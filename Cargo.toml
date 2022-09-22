@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "zlambda-common",
+    "zlambda-server",
+    "zlambda-client",
+]
