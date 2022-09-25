@@ -1,7 +1,7 @@
-use actix::{Message};
-use zlambda_common::packet::{OperationRequestPacket, ReadPacketError};
-use std::marker::PhantomData;
+use actix::Message;
 use bytes::Bytes;
+use std::marker::PhantomData;
+use zlambda_common::packet::{OperationRequestPacket, ReadPacketError};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,7 +36,7 @@ where
     pub fn new(bytes: Bytes) -> Self {
         Self {
             bytes,
-            r#type: PhantomData::<T>
+            r#type: PhantomData::<T>,
         }
     }
 

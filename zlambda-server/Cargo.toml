@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 actix = { version = "0" }
 bytes = { version = "1" }
+postcard = { version = "1", features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
-tokio-stream  = { version = "0" }
+tokio-stream  = { version = "0", features = ["net"] }
 tokio-util = { version = "0", features = ["full"] }
 zlambda-common = { path = "../zlambda-common" }

@@ -1,13 +1,12 @@
-use actix::{Actor, SyncContext, SyncArbiter, Addr, Handler, Message};
 use crate::packet::ReadPacketMessage;
-use zlambda_common::packet::{from_bytes, OperationRequestPacket};
-use zlambda_common::operation::OperationRequest;
+use actix::{Actor, Addr, Handler, Message, SyncArbiter, SyncContext};
 use std::marker::PhantomData;
+use zlambda_common::operation::OperationRequest;
+use zlambda_common::packet::{from_bytes, OperationRequestPacket};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct PacketReaderActor {
-}
+pub struct PacketReaderActor {}
 
 impl Actor for PacketReaderActor {
     type Context = SyncContext<Self>;
@@ -19,7 +18,11 @@ where
 {
     type Result = <ReadPacketMessage<T> as Message>::Result;
 
-    fn handle(&mut self, message: ReadPacketMessage<T>, _: &mut <Self as Actor>::Context) -> Self::Result {
+    fn handle(
+        &mut self,
+        message: ReadPacketMessage<T>,
+        _: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
         let (bytes,) = message.into();
         let request: OperationRequest = from_bytes::<T>(&bytes)?.into();
 

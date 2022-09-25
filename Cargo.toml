@@ -3,4 +3,5 @@ members = [
     "zlambda-common",
     "zlambda-server",
     "zlambda-client",
+    "zlambda-cli",
 ]

@@ -1,8 +1,8 @@
 use crate::operation::{Operation, OperationRequest, OperationResponse};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::error;
+use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,8 +203,7 @@ pub type StdinOperationResponsePacket = StdinPacket<OperationResponse>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub trait Packet: DeserializeOwned + Serialize {
-}
+pub trait Packet: DeserializeOwned + Serialize {}
 
 impl<T> Packet for UdpPacket<T> where T: DeserializeOwned + Serialize + Operation + 'static {}
 
@@ -228,7 +227,7 @@ impl OperationRequestPacket for StdinOperationRequestPacket {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub trait OperationResponsePacket: Packet/* + Into<OperationRequest>*/ {}
+pub trait OperationResponsePacket: Packet {}
 
 impl OperationResponsePacket for UdpOperationResponsePacket {}
 
