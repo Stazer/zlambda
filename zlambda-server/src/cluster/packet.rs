@@ -1,14 +1,17 @@
+use crate::cluster::manager::ManagerId;
+use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use bytes::Bytes;
+use std::net::SocketAddr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
-    ManagerFollowerHandshakeChallenge,
+    ManagerFollowerHandshakeChallenge { listener_local_address: SocketAddr },
     ManagerFollowerHandshakeSuccess,
 
     Ping,
@@ -16,13 +19,13 @@ pub enum Packet {
 }
 
 impl Packet {
-    pub fn from_bytes(bytes: &Bytes) -> Result<(usize, Self), ReadPacketError> {
-        let (packet, remaining) = postcard::take_from_bytes::<Self>(bytes)?;
+    pub fn from_vec(bytes: &Vec<u8>) -> Result<(usize, Self), ReadPacketError> {
+        let (packet, remaining) = take_from_bytes::<Self>(bytes)?;
         Ok((bytes.len() - remaining.len(), packet))
     }
 
-    pub fn to_bytes(&self) -> Result<Bytes, WritePacketError> {
-        Ok(Bytes::from(postcard::to_allocvec(&self)?))
+    pub fn to_vec(&self) -> Result<Vec<u8>, WritePacketError> {
+        Ok(to_allocvec(&self)?)
     }
 }
 

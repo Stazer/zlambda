@@ -1,12 +1,15 @@
-use crate::cluster::packet::{from_bytes, to_vec, Packet, ReadPacketError};
-use crate::common::{TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage};
-use actix::{
-    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message,
-    WrapFuture,
+use crate::cluster::packet::{Packet, ReadPacketError};
+use crate::common::{
+    ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor,
+    TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
 };
-use bytes::{Bytes};
+use actix::{
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, WrapFuture,
+};
+use bytes::Bytes;
 use std::io;
-use tokio::net::{TcpStream, ToSocketAddrs};
+use std::net::SocketAddr;
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,7 +21,10 @@ enum ManagerFollowerActorState {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct ManagerFollowerActor {
-    follower: Addr<TcpStreamActor>,
+    listener: Addr<TcpListenerActor>,
+    listener_local_address: SocketAddr,
+
+    stream: Addr<TcpStreamActor>,
     buffer: Vec<u8>,
     state: ManagerFollowerActorState,
 }
@@ -27,10 +33,14 @@ impl Actor for ManagerFollowerActor {
     type Context = Context<Self>;
 
     fn started(&mut self, context: &mut Self::Context) {
-        let follower = self.follower.clone();
+        let stream = self.stream.clone();
 
-        let packet = match to_vec(&Packet::ManagerFollowerHandshakeChallenge) {
-            Ok(o) => o,
+        let packet = match (Packet::ManagerFollowerHandshakeChallenge {
+            listener_local_address: self.listener_local_address.clone(),
+        })
+        .to_vec()
+        {
+            Ok(p) => p,
             Err(e) => {
                 eprintln!("{}", e);
                 context.stop();
@@ -41,7 +51,7 @@ impl Actor for ManagerFollowerActor {
 
         context.wait(
             async move {
-                follower
+                stream
                     .send(TcpStreamActorSendMessage::new(Bytes::from(packet)))
                     .await
             }
@@ -58,6 +68,22 @@ impl Actor for ManagerFollowerActor {
                 Ok(Ok(())) => (),
             }),
         );
+    }
+
+    fn stopped(&mut self, _context: &mut Self::Context) {
+        self.listener.do_send(ActorStopMessage);
+        self.stream.do_send(ActorStopMessage);
+    }
+}
+
+impl Handler<TcpListenerActorAcceptMessage> for ManagerFollowerActor {
+    type Result = <TcpListenerActorAcceptMessage as Message>::Result;
+
+    fn handle(
+        &mut self,
+        _message: TcpListenerActorAcceptMessage,
+        _context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
     }
 }
 
@@ -82,7 +108,7 @@ impl Handler<TcpStreamActorReceiveMessage> for ManagerFollowerActor {
         self.buffer.extend(bytes);
 
         loop {
-            let (read, packet) = match from_bytes(&self.buffer) {
+            let (read, packet) = match Packet::from_vec(&self.buffer) {
                 Err(ReadPacketError::UnexpectedEnd) => break,
                 Err(e) => {
                     eprintln!("{}", e);
@@ -101,18 +127,19 @@ impl Handler<TcpStreamActorReceiveMessage> for ManagerFollowerActor {
 }
 
 impl ManagerFollowerActor {
-    pub async fn new<S, T>(
-        _listener_address: S,
-        follower_address: T,
-    ) -> Result<Addr<Self>, io::Error>
+    pub async fn new<S, T>(listener_address: S, stream_address: T) -> Result<Addr<Self>, io::Error>
     where
         S: ToSocketAddrs,
         T: ToSocketAddrs,
     {
-        let stream = TcpStream::connect(follower_address).await?;
+        let listener = TcpListener::bind(listener_address).await?;
+        let listener_local_address = listener.local_addr()?;
+        let stream = TcpStream::connect(stream_address).await?;
 
         Ok(Self::create(move |context| Self {
-            follower: TcpStreamActor::new(context.address().recipient(), stream),
+            listener: TcpListenerActor::new(context.address().recipient(), listener),
+            listener_local_address,
+            stream: TcpStreamActor::new(context.address().recipient(), stream),
             state: ManagerFollowerActorState::Handshake,
             buffer: Vec::default(),
         }))
@@ -150,9 +177,9 @@ impl ManagerFollowerActor {
     ) {
         match packet {
             Packet::Ping => {
-                let stream = self.follower.clone();
+                let stream = self.stream.clone();
 
-                let bytes = match to_vec(&Packet::Pong) {
+                let bytes = match Packet::Pong.to_vec() {
                     Err(e) => {
                         eprintln!("{}", e);
                         context.stop();

@@ -1,6 +1,6 @@
 use actix::{
-    Actor, Addr, AsyncContext, AtomicResponse, Context, Handler, Message, Recipient, StreamHandler, ActorContext,
-    WrapFuture,
+    Actor, ActorContext, Addr, AsyncContext, AtomicResponse, Context, Handler, Message, Recipient,
+    StreamHandler, WrapFuture,
 };
 use bytes::Bytes;
 use std::io;
@@ -85,7 +85,11 @@ impl Actor for TcpStreamActor {
 impl Handler<ActorStopMessage> for TcpStreamActor {
     type Result = <ActorStopMessage as Message>::Result;
 
-    fn handle(&mut self, _: ActorStopMessage, context: &mut <Self as Actor>::Context) -> Self::Result {
+    fn handle(
+        &mut self,
+        _: ActorStopMessage,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
         context.stop();
     }
 }
@@ -181,7 +185,11 @@ impl Actor for TcpListenerActor {
 impl Handler<ActorStopMessage> for TcpListenerActor {
     type Result = <ActorStopMessage as Message>::Result;
 
-    fn handle(&mut self, _: ActorStopMessage, context: &mut <Self as Actor>::Context) -> Self::Result {
+    fn handle(
+        &mut self,
+        _: ActorStopMessage,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
         context.stop();
     }
 }
