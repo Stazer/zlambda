@@ -8,8 +8,8 @@ use tokio::runtime::Builder;
 pub fn default_system_runner() -> SystemRunner {
     System::with_tokio_rt(move || {
         Builder::new_multi_thread()
-        .enable_all()
-        .build()
+            .enable_all()
+            .build()
             .expect("Cannot builder runtime")
     })
 }
@@ -24,7 +24,7 @@ where
     let system = default_system_runner();
 
     system.block_on(async {
-        function().await;
+        function().await.unwrap();
     });
 
     system.run()?;

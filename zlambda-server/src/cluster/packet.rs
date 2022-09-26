@@ -6,26 +6,28 @@ use std::error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::net::SocketAddr;
+use bytes::{Bytes, BytesMut};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
-    ManagerFollowerHandshakeChallenge { listener_local_address: SocketAddr },
-    ManagerFollowerHandshakeSuccess,
-
-    Ping,
-    Pong,
+    FollowerHandshakeChallenge,
+    FollowerHandshakeSuccess,
+    FollowerPing,
+    FollowerPong,
 }
 
 impl Packet {
-    pub fn from_vec(bytes: &Vec<u8>) -> Result<(usize, Self), ReadPacketError> {
+    pub fn from_bytes(bytes: &Bytes) -> Result<(usize, Self), ReadPacketError> {
         let (packet, remaining) = take_from_bytes::<Self>(bytes)?;
         Ok((bytes.len() - remaining.len(), packet))
     }
 
-    pub fn to_vec(&self) -> Result<Vec<u8>, WritePacketError> {
-        Ok(to_allocvec(&self)?)
+    pub fn to_bytes(&self) -> Result<BytesMut, WritePacketError> {
+        let mut result = BytesMut::new();
+        result.extend(to_allocvec(&self)?);
+        Ok(result)
     }
 }
 

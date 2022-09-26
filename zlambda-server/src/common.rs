@@ -74,12 +74,19 @@ impl TcpStreamActorSendMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct TcpStreamActor {
-    recipient: Recipient<TcpStreamActorReceiveMessage>,
+    receive_recipient: Recipient<TcpStreamActorReceiveMessage>,
+    stop_recipient: Option<Recipient<ActorStopMessage>>,
     owned_write_half: Arc<Mutex<OwnedWriteHalf>>,
 }
 
 impl Actor for TcpStreamActor {
     type Context = Context<Self>;
+
+    fn stopped(&mut self, context: &mut Self::Context) {
+        if let Some(stop_recipient) = &self.stop_recipient {
+            stop_recipient.do_send(ActorStopMessage);
+        }
+    }
 }
 
 impl Handler<ActorStopMessage> for TcpStreamActor {
@@ -123,14 +130,15 @@ impl Handler<TcpStreamActorSendMessage> for TcpStreamActor {
 
 impl StreamHandler<Result<Bytes, io::Error>> for TcpStreamActor {
     fn handle(&mut self, item: Result<Bytes, io::Error>, _context: &mut <Self as Actor>::Context) {
-        self.recipient
+        self.receive_recipient
             .do_send(TcpStreamActorReceiveMessage::new(item));
     }
 }
 
 impl TcpStreamActor {
     pub fn new(
-        recipient: Recipient<TcpStreamActorReceiveMessage>,
+        receive_recipient: Recipient<TcpStreamActorReceiveMessage>,
+        stop_recipient: Option<Recipient<ActorStopMessage>>,
         tcp_stream: TcpStream,
     ) -> Addr<Self> {
         Self::create(move |context| {
@@ -139,7 +147,8 @@ impl TcpStreamActor {
             context.add_stream(ReaderStream::new(owned_read_half));
 
             Self {
-                recipient,
+                receive_recipient,
+                stop_recipient,
                 owned_write_half: Arc::new(Mutex::new(owned_write_half)),
             }
         })
@@ -175,11 +184,18 @@ impl TcpListenerActorAcceptMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct TcpListenerActor {
-    recipient: Recipient<TcpListenerActorAcceptMessage>,
+    accept_recipient: Recipient<TcpListenerActorAcceptMessage>,
+    stop_recipient: Option<Recipient<ActorStopMessage>>,
 }
 
 impl Actor for TcpListenerActor {
     type Context = Context<Self>;
+
+    fn stopped(&mut self, context: &mut Self::Context) {
+        if let Some(stop_recipient) = &self.stop_recipient {
+            stop_recipient.do_send(ActorStopMessage);
+        }
+    }
 }
 
 impl Handler<ActorStopMessage> for TcpListenerActor {
@@ -200,20 +216,24 @@ impl StreamHandler<Result<TcpStream, io::Error>> for TcpListenerActor {
         item: Result<TcpStream, io::Error>,
         _context: &mut <Self as Actor>::Context,
     ) {
-        self.recipient
+        self.accept_recipient
             .do_send(TcpListenerActorAcceptMessage::new(item));
     }
 }
 
 impl TcpListenerActor {
     pub fn new(
-        recipient: Recipient<TcpListenerActorAcceptMessage>,
+        accept_recipient: Recipient<TcpListenerActorAcceptMessage>,
+        stop_recipient: Option<Recipient<ActorStopMessage>>,
         tcp_listener: TcpListener,
     ) -> Addr<Self> {
         Self::create(|context| {
             context.add_stream(TcpListenerStream::new(tcp_listener));
 
-            Self { recipient }
+            Self {
+                accept_recipient,
+                stop_recipient,
+            }
         })
     }
 }

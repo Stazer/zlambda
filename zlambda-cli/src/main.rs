@@ -1,5 +1,11 @@
+#![feature(async_closure)]
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 use clap::{Parser, Subcommand};
 use std::error::Error;
+use zlambda_server::cluster::manager::ManagerActor;
+use zlambda_server::run::run_with_default_system_runner;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +31,11 @@ enum MainCommand {
 
 #[derive(Debug, Subcommand)]
 enum ServerCommand {
-    Manager { leader_address: Option<String> },
+    Manager {
+        #[clap(default_value = "0.0.0.0:8000")]
+        listener_address: String,
+        leader_address: Option<String>,
+    },
     Worker {},
 }
 
@@ -37,14 +47,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     match arguments.command {
         MainCommand::Server { command } => {
             match command {
-                ServerCommand::Manager { leader_address } => match leader_address {
-                    Some(leader_address) => {
-                        zlambda_server::cluster::manager::main2(&leader_address)?;
-                    }
-                    None => {
-                        zlambda_server::cluster::manager::main()?;
-                    }
-                },
+                ServerCommand::Manager {
+                    listener_address,
+                    leader_address,
+                } => {
+                    run_with_default_system_runner(async move || {
+                        ManagerActor::new(listener_address, leader_address).await?;
+                        Ok(())
+                    })
+                    .expect("Cannot start manager");
+                }
                 ServerCommand::Worker {} => {}
             };
         }

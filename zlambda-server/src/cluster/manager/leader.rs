@@ -91,16 +91,23 @@ impl Handler<TcpStreamActorReceiveMessage> for ManagerLeaderReaderActor {
 }
 
 impl ManagerLeaderReaderActor {
-    fn new(id: ManagerId, leader: Addr<ManagerLeaderActor>, stream: TcpStream) -> (Addr<Self>, Addr<TcpStreamActor>) {
+    fn new(
+        id: ManagerId,
+        leader: Addr<ManagerLeaderActor>,
+        stream: TcpStream,
+    ) -> (Addr<Self>, Addr<TcpStreamActor>) {
         let context = Context::new();
         let stream = TcpStreamActor::new(context.address().recipient(), stream);
 
-        (context.run(Self {
-            leader,
-            id,
-            stream: stream.clone(),
-            buffer: Vec::default(),
-        }), stream.clone())
+        (
+            context.run(Self {
+                leader,
+                id,
+                stream: stream.clone(),
+                buffer: Vec::default(),
+            }),
+            stream.clone(),
+        )
     }
 }
 
@@ -243,8 +250,12 @@ impl ManagerLeaderActor {
         };
 
         match state {
-            ManagerFollowerState::Handshaking => self.handle_handshaking_packet(id, packet, context),
-            ManagerFollowerState::Operational => self.handle_operational_packet(id, packet, context),
+            ManagerFollowerState::Handshaking => {
+                self.handle_handshaking_packet(id, packet, context)
+            }
+            ManagerFollowerState::Operational => {
+                self.handle_operational_packet(id, packet, context)
+            }
         };
     }
 
