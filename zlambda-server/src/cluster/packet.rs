@@ -1,33 +1,28 @@
-use crate::cluster::manager::ManagerId;
+use crate::cluster::node::NodeId;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::net::SocketAddr;
-use bytes::{Bytes, BytesMut};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
     FollowerHandshakeChallenge,
-    FollowerHandshakeSuccess,
+    FollowerHandshakeSuccess { id: NodeId },
     FollowerPing,
     FollowerPong,
 }
 
 impl Packet {
-    pub fn from_bytes(bytes: &Bytes) -> Result<(usize, Self), ReadPacketError> {
+    pub fn from_vec(bytes: &Vec<u8>) -> Result<(usize, Self), ReadPacketError> {
         let (packet, remaining) = take_from_bytes::<Self>(bytes)?;
         Ok((bytes.len() - remaining.len(), packet))
     }
 
-    pub fn to_bytes(&self) -> Result<BytesMut, WritePacketError> {
-        let mut result = BytesMut::new();
-        result.extend(to_allocvec(&self)?);
-        Ok(result)
+    pub fn to_vec(&self) -> Result<Vec<u8>, WritePacketError> {
+        Ok(to_allocvec(&self)?)
     }
 }
 
@@ -95,15 +90,4 @@ impl From<postcard::Error> for WritePacketError {
     fn from(error: postcard::Error) -> Self {
         Self::PostcardError(error)
     }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub fn from_bytes(bytes: &[u8]) -> Result<(usize, Packet), ReadPacketError> {
-    let (packet, remaining) = postcard::take_from_bytes::<Packet>(bytes)?;
-    Ok((bytes.len() - remaining.len(), packet))
-}
-
-pub fn to_vec(packet: &Packet) -> Result<Vec<u8>, WritePacketError> {
-    Ok(postcard::to_allocvec(packet)?)
 }

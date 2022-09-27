@@ -13,6 +13,7 @@ use tokio_util::io::ReaderStream;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct ActorStopMessage;
 
 impl Message for ActorStopMessage {
@@ -21,6 +22,7 @@ impl Message for ActorStopMessage {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct TcpStreamActorReceiveMessage {
     result: Result<Bytes, io::Error>,
 }
@@ -47,6 +49,7 @@ impl TcpStreamActorReceiveMessage {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct TcpStreamActorSendMessage {
     data: Bytes,
 }
@@ -73,6 +76,7 @@ impl TcpStreamActorSendMessage {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct TcpStreamActor {
     receive_recipient: Recipient<TcpStreamActorReceiveMessage>,
     stop_recipient: Option<Recipient<ActorStopMessage>>,
@@ -82,6 +86,7 @@ pub struct TcpStreamActor {
 impl Actor for TcpStreamActor {
     type Context = Context<Self>;
 
+    #[tracing::instrument]
     fn stopped(&mut self, context: &mut Self::Context) {
         if let Some(stop_recipient) = &self.stop_recipient {
             stop_recipient.do_send(ActorStopMessage);
@@ -92,6 +97,7 @@ impl Actor for TcpStreamActor {
 impl Handler<ActorStopMessage> for TcpStreamActor {
     type Result = <ActorStopMessage as Message>::Result;
 
+    #[tracing::instrument]
     fn handle(
         &mut self,
         _: ActorStopMessage,
@@ -104,6 +110,7 @@ impl Handler<ActorStopMessage> for TcpStreamActor {
 impl Handler<TcpStreamActorSendMessage> for TcpStreamActor {
     type Result = AtomicResponse<Self, <TcpStreamActorSendMessage as Message>::Result>;
 
+    #[tracing::instrument]
     fn handle(
         &mut self,
         message: TcpStreamActorSendMessage,
@@ -129,6 +136,7 @@ impl Handler<TcpStreamActorSendMessage> for TcpStreamActor {
 }
 
 impl StreamHandler<Result<Bytes, io::Error>> for TcpStreamActor {
+    #[tracing::instrument]
     fn handle(&mut self, item: Result<Bytes, io::Error>, _context: &mut <Self as Actor>::Context) {
         self.receive_recipient
             .do_send(TcpStreamActorReceiveMessage::new(item));
@@ -157,6 +165,7 @@ impl TcpStreamActor {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct TcpListenerActorAcceptMessage {
     result: Result<TcpStream, io::Error>,
 }
@@ -183,6 +192,7 @@ impl TcpListenerActorAcceptMessage {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct TcpListenerActor {
     accept_recipient: Recipient<TcpListenerActorAcceptMessage>,
     stop_recipient: Option<Recipient<ActorStopMessage>>,
@@ -191,6 +201,7 @@ pub struct TcpListenerActor {
 impl Actor for TcpListenerActor {
     type Context = Context<Self>;
 
+    #[tracing::instrument]
     fn stopped(&mut self, context: &mut Self::Context) {
         if let Some(stop_recipient) = &self.stop_recipient {
             stop_recipient.do_send(ActorStopMessage);
@@ -201,6 +212,7 @@ impl Actor for TcpListenerActor {
 impl Handler<ActorStopMessage> for TcpListenerActor {
     type Result = <ActorStopMessage as Message>::Result;
 
+    #[tracing::instrument]
     fn handle(
         &mut self,
         _: ActorStopMessage,
@@ -211,6 +223,7 @@ impl Handler<ActorStopMessage> for TcpListenerActor {
 }
 
 impl StreamHandler<Result<TcpStream, io::Error>> for TcpListenerActor {
+    #[tracing::instrument]
     fn handle(
         &mut self,
         item: Result<TcpStream, io::Error>,
