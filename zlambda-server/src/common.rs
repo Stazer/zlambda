@@ -4,10 +4,11 @@ use actix::{
 };
 use bytes::Bytes;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::io::ReaderStream;
 
@@ -120,12 +121,7 @@ impl Handler<TcpStreamActorSendMessage> for TcpStreamActor {
 
         AtomicResponse::new(Box::pin(
             async move {
-                let mut writer = match owned_write_half.lock() {
-                    Ok(w) => w,
-                    Err(_) => todo!(),
-                };
-
-                match writer.write(message.data()).await {
+                match owned_write_half.lock().await.write(message.data()).await {
                     Ok(_) => Ok(()),
                     Err(e) => Err(e),
                 }
