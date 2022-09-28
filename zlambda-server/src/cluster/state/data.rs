@@ -6,16 +6,16 @@ use std::rc::Rc;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Default)]
-pub struct NodeNodesState {
-    nodes: HashMap<NodeId, Rc<NodeNodeState>>,
+pub struct NodeNodesStateData {
+    nodes: HashMap<NodeId, Rc<NodeNodeStateData>>,
 }
 
-impl NodeNodesState {
-    pub fn get(&self, node_id: &NodeId) -> Option<&Rc<NodeNodeState>> {
+impl NodeNodesStateData {
+    pub fn get(&self, node_id: &NodeId) -> Option<&Rc<NodeNodeStateData>> {
         self.nodes.get(node_id)
     }
 
-    pub fn get_mut(&mut self, node_id: &NodeId) -> Option<&mut Rc<NodeNodeState>> {
+    pub fn get_mut(&mut self, node_id: &NodeId) -> Option<&mut Rc<NodeNodeStateData>> {
         self.nodes.get_mut(node_id)
     }
 
@@ -23,7 +23,7 @@ impl NodeNodesState {
         let id = next_key(&self.nodes);
         assert!(self
             .nodes
-            .insert(id, Rc::new(NodeNodeState::new(id)))
+            .insert(id, Rc::new(NodeNodeStateData::new(id)))
             .is_none());
 
         id
@@ -33,11 +33,11 @@ impl NodeNodesState {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct NodeNodeState {
+pub struct NodeNodeStateData {
     id: NodeId,
 }
 
-impl NodeNodeState {
+impl NodeNodeStateData {
     pub fn new(id: NodeId) -> Self {
         Self { id }
     }
@@ -50,21 +50,21 @@ impl NodeNodeState {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum NodeClientTypeState {
+pub enum NodeClientTypeStateData {
     Undefined,
-    Node(Rc<NodeNodeState>),
+    Node(Rc<NodeNodeStateData>),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct NodeClientState {
+pub struct NodeClientStateData {
     id: NodeClientId,
-    r#type: NodeClientTypeState,
+    r#type: NodeClientTypeStateData,
 }
 
-impl NodeClientState {
-    pub fn new(id: NodeClientId, r#type: NodeClientTypeState) -> Self {
+impl NodeClientStateData {
+    pub fn new(id: NodeClientId, r#type: NodeClientTypeStateData) -> Self {
         Self { id, r#type }
     }
 
@@ -72,15 +72,15 @@ impl NodeClientState {
         &self.id
     }
 
-    pub fn r#type(&self) -> &NodeClientTypeState {
+    pub fn r#type(&self) -> &NodeClientTypeStateData {
         &self.r#type
     }
 
-    pub fn type_mut(&mut self) -> &mut NodeClientTypeState {
+    pub fn type_mut(&mut self) -> &mut NodeClientTypeStateData {
         &mut self.r#type
     }
 
-    pub fn set_type(&mut self, r#type: NodeClientTypeState) {
+    pub fn set_type(&mut self, r#type: NodeClientTypeStateData) {
         self.r#type = r#type
     }
 }
@@ -88,16 +88,16 @@ impl NodeClientState {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Default)]
-pub struct NodeClientsState {
-    clients: HashMap<NodeClientId, NodeClientState>,
+pub struct NodeClientsStateData {
+    clients: HashMap<NodeClientId, NodeClientStateData>,
 }
 
-impl NodeClientsState {
-    pub fn get(&self, node_id: &NodeId) -> Option<&NodeClientState> {
+impl NodeClientsStateData {
+    pub fn get(&self, node_id: &NodeId) -> Option<&NodeClientStateData> {
         self.clients.get(node_id)
     }
 
-    pub fn get_mut(&self, node_id: &NodeId) -> Option<&NodeClientState> {
+    pub fn get_mut(&self, node_id: &NodeId) -> Option<&NodeClientStateData> {
         self.clients.get(node_id)
     }
 
@@ -105,7 +105,7 @@ impl NodeClientsState {
         let id = next_key(&self.clients);
         assert!(self
             .clients
-            .insert(id, NodeClientState::new(id, NodeClientTypeState::Undefined))
+            .insert(id, NodeClientStateData::new(id, NodeClientTypeStateData::Undefined))
             .is_none());
 
         id
@@ -115,16 +115,16 @@ impl NodeClientsState {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct NodeState {
+pub struct NodeStateData {
     id: NodeId,
-    clients: NodeClientsState,
+    clients: NodeClientsStateData,
 }
 
-impl NodeState {
+impl NodeStateData {
     pub fn new(id: NodeId) -> Self {
         Self {
             id,
-            clients: NodeClientsState::default(),
+            clients: NodeClientsStateData::default(),
         }
     }
 
@@ -132,11 +132,11 @@ impl NodeState {
         &self.id
     }
 
-    pub fn clients(&self) -> &NodeClientsState {
+    pub fn clients(&self) -> &NodeClientsStateData {
         &self.clients
     }
 
-    pub fn clients_mut(&mut self) -> &NodeClientsState {
+    pub fn clients_mut(&mut self) -> &NodeClientsStateData {
         &mut self.clients
     }
 }
