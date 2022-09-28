@@ -4,7 +4,7 @@
 
 use clap::{Parser, Subcommand};
 use std::error::Error;
-use zlambda_server::cluster::node::NodeActor;
+use zlambda_server::cluster::NodeActor;
 use zlambda_server::run::run_with_default_system_runner;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

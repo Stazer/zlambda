@@ -1,5 +1,8 @@
 use crate::algorithm::next_key;
-use crate::cluster::packet::{Packet, ReadPacketError};
+use crate::cluster::{
+    NodeActorRemoveClientMessage, NodeClient, NodeClientId, NodeClientType, NodeFollower, NodeId,
+    NodeType, Packet, PacketReaderActorReadPacketMessage, ReadPacketError,
+};
 use crate::common::{
     ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor,
     TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
@@ -11,42 +14,6 @@ use std::rc::Rc;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tracing::{error, trace};
 use tracing_subscriber::fmt::init;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type NodeClientId = u64;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct PacketReaderActorReadPacketMessage {
-    id: NodeClientId,
-    packet: Packet,
-}
-
-impl From<PacketReaderActorReadPacketMessage> for (NodeClientId, Packet) {
-    fn from(message: PacketReaderActorReadPacketMessage) -> Self {
-        (message.id, message.packet)
-    }
-}
-
-impl Message for PacketReaderActorReadPacketMessage {
-    type Result = ();
-}
-
-impl PacketReaderActorReadPacketMessage {
-    pub fn new(id: NodeClientId, packet: Packet) -> Self {
-        Self { id, packet }
-    }
-
-    pub fn id(&self) -> NodeClientId {
-        self.id
-    }
-
-    pub fn packet(&self) -> &Packet {
-        &self.packet
-    }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -149,118 +116,6 @@ impl PacketReaderActor {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type NodeId = u64;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub enum NodeType {
-    Leader {},
-    Follower {
-        stream: Addr<TcpStreamActor>,
-        buffer: Vec<u8>,
-    },
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub enum NodeClientType {
-    User {},
-    Follower(Rc<NodeFollower>),
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct NodeClient {
-    id: NodeClientId,
-    reader: Addr<PacketReaderActor>,
-    stream: Addr<TcpStreamActor>,
-    r#type: Option<NodeClientType>,
-}
-
-impl NodeClient {
-    pub fn new(
-        id: NodeClientId,
-        reader: Addr<PacketReaderActor>,
-        stream: Addr<TcpStreamActor>,
-    ) -> Self {
-        Self {
-            id,
-            reader,
-            stream,
-            r#type: None,
-        }
-    }
-
-    pub fn id(&self) -> NodeClientId {
-        self.id
-    }
-
-    pub fn r#type(&self) -> &Option<NodeClientType> {
-        &self.r#type
-    }
-
-    pub fn set_type(&mut self, r#type: Option<NodeClientType>) {
-        self.r#type = r#type;
-    }
-
-    pub fn reader(&self) -> &Addr<PacketReaderActor> {
-        &self.reader
-    }
-
-    pub fn stream(&self) -> &Addr<TcpStreamActor> {
-        &self.stream
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct NodeFollower {
-    id: NodeId,
-}
-
-impl NodeFollower {
-    pub fn new(id: NodeId) -> Self {
-        Self { id }
-    }
-
-    pub fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct NodeActorRemoveClientMessage {
-    id: NodeClientId,
-}
-
-impl From<NodeActorRemoveClientMessage> for (NodeClientId,) {
-    fn from(message: NodeActorRemoveClientMessage) -> Self {
-        (message.id,)
-    }
-}
-
-impl Message for NodeActorRemoveClientMessage {
-    type Result = ();
-}
-
-impl NodeActorRemoveClientMessage {
-    pub fn new(id: NodeClientId) -> Self {
-        Self { id }
-    }
-
-    pub fn id(&self) -> NodeClientId {
-        self.id
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #[derive(Debug)]
 pub struct NodeActor {
     id: NodeId,
@@ -342,7 +197,7 @@ impl Handler<PacketReaderActorReadPacketMessage> for NodeActor {
             }
         };
 
-        match (client.r#type.as_ref(), packet) {
+        match (client.r#type().as_ref(), packet) {
             (None, Packet::FollowerHandshakeChallenge) => {
                 let id = next_key(&mut self.followers);
 
@@ -361,7 +216,9 @@ impl Handler<PacketReaderActorReadPacketMessage> for NodeActor {
                     Ok(p) => p,
                 };
 
-                client.stream().do_send(TcpStreamActorSendMessage::new(packet.into()));
+                client
+                    .stream()
+                    .do_send(TcpStreamActorSendMessage::new(packet.into()));
             }
             _ => {
                 error!("Unhandled packet");

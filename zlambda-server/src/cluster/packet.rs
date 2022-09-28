@@ -1,4 +1,4 @@
-use crate::cluster::node::NodeId;
+use crate::cluster::NodeId;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
 use std::error;
