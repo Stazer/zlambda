@@ -1,7 +1,7 @@
 use crate::algorithm::next_key;
 use crate::cluster::{
     NodeActorRemoveClientMessage, NodeClient, NodeClientId, NodeClientType, NodeFollower, NodeId,
-    NodeType, Packet, PacketReaderActorReadPacketMessage, ReadPacketError,
+    NodeType, Packet, PacketReaderActor, PacketReaderActorReadPacketMessage, ReadPacketError,
 };
 use crate::common::{
     ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor,
@@ -14,105 +14,6 @@ use std::rc::Rc;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tracing::{error, trace};
 use tracing_subscriber::fmt::init;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct PacketReaderActor {
-    id: NodeClientId,
-    recipient: Addr<NodeActor>,
-    stream: Addr<TcpStreamActor>,
-    buffer: Vec<u8>,
-}
-
-impl Actor for PacketReaderActor {
-    type Context = Context<Self>;
-
-    #[tracing::instrument]
-    fn stopped(&mut self, _: &mut Self::Context) {
-        self.stream.do_send(ActorStopMessage);
-        self.recipient
-            .do_send(NodeActorRemoveClientMessage::new(self.id));
-    }
-}
-
-impl Handler<ActorStopMessage> for PacketReaderActor {
-    type Result = <ActorStopMessage as Message>::Result;
-
-    fn handle(
-        &mut self,
-        _: ActorStopMessage,
-        context: &mut <Self as Actor>::Context,
-    ) -> Self::Result {
-        context.stop();
-    }
-}
-
-impl Handler<TcpStreamActorReceiveMessage> for PacketReaderActor {
-    type Result = <TcpStreamActorReceiveMessage as Message>::Result;
-
-    #[tracing::instrument]
-    fn handle(
-        &mut self,
-        message: TcpStreamActorReceiveMessage,
-        context: &mut <Self as Actor>::Context,
-    ) -> Self::Result {
-        let (result,) = message.into();
-
-        let bytes = match result {
-            Ok(b) => b,
-            Err(e) => {
-                eprintln!("{:?}", e);
-                context.stop();
-                return;
-            }
-        };
-
-        self.buffer.extend(bytes);
-
-        loop {
-            let (read, packet) = match Packet::from_vec(&self.buffer) {
-                Ok((r, p)) => (r, p),
-                Err(ReadPacketError::UnexpectedEnd) => break,
-                Err(e) => {
-                    eprintln!("{:?}", e);
-                    context.stop();
-                    return;
-                }
-            };
-
-            self.buffer.drain(0..read);
-
-            self.recipient
-                .do_send(PacketReaderActorReadPacketMessage::new(self.id, packet));
-        }
-    }
-}
-
-impl PacketReaderActor {
-    pub fn new(
-        id: NodeClientId,
-        recipient: Addr<NodeActor>,
-        stream: TcpStream,
-    ) -> (Addr<Self>, Addr<TcpStreamActor>) {
-        let context = Context::new();
-        let stream = TcpStreamActor::new(
-            context.address().recipient(),
-            Some(context.address().recipient()),
-            stream,
-        );
-
-        (
-            context.run(Self {
-                id,
-                recipient,
-                stream: stream.clone(),
-                buffer: Vec::default(),
-            }),
-            stream,
-        )
-    }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

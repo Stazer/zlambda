@@ -105,7 +105,10 @@ impl NodeClientsStateData {
         let id = next_key(&self.clients);
         assert!(self
             .clients
-            .insert(id, NodeClientStateData::new(id, NodeClientTypeStateData::Undefined))
+            .insert(
+                id,
+                NodeClientStateData::new(id, NodeClientTypeStateData::Undefined)
+            )
             .is_none());
 
         id
