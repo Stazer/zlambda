@@ -13,6 +13,10 @@ pub enum Packet {
     FollowerHandshakeSuccess { id: NodeId },
     FollowerPing,
     FollowerPong,
+
+    FollowerHandshake,
+
+    NodeHandshake,
 }
 
 impl Packet {

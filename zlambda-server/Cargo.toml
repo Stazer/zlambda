@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 actix = { version = "0" }
+async-trait = { version = "0" }
 bytes = { version = "1" }
 postcard = { version = "1", features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }

@@ -1,5 +1,6 @@
 mod actor;
 mod common;
+mod consensus;
 mod message;
 mod packet;
 mod state;

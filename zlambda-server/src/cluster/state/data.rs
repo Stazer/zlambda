@@ -1,5 +1,5 @@
 use crate::algorithm::next_key;
-use crate::cluster::{NodeClientId, NodeId};
+use crate::cluster::{NodeConnectionId, NodeId};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -50,7 +50,7 @@ impl NodeNodeStateData {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum NodeClientTypeStateData {
+pub enum NodeConnectionTypeStateData {
     Undefined,
     Node(Rc<NodeNodeStateData>),
 }
@@ -58,29 +58,29 @@ pub enum NodeClientTypeStateData {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct NodeClientStateData {
-    id: NodeClientId,
-    r#type: NodeClientTypeStateData,
+pub struct NodeConnectionStateData {
+    id: NodeConnectionId,
+    r#type: NodeConnectionTypeStateData,
 }
 
-impl NodeClientStateData {
-    pub fn new(id: NodeClientId, r#type: NodeClientTypeStateData) -> Self {
+impl NodeConnectionStateData {
+    pub fn new(id: NodeConnectionId, r#type: NodeConnectionTypeStateData) -> Self {
         Self { id, r#type }
     }
 
-    pub fn id(&self) -> &NodeClientId {
+    pub fn id(&self) -> &NodeConnectionId {
         &self.id
     }
 
-    pub fn r#type(&self) -> &NodeClientTypeStateData {
+    pub fn r#type(&self) -> &NodeConnectionTypeStateData {
         &self.r#type
     }
 
-    pub fn type_mut(&mut self) -> &mut NodeClientTypeStateData {
+    pub fn type_mut(&mut self) -> &mut NodeConnectionTypeStateData {
         &mut self.r#type
     }
 
-    pub fn set_type(&mut self, r#type: NodeClientTypeStateData) {
+    pub fn set_type(&mut self, r#type: NodeConnectionTypeStateData) {
         self.r#type = r#type
     }
 }
@@ -88,26 +88,26 @@ impl NodeClientStateData {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Default)]
-pub struct NodeClientsStateData {
-    clients: HashMap<NodeClientId, NodeClientStateData>,
+pub struct NodeConnectionsStateData {
+    connections: HashMap<NodeConnectionId, NodeConnectionStateData>,
 }
 
-impl NodeClientsStateData {
-    pub fn get(&self, node_id: &NodeId) -> Option<&NodeClientStateData> {
-        self.clients.get(node_id)
+impl NodeConnectionsStateData {
+    pub fn get(&self, node_id: &NodeId) -> Option<&NodeConnectionStateData> {
+        self.connections.get(node_id)
     }
 
-    pub fn get_mut(&self, node_id: &NodeId) -> Option<&NodeClientStateData> {
-        self.clients.get(node_id)
+    pub fn get_mut(&self, node_id: &NodeId) -> Option<&NodeConnectionStateData> {
+        self.connections.get(node_id)
     }
 
-    pub fn insert_default(&mut self) -> NodeClientId {
-        let id = next_key(&self.clients);
+    pub fn insert_default(&mut self) -> NodeConnectionId {
+        let id = next_key(&self.connections);
         assert!(self
-            .clients
+            .connections
             .insert(
                 id,
-                NodeClientStateData::new(id, NodeClientTypeStateData::Undefined)
+                NodeConnectionStateData::new(id, NodeConnectionTypeStateData::Undefined)
             )
             .is_none());
 
@@ -120,14 +120,16 @@ impl NodeClientsStateData {
 #[derive(Debug)]
 pub struct NodeStateData {
     id: NodeId,
-    clients: NodeClientsStateData,
+    connections: NodeConnectionsStateData,
+    nodes: NodeNodesStateData,
 }
 
 impl NodeStateData {
     pub fn new(id: NodeId) -> Self {
         Self {
             id,
-            clients: NodeClientsStateData::default(),
+            connections: NodeConnectionsStateData::default(),
+            nodes: NodeNodesStateData::default(),
         }
     }
 
@@ -135,11 +137,19 @@ impl NodeStateData {
         &self.id
     }
 
-    pub fn clients(&self) -> &NodeClientsStateData {
-        &self.clients
+    pub fn connections(&self) -> &NodeConnectionsStateData {
+        &self.connections
     }
 
-    pub fn clients_mut(&mut self) -> &NodeClientsStateData {
-        &mut self.clients
+    pub fn connections_mut(&mut self) -> &NodeConnectionsStateData {
+        &mut self.connections
+    }
+
+    pub fn nodes(&self) -> &NodeNodesStateData {
+        &self.nodes
+    }
+
+    pub fn nodes_mut(&mut self) -> &mut NodeNodesStateData {
+        &mut self.nodes
     }
 }
