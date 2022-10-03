@@ -1,7 +1,7 @@
-mod node;
-mod packet_reader;
+mod actor;
+mod message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub use node::*;
-pub use packet_reader::*;
+pub use actor::*;
+pub use message::*;

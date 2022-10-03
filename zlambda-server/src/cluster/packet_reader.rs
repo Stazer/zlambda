@@ -1,6 +1,5 @@
 use crate::cluster::{
-    NodeActor, NodeActorRemoveClientMessage, NodeClientId, Packet,
-    PacketReaderActorReadPacketMessage, ReadPacketError,
+    NodeActor, NodeActorRemoveConnectionMessage, NodeConnectionId, Packet, ReadPacketError,
 };
 use crate::common::{ActorStopMessage, TcpStreamActor, TcpStreamActorReceiveMessage};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
@@ -9,8 +8,40 @@ use tokio::net::TcpStream;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct PacketReaderActorReadPacketMessage {
+    id: NodeConnectionId,
+    packet: Packet,
+}
+
+impl From<PacketReaderActorReadPacketMessage> for (NodeConnectionId, Packet) {
+    fn from(message: PacketReaderActorReadPacketMessage) -> Self {
+        (message.id, message.packet)
+    }
+}
+
+impl Message for PacketReaderActorReadPacketMessage {
+    type Result = ();
+}
+
+impl PacketReaderActorReadPacketMessage {
+    pub fn new(id: NodeConnectionId, packet: Packet) -> Self {
+        Self { id, packet }
+    }
+
+    pub fn id(&self) -> NodeConnectionId {
+        self.id
+    }
+
+    pub fn packet(&self) -> &Packet {
+        &self.packet
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct PacketReaderActor {
-    id: NodeClientId,
+    id: NodeConnectionId,
     recipient: Addr<NodeActor>,
     stream: Addr<TcpStreamActor>,
     buffer: Vec<u8>,
@@ -23,7 +54,7 @@ impl Actor for PacketReaderActor {
     fn stopped(&mut self, _: &mut Self::Context) {
         self.stream.do_send(ActorStopMessage);
         self.recipient
-            .do_send(NodeActorRemoveClientMessage::new(self.id));
+            .do_send(NodeActorRemoveConnectionMessage::new(self.id));
     }
 }
 
@@ -82,7 +113,7 @@ impl Handler<TcpStreamActorReceiveMessage> for PacketReaderActor {
 
 impl PacketReaderActor {
     pub fn new(
-        id: NodeClientId,
+        id: NodeConnectionId,
         recipient: Addr<NodeActor>,
         stream: TcpStream,
     ) -> (Addr<Self>, Addr<TcpStreamActor>) {

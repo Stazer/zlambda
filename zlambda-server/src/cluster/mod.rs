@@ -1,14 +1,19 @@
-mod actor;
 mod common;
-mod consensus;
-mod message;
 mod packet;
 mod state;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub use actor::*;
 pub use common::*;
-pub use message::*;
 pub use packet::*;
 pub use state::*;
+
+mod consensus;
+mod node;
+mod packet_reader;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub use consensus::*;
+pub use node::*;
+pub use packet_reader::*;

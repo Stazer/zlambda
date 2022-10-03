@@ -7,16 +7,30 @@ use std::fmt::{Debug, Display, Formatter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type CommandType = ();
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum ConsensusPacket {
+    //BeginRequest(ConsensusBeginRequest<CommandType>),
+    //BeginResponse(ConsensusBeginResponse<CommandType>),
+    //CommitRequest(ConsensusCommitRequest<CommandType>),
+    //CommitResponse(ConsensusCommitResponse<CommandType>),
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
-    FollowerHandshakeChallenge,
-    FollowerHandshakeSuccess { id: NodeId },
-    FollowerPing,
-    FollowerPong,
+    NodeHandshakeRequest,
+    NodeHandshakeResponse,
+    ClientHandshake,
 
-    FollowerHandshake,
+    NodeRegisterRequest,
+    NodeRegisterResponse,
 
-    NodeHandshake,
+    Consensus(ConsensusPacket),
 }
 
 impl Packet {
