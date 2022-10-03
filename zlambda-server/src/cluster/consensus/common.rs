@@ -1,34 +1,31 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type ConsensusInstanceId = u64;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ConsensusCommandId = u64;
+pub type ConsensusMessageId = u64;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ConsensusTransactionId {
-    command_id: ConsensusCommandId,
+    message_id: ConsensusMessageId,
     instance_id: ConsensusInstanceId,
 }
 
 impl ConsensusTransactionId {
-    pub fn new(command_id: ConsensusCommandId, instance_id: ConsensusInstanceId) -> Self {
+    pub fn new(message_id: ConsensusMessageId, instance_id: ConsensusInstanceId) -> Self {
         Self {
-            command_id,
+            message_id,
             instance_id,
         }
     }
 
-    pub fn command_id(&self) -> ConsensusCommandId {
-        self.command_id
+    pub fn message_id(&self) -> ConsensusMessageId {
+        self.message_id
     }
 
     pub fn instance_id(&self) -> ConsensusInstanceId {
@@ -43,7 +40,7 @@ pub enum ConsensusTransactionState<C>
 where
     C: Debug + 'static,
 {
-    Proposed { command: C },
+    Proposed { message: C },
     Promised,
 }
 
@@ -80,7 +77,7 @@ where
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConsensusBeginRequest<C> {
     transaction_id: ConsensusTransactionId,
-    command_type: PhantomData<C>,
+    message_type: PhantomData<C>,
 }
 
 impl<C> From<ConsensusBeginRequest<C>> for (ConsensusTransactionId,) {
@@ -93,7 +90,7 @@ impl<C> ConsensusBeginRequest<C> {
     pub fn new(transaction_id: ConsensusTransactionId) -> Self {
         Self {
             transaction_id,
-            command_type: PhantomData::<C>,
+            message_type: PhantomData::<C>,
         }
     }
 
@@ -108,7 +105,7 @@ impl<C> ConsensusBeginRequest<C> {
 pub enum ConsensusBeginResponse<C> {
     Success {
         transaction_id: ConsensusTransactionId,
-        command_type: PhantomData<C>,
+        message_type: PhantomData<C>,
     },
 }
 
@@ -116,19 +113,19 @@ pub enum ConsensusBeginResponse<C> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConsensusCommitRequest<C> {
-    id: ConsensusCommandId,
-    command_type: PhantomData<C>,
+    id: ConsensusMessageId,
+    message_type: PhantomData<C>,
 }
 
 impl<C> ConsensusCommitRequest<C> {
-    pub fn new(id: ConsensusCommandId) -> Self {
+    pub fn new(id: ConsensusMessageId) -> Self {
         Self {
             id,
-            command_type: PhantomData::<C>,
+            message_type: PhantomData::<C>,
         }
     }
 
-    pub fn id(&self) -> ConsensusCommandId {
+    pub fn id(&self) -> ConsensusMessageId {
         self.id
     }
 }
@@ -137,19 +134,19 @@ impl<C> ConsensusCommitRequest<C> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConsensusCommitResponse<C> {
-    id: ConsensusCommandId,
-    command_type: PhantomData<C>,
+    id: ConsensusMessageId,
+    message_type: PhantomData<C>,
 }
 
 impl<C> ConsensusCommitResponse<C> {
-    pub fn new(id: ConsensusCommandId) -> Self {
+    pub fn new(id: ConsensusMessageId) -> Self {
         Self {
             id,
-            command_type: PhantomData::<C>,
+            message_type: PhantomData::<C>,
         }
     }
 
-    pub fn id(&self) -> ConsensusCommandId {
+    pub fn id(&self) -> ConsensusMessageId {
         self.id
     }
 }

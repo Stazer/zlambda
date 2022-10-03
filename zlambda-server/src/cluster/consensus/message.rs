@@ -7,39 +7,39 @@ use std::fmt::Debug;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ConsensusActorExecuteMessage<C>
+pub struct ConsensusActorBroadcastMessage<C>
 where
     C: Debug + 'static,
 {
-    command: C,
+    message: C,
 }
 
-impl<C> From<ConsensusActorExecuteMessage<C>> for (C,)
+impl<C> From<ConsensusActorBroadcastMessage<C>> for (C,)
 where
     C: Debug + 'static,
 {
-    fn from(message: ConsensusActorExecuteMessage<C>) -> Self {
-        (message.command,)
+    fn from(message: ConsensusActorBroadcastMessage<C>) -> Self {
+        (message.message,)
     }
 }
 
-impl<C> Message for ConsensusActorExecuteMessage<C>
+impl<C> Message for ConsensusActorBroadcastMessage<C>
 where
     C: Debug + 'static,
 {
     type Result = ();
 }
 
-impl<C> ConsensusActorExecuteMessage<C>
+impl<C> ConsensusActorBroadcastMessage<C>
 where
     C: Debug + 'static,
 {
-    pub fn new(command: C) -> Self {
-        Self { command }
+    pub fn new(message: C) -> Self {
+        Self { message }
     }
 
-    pub fn command(&self) -> &C {
-        &self.command
+    pub fn message(&self) -> &C {
+        &self.message
     }
 }
 

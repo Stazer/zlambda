@@ -1,5 +1,5 @@
 use crate::cluster::{
-    NodeActor, NodeActorRemoveConnectionMessage, NodeConnectionId, Packet, ReadPacketError,
+    ConnectionId, NodeActor, NodeActorRemoveConnectionMessage, Packet, ReadPacketError,
 };
 use crate::common::{ActorStopMessage, TcpStreamActor, TcpStreamActorReceiveMessage};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
@@ -9,11 +9,11 @@ use tokio::net::TcpStream;
 
 #[derive(Debug)]
 pub struct PacketReaderActorReadPacketMessage {
-    id: NodeConnectionId,
+    id: ConnectionId,
     packet: Packet,
 }
 
-impl From<PacketReaderActorReadPacketMessage> for (NodeConnectionId, Packet) {
+impl From<PacketReaderActorReadPacketMessage> for (ConnectionId, Packet) {
     fn from(message: PacketReaderActorReadPacketMessage) -> Self {
         (message.id, message.packet)
     }
@@ -24,11 +24,11 @@ impl Message for PacketReaderActorReadPacketMessage {
 }
 
 impl PacketReaderActorReadPacketMessage {
-    pub fn new(id: NodeConnectionId, packet: Packet) -> Self {
+    pub fn new(id: ConnectionId, packet: Packet) -> Self {
         Self { id, packet }
     }
 
-    pub fn id(&self) -> NodeConnectionId {
+    pub fn id(&self) -> ConnectionId {
         self.id
     }
 
@@ -41,7 +41,7 @@ impl PacketReaderActorReadPacketMessage {
 
 #[derive(Debug)]
 pub struct PacketReaderActor {
-    id: NodeConnectionId,
+    id: ConnectionId,
     recipient: Addr<NodeActor>,
     stream: Addr<TcpStreamActor>,
     buffer: Vec<u8>,
@@ -113,7 +113,7 @@ impl Handler<TcpStreamActorReceiveMessage> for PacketReaderActor {
 
 impl PacketReaderActor {
     pub fn new(
-        id: NodeConnectionId,
+        id: ConnectionId,
         recipient: Addr<NodeActor>,
         stream: TcpStream,
     ) -> (Addr<Self>, Addr<TcpStreamActor>) {

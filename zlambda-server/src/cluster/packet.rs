@@ -1,4 +1,5 @@
 use crate::cluster::NodeId;
+use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
 use std::error;
@@ -25,10 +26,11 @@ pub enum ConsensusPacket {
 pub enum Packet {
     NodeHandshakeRequest,
     NodeHandshakeResponse,
-    ClientHandshake,
+    ClientHandshakeRequest,
+    ClientHandshakeResponse,
 
     NodeRegisterRequest,
-    NodeRegisterResponse,
+    NodeRegisterResponse { result: Result<NodeId, ()> },
 
     Consensus(ConsensusPacket),
 }
@@ -41,6 +43,10 @@ impl Packet {
 
     pub fn to_vec(&self) -> Result<Vec<u8>, WritePacketError> {
         Ok(to_allocvec(&self)?)
+    }
+
+    pub fn to_bytes(&self) -> Result<Bytes, WritePacketError> {
+        Ok(Bytes::from(self.to_vec()?))
     }
 }
 

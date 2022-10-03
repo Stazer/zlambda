@@ -1,43 +1,41 @@
-use crate::algorithm::next_key;
 use crate::cluster::{
-    ConsensusActor,
-    CreateConnectionNodeStateTransition,
-    DestroyConnectionNodeStateTransition, NodeClientId, NodeConnectionId, NodeId, NodeStateData,
-    NodeStateTransition, Packet, PacketReaderActor, PacketReaderActorReadPacketMessage,
-    ReadPacketError,
-    RegisterNodeNodeStateTransition,
-    ConsensusActorSendBeginRequestMessage,
-    ConsensusActorSendBeginResponseMessage,
-    ConsensusActorSendCommitRequestMessage,
-    ConsensusActorSendCommitResponseMessage,
-    NodeActorRemoveConnectionMessage,
+    ConnectionId, ConsensusActor, ConsensusActorBroadcastMessage,
+    ConsensusActorSendBeginRequestMessage, ConsensusActorSendBeginResponseMessage,
+    ConsensusActorSendCommitRequestMessage, ConsensusActorSendCommitResponseMessage,
+    NodeActorRegisterMessage, NodeActorRemoveConnectionMessage, Packet, PacketReaderActor,
+    PacketReaderActorReadPacketMessage, StateActor, StateActorCreateConnectionMessage,
+    StateActorDestroyConnectionMessage, StateActorReadDataMessage, StateActorCreateNodeConnectionMessage
 };
 use crate::common::{
     ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor,
-    TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
+    TcpStreamActorSendMessage,
 };
-use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
-use async_trait::async_trait;
+use actix::{
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message,
+    ResponseActFuture, WrapFuture,
+};
 use std::collections::HashMap;
+use std::error::Error;
 use std::io;
-use std::rc::Rc;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tracing::{error, trace};
-use tracing_subscriber::fmt::init;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type CommandType = ();
+#[derive(Debug)]
+pub enum NodeMessage {
+    RegisterNode { connection_id: ConnectionId },
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct NodeActor {
-    consensus: Addr<ConsensusActor<CommandType, Self>>,
-    state: NodeStateData,
+    consensus: Addr<ConsensusActor<NodeMessage, Self>>,
+    state: Addr<StateActor>,
     listener: Addr<TcpListenerActor>,
-    streams: HashMap<NodeConnectionId, Addr<TcpStreamActor>>,
-    readers: HashMap<NodeConnectionId, Addr<PacketReaderActor>>,
+    streams: HashMap<ConnectionId, Addr<TcpStreamActor>>,
+    readers: HashMap<ConnectionId, Addr<PacketReaderActor>>,
 }
 
 impl Actor for NodeActor {
@@ -45,6 +43,7 @@ impl Actor for NodeActor {
 
     #[tracing::instrument]
     fn stopped(&mut self, _context: &mut Self::Context) {
+        self.state.do_send(ActorStopMessage);
         self.listener.do_send(ActorStopMessage);
 
         for stream in self.streams.values() {
@@ -71,56 +70,67 @@ impl Handler<ActorStopMessage> for NodeActor {
 }
 
 impl Handler<PacketReaderActorReadPacketMessage> for NodeActor {
-    type Result = <PacketReaderActorReadPacketMessage as Message>::Result;
+    type Result = ResponseActFuture<Self, <PacketReaderActorReadPacketMessage as Message>::Result>;
 
     #[tracing::instrument]
     fn handle(
         &mut self,
         message: PacketReaderActorReadPacketMessage,
-        context: &mut <Self as Actor>::Context,
+        _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        /*trace!("Received packet");
-        let (id, packet) = message.into();
+        async {}
+            .into_actor(self)
+            .then(|_, actor, _context| {
+                let (connection_id, packet): (ConnectionId, Packet) = message.into();
+                let stream = actor.streams.get(&connection_id).map(|x| x.clone());
+                let _state = actor.state.clone();
+                let consensus = actor.consensus.clone();
 
-        let client = match self.clients.get_mut(&id) {
-            Some(c) => c,
-            None => {
-                panic!("PacketReaderActorReadPacketMessage should never be received by NodeActor with an unknown id {:?}", id);
-            }
-        };
+                async move {
+                    let stream = match stream {
+                        None => return Err(Box::<dyn Error>::from("Stream not found")),
+                        Some(s) => s,
+                    };
 
-        match (client.r#type().as_ref(), packet) {
-            (None, Packet::FollowerHandshakeChallenge) => {
-                let id = next_key(&mut self.followers);
+                    match packet {
+                        Packet::NodeRegisterRequest => {
+                            if let Err(e) = consensus
+                                .send(ConsensusActorBroadcastMessage::new(
+                                    NodeMessage::RegisterNode { connection_id },
+                                ))
+                                .await
+                            {
+                                return Err(Box::<dyn Error>::from(e));
+                            }
+                        }
+                        Packet::NodeRegisterResponse { result } => {
+                            trace!("{:?}", result);
+                        }
+                        _ => {
+                            error!("Unhandled packet from connection {}", connection_id);
 
-                let follower = Rc::new(NodeFollower::new(id));
-                if self.followers.insert(id, follower.clone()).is_some() {
-                    panic!("followers::insert with id {} should never return Some", id);
-                }
-                client.set_type(Some(NodeClientType::Follower(follower)));
-
-                let packet = match (Packet::FollowerHandshakeSuccess { id }).to_vec() {
-                    Err(e) => {
-                        eprintln!("{}", e);
-                        context.stop();
-                        return;
+                            if let Err(e) = stream.send(ActorStopMessage).await {
+                                return Err(Box::<dyn Error>::from(e));
+                            }
+                        }
                     }
-                    Ok(p) => p,
-                };
 
-                client
-                    .stream()
-                    .do_send(TcpStreamActorSendMessage::new(packet.into()));
-            }
-            _ => {
-                error!("Unhandled packet");
-            }
-        };*/
+                    Ok(())
+                }
+                .into_actor(actor)
+            })
+            .map(|result, _actor, context| {
+                if let Err(e) = result {
+                    error!("{}", e);
+                    context.stop();
+                }
+            })
+            .boxed_local()
     }
 }
 
 impl Handler<NodeActorRemoveConnectionMessage> for NodeActor {
-    type Result = <NodeActorRemoveConnectionMessage as Message>::Result;
+    type Result = ResponseActFuture<Self, <NodeActorRemoveConnectionMessage as Message>::Result>;
 
     #[tracing::instrument]
     fn handle(
@@ -128,7 +138,9 @@ impl Handler<NodeActorRemoveConnectionMessage> for NodeActor {
         message: NodeActorRemoveConnectionMessage,
         context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        let (id,) = message.into();
+        let (id,): (ConnectionId,) = message.into();
+
+        trace!("Destroy connection {}", id);
 
         assert!(self
             .streams
@@ -147,14 +159,28 @@ impl Handler<NodeActorRemoveConnectionMessage> for NodeActor {
             })
             .is_some());
 
-        DestroyConnectionNodeStateTransition::new(id).apply(&mut self.state);
+        let future = self.state.send(StateActorDestroyConnectionMessage::new(id));
 
-        trace!("Connection destroyed");
+        Box::pin(
+            async move { future.await }
+                .into_actor(self)
+                .map(|result, _actor, _context| {
+                    match result {
+                        Err(e) => {
+                            error!("{}", e);
+                            return;
+                        }
+                        Ok(()) => {}
+                    };
+
+                    trace!("Connection destroyed");
+                }),
+        )
     }
 }
 
 impl Handler<TcpListenerActorAcceptMessage> for NodeActor {
-    type Result = <TcpListenerActorAcceptMessage as Message>::Result;
+    type Result = ResponseActFuture<Self, <TcpListenerActorAcceptMessage as Message>::Result>;
 
     #[tracing::instrument]
     fn handle(
@@ -162,66 +188,198 @@ impl Handler<TcpListenerActorAcceptMessage> for NodeActor {
         message: TcpListenerActorAcceptMessage,
         context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
+        trace!("Create connection");
+
         let stream = match message.into() {
             (Err(e),) => {
                 eprintln!("{}", e);
-                return;
+                return Box::pin(async {}.into_actor(self));
             }
             (Ok(s),) => s,
         };
 
-        let id = CreateConnectionNodeStateTransition.apply(&mut self.state);
-        let (reader, stream) = PacketReaderActor::new(id, context.address(), stream);
-        self.readers.insert(id, reader);
-        self.streams.insert(id, stream);
+        let future = self.state.send(StateActorCreateConnectionMessage::new());
 
-        trace!("Connnection created");
+        Box::pin(
+            async move { future.await }
+                .into_actor(self)
+                .map(|result, actor, context| {
+                    let id = match result {
+                        Err(e) => {
+                            error!("{}", e);
+                            return;
+                        }
+                        Ok(i) => i,
+                    };
+
+                    let (reader, stream) = PacketReaderActor::new(id, context.address(), stream);
+                    actor.readers.insert(id, reader);
+                    actor.streams.insert(id, stream);
+
+                    trace!("Connection {} created", id);
+                }),
+        )
     }
 }
 
-impl Handler<ConsensusActorSendBeginRequestMessage<CommandType>> for NodeActor {
-    type Result = <ConsensusActorSendBeginRequestMessage<CommandType> as Message>::Result;
+impl Handler<NodeActorRegisterMessage> for NodeActor {
+    type Result = ResponseActFuture<Self, <NodeActorRegisterMessage as Message>::Result>;
 
     #[tracing::instrument]
     fn handle(
         &mut self,
-        _message: ConsensusActorSendBeginRequestMessage<CommandType>,
+        message: NodeActorRegisterMessage,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        trace!("Register node");
+
+        let (stream,): (TcpStream,) = message.into();
+
+        let future = self.state.send(StateActorCreateConnectionMessage::new());
+
+        (async {})
+            .into_actor(self)
+            .then(move |_, actor, _context| async { future.await }.into_actor(actor))
+            .then(move |result, actor, context| {
+                let address = context.address();
+
+                async move {
+                    let connection_id = match result {
+                        Err(e) => {
+                            return Err(Box::<dyn Error>::from(e));
+                        }
+                        Ok(c) => c,
+                    };
+
+                    let (reader, stream) = PacketReaderActor::new(connection_id, address, stream);
+
+                    let request = match Packet::NodeRegisterRequest.to_bytes() {
+                        Err(e) => {
+                            return Err(Box::<dyn Error>::from(e));
+                        }
+                        Ok(r) => r,
+                    };
+
+                    if let Err(e) = stream.send(TcpStreamActorSendMessage::new(request)).await {
+                        return Err(Box::<dyn Error>::from(e));
+                    }
+
+                    Ok((connection_id, reader, stream))
+                }
+                .into_actor(actor)
+            })
+            .map(|result, actors, context| {
+                let (connection_id, reader, stream) = match result {
+                    Err(e) => {
+                        error!("{}", e);
+                        context.stop();
+                        return;
+                    }
+                    Ok((c, r, s)) => (c, r, s),
+                };
+
+                assert!(actors.readers.insert(connection_id, reader).is_none());
+                assert!(actors.streams.insert(connection_id, stream).is_none());
+            })
+            .boxed_local()
+    }
+}
+
+impl Handler<ConsensusActorSendBeginRequestMessage<NodeMessage>> for NodeActor {
+    type Result = ResponseActFuture<
+        Self,
+        <ConsensusActorSendBeginRequestMessage<NodeMessage> as Message>::Result,
+    >;
+
+    #[tracing::instrument]
+    fn handle(
+        &mut self,
+        _message: ConsensusActorSendBeginRequestMessage<NodeMessage>,
+        _context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        async {}
+            .into_actor(self)
+            .then(|_result, actor, context| {
+                let state = actor.state.clone();
+                let address = context.address();
+
+                async move {
+                    let nodes = match state
+
+                        .send(StateActorReadDataMessage::new(|state| {
+                            state.nodes().values().map(|x| x.clone()).collect::<Vec<_>>()
+                        }))
+                        .await
+                    {
+                        Err(e) => return Err(Box::<dyn Error>::from(e)),
+                        Ok(n) => n,
+                    };
+
+                    for node in nodes.iter().filter(|n| n.connection_id().is_none()) {
+                        let stream = match TcpStream::connect(node.address()).await {
+                            Err(e) => {
+                                error!("{}", e);
+                                continue;
+                            }
+                            Ok(s) => s,
+                        };
+
+                        let connection_id = match state.send(StateActorCreateNodeConnectionMessage::new(node.id())).await {
+                            Err(e) => return Err(Box::<dyn Error>::from(e)),
+                            Ok(c) => c,
+                        };
+
+                        let (reader, stream) = PacketReaderActor::new(connection_id, address.clone(), stream);
+
+                        //assert!(actors.readers.insert(connection_id, reader).is_none());
+                        //assert!(actors.streams.insert(connection_id, stream).is_none());
+                    }
+
+                    Ok(())
+                }
+                .into_actor(actor)
+            })
+            .map(|result, _actor, context| {
+                if let Err(e) = result {
+                    error!("{}", e);
+                    context.stop();
+                }
+            })
+            .boxed_local()
+    }
+}
+
+impl Handler<ConsensusActorSendBeginResponseMessage<NodeMessage>> for NodeActor {
+    type Result = <ConsensusActorSendBeginResponseMessage<NodeMessage> as Message>::Result;
+
+    #[tracing::instrument]
+    fn handle(
+        &mut self,
+        _message: ConsensusActorSendBeginResponseMessage<NodeMessage>,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
     }
 }
 
-impl Handler<ConsensusActorSendBeginResponseMessage<CommandType>> for NodeActor {
-    type Result = <ConsensusActorSendBeginResponseMessage<CommandType> as Message>::Result;
+impl Handler<ConsensusActorSendCommitRequestMessage<NodeMessage>> for NodeActor {
+    type Result = <ConsensusActorSendCommitRequestMessage<NodeMessage> as Message>::Result;
 
     #[tracing::instrument]
     fn handle(
         &mut self,
-        _message: ConsensusActorSendBeginResponseMessage<CommandType>,
+        _message: ConsensusActorSendCommitRequestMessage<NodeMessage>,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
     }
 }
 
-impl Handler<ConsensusActorSendCommitRequestMessage<CommandType>> for NodeActor {
-    type Result = <ConsensusActorSendCommitRequestMessage<CommandType> as Message>::Result;
+impl Handler<ConsensusActorSendCommitResponseMessage<NodeMessage>> for NodeActor {
+    type Result = <ConsensusActorSendCommitResponseMessage<NodeMessage> as Message>::Result;
 
     #[tracing::instrument]
     fn handle(
         &mut self,
-        _message: ConsensusActorSendCommitRequestMessage<CommandType>,
-        _context: &mut <Self as Actor>::Context,
-    ) -> Self::Result {
-    }
-}
-
-impl Handler<ConsensusActorSendCommitResponseMessage<CommandType>> for NodeActor {
-    type Result = <ConsensusActorSendCommitResponseMessage<CommandType> as Message>::Result;
-
-    #[tracing::instrument]
-    fn handle(
-        &mut self,
-        _message: ConsensusActorSendCommitResponseMessage<CommandType>,
+        _message: ConsensusActorSendCommitResponseMessage<NodeMessage>,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
     }
@@ -236,49 +394,35 @@ impl NodeActor {
         S: ToSocketAddrs,
         T: ToSocketAddrs,
     {
-        init();
+        let stream = match stream_address {
+            Some(s) => Some(TcpStream::connect(s).await?),
+            None => None,
+        };
 
         let listener = TcpListener::bind(listener_address).await?;
 
-        match stream_address {
-            Some(stream_address) => {
-                let stream = TcpStream::connect(stream_address).await?;
+        let actor = Self::create(move |context| Self {
+            consensus: ConsensusActor::new(context.address()),
+            listener: TcpListenerActor::new(
+                context.address().recipient(),
+                Some(context.address().recipient()),
+                listener,
+            ),
+            state: StateActor::new(),
+            streams: HashMap::default(),
+            readers: HashMap::default(),
+        });
 
-                Ok(Self::create(move |context| {
-                    let mut state = NodeStateData::default();
-                    let id = RegisterNodeNodeStateTransition.apply(&mut state);
-
-                    let mut readers = HashMap::default();
-                    let mut streams = HashMap::default();
-
-                    let (reader, stream) = PacketReaderActor::new(id, context.address(), stream);
-                    readers.insert(id, reader);
-                    streams.insert(id, stream);
-
-                    Self {
-                        consensus: ConsensusActor::new(context.address()),
-                        listener: TcpListenerActor::new(
-                            context.address().recipient(),
-                            Some(context.address().recipient()),
-                            listener,
-                        ),
-                        state,
-                        streams,
-                        readers,
-                    }
-                }))
+        match stream {
+            Some(s) => {
+                actor
+                    .send(NodeActorRegisterMessage::new(s))
+                    .await
+                    .expect("Cannot send NodeActorRegisterMessage");
             }
-            None => Ok(Self::create(move |context| Self {
-                consensus: ConsensusActor::new(context.address()),
-                listener: TcpListenerActor::new(
-                    context.address().recipient(),
-                    Some(context.address().recipient()),
-                    listener,
-                ),
-                state: NodeStateData::default(),
-                streams: HashMap::default(),
-                readers: HashMap::default(),
-            })),
-        }
+            None => {}
+        };
+
+        Ok(actor)
     }
 }

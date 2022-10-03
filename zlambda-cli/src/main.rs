@@ -4,6 +4,7 @@
 
 use clap::{Parser, Subcommand};
 use std::error::Error;
+use tracing_subscriber::fmt::init;
 use zlambda_server::cluster::NodeActor;
 use zlambda_server::run::run_with_default_system_runner;
 
@@ -38,6 +39,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             listener_address,
             leader_address,
         } => {
+            init();
+
             run_with_default_system_runner(async move || {
                 NodeActor::new(listener_address, leader_address).await?;
                 Ok(())

@@ -1,16 +1,21 @@
 use crate::cluster::{
-    ConsensusActorExecuteMessage, ConsensusActorReceiveBeginRequestMessage,
+    ConsensusActorBroadcastMessage, ConsensusActorReceiveBeginRequestMessage,
     ConsensusActorReceiveBeginResponseMessage, ConsensusActorReceiveCommitRequestMessage,
     ConsensusActorReceiveCommitResponseMessage, ConsensusActorSendBeginRequestMessage,
     ConsensusActorSendBeginResponseMessage, ConsensusActorSendCommitRequestMessage,
-    ConsensusActorSendCommitResponseMessage, ConsensusBeginRequest, ConsensusBeginResponse,
-    ConsensusCommandId, ConsensusCommitRequest, ConsensusCommitResponse, ConsensusTransaction,
-    ConsensusTransactionId,
+    ConsensusActorSendCommitResponseMessage, ConsensusBeginRequest, ConsensusMessageId,
+    ConsensusTransaction, ConsensusTransactionId,
 };
-use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler};
+use actix::dev::ToEnvelope;
+use actix::{
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message,
+    ResponseActFuture, WrapFuture,
+};
+use futures::FutureExt;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::{PhantomData, Unpin};
+use tracing::{error, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,9 +31,9 @@ where
         + Handler<ConsensusActorSendCommitResponseMessage<C>>
         + 'static,
 {
-    _command_type: PhantomData<C>,
-    _recipient: Addr<R>,
-    _next_command_id: ConsensusCommandId,
+    message_type: PhantomData<C>,
+    recipient: Addr<R>,
+    _next_message_id: ConsensusMessageId,
     _transactions: HashMap<ConsensusTransactionId, ConsensusTransaction<C>>,
 }
 
@@ -46,9 +51,9 @@ where
     type Context = Context<Self>;
 }
 
-impl<C, R> Handler<ConsensusActorExecuteMessage<C>> for ConsensusActor<C, R>
+impl<C, R> Handler<ConsensusActorBroadcastMessage<C>> for ConsensusActor<C, R>
 where
-    C: Debug + Unpin + 'static,
+    C: Debug + Unpin + Send + 'static,
     R: Actor
         + Debug
         + Handler<ConsensusActorSendBeginRequestMessage<C>>
@@ -56,15 +61,35 @@ where
         + Handler<ConsensusActorSendCommitRequestMessage<C>>
         + Handler<ConsensusActorSendCommitResponseMessage<C>>
         + 'static,
+    R::Context: ToEnvelope<R, ConsensusActorSendBeginRequestMessage<C>>,
 {
-    type Result = ();
+    type Result = ResponseActFuture<Self, <ConsensusActorBroadcastMessage<C> as Message>::Result>;
 
     #[tracing::instrument]
     fn handle(
         &mut self,
-        message: ConsensusActorExecuteMessage<C>,
+        message: ConsensusActorBroadcastMessage<C>,
         context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
+        let (message,): (C,) = message.into();
+
+        let recipient = self.recipient.clone();
+
+        async move {
+            recipient
+                .send(ConsensusActorSendBeginRequestMessage::<C>::new(
+                    ConsensusBeginRequest::new(ConsensusTransactionId::new(0, 0)),
+                ))
+                .await
+        }
+        .into_actor(self)
+        .map(|result, _actor, context| {
+            if let Err(e) = result {
+                error!("{}", e);
+                context.stop();
+            }
+        })
+        .boxed_local()
     }
 }
 
@@ -166,12 +191,16 @@ where
         + Handler<ConsensusActorSendCommitRequestMessage<C>>
         + Handler<ConsensusActorSendCommitResponseMessage<C>>
         + 'static,
+    R::Context: ToEnvelope<R, ConsensusActorSendBeginRequestMessage<C>>
+        + ToEnvelope<R, ConsensusActorSendBeginResponseMessage<C>>
+        + ToEnvelope<R, ConsensusActorSendCommitRequestMessage<C>>
+        + ToEnvelope<R, ConsensusActorSendCommitResponseMessage<C>>,
 {
     pub fn new(recipient: Addr<R>) -> Addr<Self> {
         (Self {
-            _command_type: PhantomData::default(),
-            _recipient: recipient,
-            _next_command_id: 0,
+            message_type: PhantomData::default(),
+            recipient: recipient,
+            _next_message_id: 0,
             _transactions: HashMap::default(),
         })
         .start()

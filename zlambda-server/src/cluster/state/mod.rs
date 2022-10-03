@@ -1,7 +1,9 @@
-pub mod data;
-pub mod transition;
+mod actor;
+mod data;
+mod message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub use actor::*;
 pub use data::*;
-pub use transition::*;
+pub use message::*;
