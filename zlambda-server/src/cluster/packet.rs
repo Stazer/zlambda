@@ -3,36 +3,34 @@ use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
 use std::error;
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type CommandType = ();
+use std::fmt::{self, Debug, Display, Formatter};
+use std::net::SocketAddr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum ConsensusPacket {
-    //BeginRequest(ConsensusBeginRequest<CommandType>),
-    //BeginResponse(ConsensusBeginResponse<CommandType>),
-    //CommitRequest(ConsensusCommitRequest<CommandType>),
-    //CommitResponse(ConsensusCommitResponse<CommandType>),
+pub enum NodeRegisterResponsePacketError {
+    NotALeader {
+        leader_address: SocketAddr,
+    },
 }
+
+impl Display for NodeRegisterResponsePacketError {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Self::NotALeader { .. } => write!(formatter, "Not a leader"),
+        }
+    }
+}
+
+impl error::Error for NodeRegisterResponsePacketError {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
-    NodeHandshakeRequest { node_id: NodeId },
-    NodeHandshakeResponse { result: Result<(), String> },
-    ClientHandshakeRequest,
-    ClientHandshakeResponse { result: Result<(), String> },
-
     NodeRegisterRequest,
-    NodeRegisterResponse { result: Result<NodeId, String> },
-
-    Consensus(ConsensusPacket),
+    NodeRegisterResponse { result: Result<NodeId, NodeRegisterResponsePacketError> },
 }
 
 impl Packet {

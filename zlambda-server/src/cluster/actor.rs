@@ -1,6 +1,8 @@
+use crate::algorithm::next_key;
+use crate::cluster::NodeId;
 use crate::cluster::{
-    ConnectionId, NodeActorRegisterMessage, NodeActorRemoveConnectionMessage, NodeState, Packet,
-    PacketReaderActor, PacketReaderActorReadPacketMessage,
+    ConnectionId, NodeActorRegisterMessage, NodeActorRemoveConnectionMessage, Packet,
+    PacketReaderActor, PacketReaderActorReadPacketMessage, NodeRegisterResponsePacketError,
 };
 use crate::common::{
     ActorExecuteMessage, ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
@@ -15,6 +17,65 @@ use std::error::Error;
 use std::io;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tracing::{error, trace};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+type MessageId = u64;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+enum MessageNodeState {
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct NodeNodeState {
+    connection_id: Option<ConnectionId>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+enum ConnectionStateType {
+    IncomingRegisteringNode,
+    OutgoingRegisteringNode,
+    Node { node_id: NodeId },
+    Client,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct ConnectionNodeState {
+    id: ConnectionId,
+    r#type: Option<ConnectionStateType>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+enum NodeStateType {
+    Leader {
+        node_id: NodeId,
+        nodes: HashMap<NodeId, NodeNodeState>,
+    },
+    Follower {
+        node_id: NodeId,
+        leader_connection_id: ConnectionId,
+    },
+    Candidate,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct NodeState {
+    r#type: Option<NodeStateType>,
+    connections: HashMap<ConnectionId, ConnectionNodeState>,
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,7 +135,18 @@ impl Handler<TcpListenerActorAcceptMessage> for NodeActor {
             (Ok(s),) => s,
         };
 
-        let connection_id = self.state.create_connection();
+        let connection_id = next_key(&self.state.connections);
+        assert!(self
+            .state
+            .connections
+            .insert(
+                connection_id,
+                ConnectionNodeState {
+                    id: connection_id,
+                    r#type: None,
+                }
+            )
+            .is_none());
 
         let (reader_address, stream_address) =
             PacketReaderActor::new(connection_id, context.address(), stream);
@@ -98,7 +170,11 @@ impl Handler<NodeActorRemoveConnectionMessage> for NodeActor {
 
         self.stream_addresses.remove(&message.connection_id());
         self.reader_addresses.remove(&message.connection_id());
-        self.state.destroy_connection(message.connection_id());
+        assert!(self
+            .state
+            .connections
+            .remove(&message.connection_id())
+            .is_some());
 
         trace!("Connection destroyed");
     }
@@ -121,7 +197,6 @@ where
 }
 
 impl Handler<PacketReaderActorReadPacketMessage> for NodeActor {
-    //type Result = ResponseActFuture<Self, <PacketReaderActorReadPacketMessage as Message>::Result>;
     type Result = <PacketReaderActorReadPacketMessage as Message>::Result;
 
     #[tracing::instrument]
@@ -131,23 +206,62 @@ impl Handler<PacketReaderActorReadPacketMessage> for NodeActor {
         context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         let (connection_id, packet): (ConnectionId, Packet) = message.into();
-        let stream_address = self
-            .reader_addresses
-            .get(&connection_id)
-            .expect("Reader not found")
-            .clone();
 
         match packet {
-            Packet::NodeHandshakeRequest { node_id } => {
-                self.state.handle_node_handshake_request(node_id);
-            }
-            Packet::NodeHandshakeResponse { result } => {
-                trace!("{:?}", result);
-            }
             Packet::NodeRegisterRequest => {
-                trace!("request");
+                let connection = self
+                    .state
+                    .connections
+                    .get_mut(&connection_id)
+                    .expect("Connection not found");
+
+
+            }
+            Packet::NodeRegisterResponse { result } => {
+                match result {
+                    Ok(node_id) => {
+                        assert!(self.state.r#type.is_none());
+
+                        self.state.r#type = Some(NodeStateType::Follower {
+                            node_id,
+                            leader_connection_id: connection_id,
+                        });
+                    }
+                    Err(NodeRegisterResponsePacketError::NotALeader { leader_address }) => {
+                        let stream_address = self
+                            .stream_addresses
+                            .get(&connection_id)
+                            .expect("Reader not found")
+                            .clone();
+
+                        let reader_address = self
+                            .reader_addresses
+                            .get(&connection_id)
+                            .expect("Reader not found")
+                            .clone();
+
+                        context.wait(async move {
+                            if let Err(e) = stream_address.send(ActorStopMessage).await {
+                                return Err(Box::<dyn Error>::from(e));
+                            }
+
+                            reader_address.send(ActorStopMessage).await.map_err(Box::<dyn Error>::from)
+                        }.into_actor(self).map(|result, _actor, context| {
+                            if let Err(e) = result {
+                                error!("{}", e);
+                                context.stop();
+                            }
+                        }));
+                    }
+                }
             }
             _ => {
+                let stream_address = self
+                    .stream_addresses
+                    .get(&connection_id)
+                    .expect("Reader not found")
+                    .clone();
+
                 context.wait(
                     async move { stream_address.send(ActorStopMessage).await }
                         .into_actor(self)
@@ -156,7 +270,7 @@ impl Handler<PacketReaderActorReadPacketMessage> for NodeActor {
                                 error!("{}", e);
                                 context.stop();
                             }
-                        })
+                        }),
                 );
             }
         };
@@ -174,7 +288,19 @@ impl Handler<NodeActorRegisterMessage> for NodeActor {
     ) -> Self::Result {
         let (stream,): (TcpStream,) = message.into();
 
-        let connection_id = self.state.create_connection();
+        let connection_id = next_key(&self.state.connections);
+        assert!(self.state.r#type.is_none());
+        assert!(self
+            .state
+            .connections
+            .insert(
+                connection_id,
+                ConnectionNodeState {
+                    id: connection_id,
+                    r#type: Some(ConnectionStateType::OutgoingRegisteringNode),
+                }
+            )
+            .is_none());
 
         let (reader_address, stream_address) =
             PacketReaderActor::new(connection_id, context.address(), stream);
@@ -224,6 +350,8 @@ impl NodeActor {
 
         let listener = TcpListener::bind(listener_address).await?;
 
+        let is_leader = stream.is_none();
+
         let actor = Self::create(move |context| Self {
             listener_address: TcpListenerActor::new(
                 context.address().recipient(),
@@ -232,7 +360,20 @@ impl NodeActor {
             ),
             reader_addresses: HashMap::default(),
             stream_addresses: HashMap::default(),
-            state: NodeState::default(),
+            state: if is_leader {
+                NodeState {
+                    r#type: Some(NodeStateType::Leader {
+                        node_id: 0,
+                        nodes: HashMap::new(),
+                    }),
+                    connections: HashMap::new(),
+                }
+            } else {
+                NodeState {
+                    r#type: None,
+                    connections: HashMap::new(),
+                }
+            },
         });
 
         if let Some(stream) = stream {
