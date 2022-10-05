@@ -4,6 +4,7 @@ use crate::cluster::{
 use crate::common::{ActorStopMessage, TcpStreamActor, TcpStreamActorReceiveMessage};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
 use tokio::net::TcpStream;
+use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -84,7 +85,7 @@ impl Handler<TcpStreamActorReceiveMessage> for PacketReaderActor {
         let bytes = match result {
             Ok(b) => b,
             Err(e) => {
-                eprintln!("{:?}", e);
+                error!("{:?}", e);
                 context.stop();
                 return;
             }
@@ -97,7 +98,7 @@ impl Handler<TcpStreamActorReceiveMessage> for PacketReaderActor {
                 Ok((r, p)) => (r, p),
                 Err(ReadPacketError::UnexpectedEnd) => break,
                 Err(e) => {
-                    eprintln!("{:?}", e);
+                    error!("{:?}", e);
                     context.stop();
                     return;
                 }

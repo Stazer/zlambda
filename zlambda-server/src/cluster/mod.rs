@@ -8,12 +8,18 @@ pub use common::*;
 pub use packet::*;
 pub use state::*;
 
-mod consensus;
-mod node;
+//mod consensus;
+//mod node;
 mod packet_reader;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub use consensus::*;
-pub use node::*;
+//pub use consensus::*;
+//pub use node::*;
 pub use packet_reader::*;
+
+mod actor;
+pub use actor::*;
+
+mod message;
+pub use message::*;

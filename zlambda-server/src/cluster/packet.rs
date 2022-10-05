@@ -24,13 +24,13 @@ pub enum ConsensusPacket {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
-    NodeHandshakeRequest,
-    NodeHandshakeResponse,
+    NodeHandshakeRequest { node_id: NodeId },
+    NodeHandshakeResponse { result: Result<(), String> },
     ClientHandshakeRequest,
-    ClientHandshakeResponse,
+    ClientHandshakeResponse { result: Result<(), String> },
 
     NodeRegisterRequest,
-    NodeRegisterResponse { result: Result<NodeId, ()> },
+    NodeRegisterResponse { result: Result<NodeId, String> },
 
     Consensus(ConsensusPacket),
 }

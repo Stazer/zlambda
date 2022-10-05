@@ -4,6 +4,7 @@ use actix::{
 };
 use bytes::Bytes;
 use std::io;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::OwnedWriteHalf;
@@ -11,6 +12,49 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::io::ReaderStream;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ActorExecuteMessage<F, A>
+where
+    F: FnOnce(&mut A, &mut A::Context),
+    A: Actor + 'static,
+{
+    function: F,
+    actor_type: PhantomData<A>,
+}
+
+impl<F, A> From<ActorExecuteMessage<F, A>> for (F,)
+where
+    F: FnOnce(&mut A, &mut A::Context),
+    A: Actor + 'static,
+{
+    fn from(message: ActorExecuteMessage<F, A>) -> Self {
+        (message.function,)
+    }
+}
+
+impl<F, A> Message for ActorExecuteMessage<F, A>
+where
+    F: FnOnce(&mut A, &mut A::Context),
+    A: Actor + 'static,
+{
+    type Result = ();
+}
+
+impl<F, A> ActorExecuteMessage<F, A>
+where
+    F: FnOnce(&mut A, &mut A::Context),
+    A: Actor + 'static,
+{
+    pub fn new(function: F) -> Self {
+        Self {
+            function,
+            actor_type: PhantomData::default(),
+        }
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

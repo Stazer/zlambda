@@ -1,4 +1,4 @@
-use crate::cluster::NodeConnectionId;
+use crate::cluster::ConnectionId;
 use actix::Message;
 use tokio::net::TcpStream;
 
@@ -6,12 +6,12 @@ use tokio::net::TcpStream;
 
 #[derive(Debug)]
 pub struct NodeActorRemoveConnectionMessage {
-    id: NodeConnectionId,
+    connection_id: ConnectionId,
 }
 
-impl From<NodeActorRemoveConnectionMessage> for (NodeConnectionId,) {
+impl From<NodeActorRemoveConnectionMessage> for (ConnectionId,) {
     fn from(message: NodeActorRemoveConnectionMessage) -> Self {
-        (message.id,)
+        (message.connection_id,)
     }
 }
 
@@ -20,12 +20,12 @@ impl Message for NodeActorRemoveConnectionMessage {
 }
 
 impl NodeActorRemoveConnectionMessage {
-    pub fn new(id: NodeConnectionId) -> Self {
-        Self { id }
+    pub fn new(connection_id: ConnectionId) -> Self {
+        Self { connection_id }
     }
 
-    pub fn id(&self) -> NodeConnectionId {
-        self.id
+    pub fn connection_id(&self) -> ConnectionId {
+        self.connection_id
     }
 }
 
@@ -55,3 +55,5 @@ impl NodeActorRegisterMessage {
         &self.stream
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
