@@ -9,10 +9,69 @@ use std::net::SocketAddr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct NodeRegisterResponsePacketSuccessNodeData {
+    node_id: NodeId,
+    socket_address: SocketAddr,
+}
+
+impl From<NodeRegisterResponsePacketSuccessNodeData> for (NodeId, SocketAddr) {
+    fn from(response: NodeRegisterResponsePacketSuccessNodeData) -> Self {
+        (response.node_id, response.socket_address)
+    }
+}
+
+impl NodeRegisterResponsePacketSuccessNodeData {
+    pub fn new(node_id: NodeId, socket_address: SocketAddr) -> Self {
+        Self {
+            node_id,
+            socket_address,
+        }
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.node_id
+    }
+
+    pub fn socket_address(&self) -> &SocketAddr {
+        &self.socket_address
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct NodeRegisterResponsePacketSuccessData {
+    node_id: NodeId,
+    nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>,
+}
+
+impl From<NodeRegisterResponsePacketSuccessData>
+    for (NodeId, Vec<NodeRegisterResponsePacketSuccessNodeData>)
+{
+    fn from(response: NodeRegisterResponsePacketSuccessData) -> Self {
+        (response.node_id, response.nodes)
+    }
+}
+
+impl NodeRegisterResponsePacketSuccessData {
+    pub fn new(node_id: NodeId, nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>) -> Self {
+        Self { node_id, nodes }
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.node_id
+    }
+
+    pub fn nodes(&self) -> &Vec<NodeRegisterResponsePacketSuccessNodeData> {
+        &self.nodes
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum NodeRegisterResponsePacketError {
-    NotALeader {
-        leader_address: SocketAddr,
-    },
+    NotALeader { leader_address: SocketAddr },
 }
 
 impl Display for NodeRegisterResponsePacketError {
@@ -30,7 +89,9 @@ impl error::Error for NodeRegisterResponsePacketError {}
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
     NodeRegisterRequest,
-    NodeRegisterResponse { result: Result<NodeId, NodeRegisterResponsePacketError> },
+    NodeRegisterResponse {
+        result: Result<NodeId, NodeRegisterResponsePacketError>,
+    },
 }
 
 impl Packet {

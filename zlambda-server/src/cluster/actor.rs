@@ -1,12 +1,12 @@
 use crate::algorithm::next_key;
 use crate::cluster::NodeId;
 use crate::cluster::{
-    ConnectionId, NodeActorRegisterMessage, NodeActorRemoveConnectionMessage, Packet,
-    PacketReaderActor, PacketReaderActorReadPacketMessage, NodeRegisterResponsePacketError,
+    ConnectionId, NodeActorRegisterMessage, NodeActorRemoveConnectionMessage,
+    NodeRegisterResponsePacketError, Packet, PacketReaderActorReadPacketMessage, ReadPacketError,
 };
 use crate::common::{
     ActorExecuteMessage, ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
-    TcpStreamActor, TcpStreamActorSendMessage,
+    TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
 };
 use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message,
@@ -25,9 +25,7 @@ type MessageId = u64;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-enum MessageNodeState {
-
-}
+enum MessageNodeState {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -39,7 +37,7 @@ struct NodeNodeState {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-enum ConnectionStateType {
+enum ConnectionTypeState {
     IncomingRegisteringNode,
     OutgoingRegisteringNode,
     Node { node_id: NodeId },
@@ -51,20 +49,30 @@ enum ConnectionStateType {
 #[derive(Debug)]
 struct ConnectionNodeState {
     id: ConnectionId,
-    r#type: Option<ConnectionStateType>,
+    r#type: Option<ConnectionTypeState>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+struct LeaderNodeNodeState {
+    connection_id: ConnectionId,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+struct FollowerNodeNodeState {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
-enum NodeStateType {
+enum NodeTypeState {
     Leader {
         node_id: NodeId,
-        nodes: HashMap<NodeId, NodeNodeState>,
+        //nodes: HashMap<NodeId, NodeNodeState>,
     },
     Follower {
         node_id: NodeId,
-        leader_connection_id: ConnectionId,
+        //nodes: HashMap<NodeId, NodeNodeState>
     },
     Candidate,
 }
@@ -73,7 +81,7 @@ enum NodeStateType {
 
 #[derive(Debug)]
 struct NodeState {
-    r#type: Option<NodeStateType>,
+    r#type: Option<NodeTypeState>,
     connections: HashMap<ConnectionId, ConnectionNodeState>,
 }
 
@@ -214,17 +222,17 @@ impl Handler<PacketReaderActorReadPacketMessage> for NodeActor {
                     .connections
                     .get_mut(&connection_id)
                     .expect("Connection not found");
-
-
             }
             Packet::NodeRegisterResponse { result } => {
                 match result {
                     Ok(node_id) => {
                         assert!(self.state.r#type.is_none());
 
-                        self.state.r#type = Some(NodeStateType::Follower {
+                        println!("Registration successful");
+
+                        self.state.r#type = Some(NodeTypeState::Follower {
                             node_id,
-                            leader_connection_id: connection_id,
+                            //leader_connection_id: connection_id,
                         });
                     }
                     Err(NodeRegisterResponsePacketError::NotALeader { leader_address }) => {
@@ -240,18 +248,25 @@ impl Handler<PacketReaderActorReadPacketMessage> for NodeActor {
                             .expect("Reader not found")
                             .clone();
 
-                        context.wait(async move {
-                            if let Err(e) = stream_address.send(ActorStopMessage).await {
-                                return Err(Box::<dyn Error>::from(e));
-                            }
+                        context.wait(
+                            async move {
+                                if let Err(e) = stream_address.send(ActorStopMessage).await {
+                                    return Err(Box::<dyn Error>::from(e));
+                                }
 
-                            reader_address.send(ActorStopMessage).await.map_err(Box::<dyn Error>::from)
-                        }.into_actor(self).map(|result, _actor, context| {
-                            if let Err(e) = result {
-                                error!("{}", e);
-                                context.stop();
+                                reader_address
+                                    .send(ActorStopMessage)
+                                    .await
+                                    .map_err(Box::<dyn Error>::from)
                             }
-                        }));
+                            .into_actor(self)
+                            .map(|result, _actor, context| {
+                                if let Err(e) = result {
+                                    error!("{}", e);
+                                    context.stop();
+                                }
+                            }),
+                        );
                     }
                 }
             }
@@ -297,7 +312,7 @@ impl Handler<NodeActorRegisterMessage> for NodeActor {
                 connection_id,
                 ConnectionNodeState {
                     id: connection_id,
-                    r#type: Some(ConnectionStateType::OutgoingRegisteringNode),
+                    r#type: Some(ConnectionTypeState::OutgoingRegisteringNode),
                 }
             )
             .is_none());
@@ -362,10 +377,7 @@ impl NodeActor {
             stream_addresses: HashMap::default(),
             state: if is_leader {
                 NodeState {
-                    r#type: Some(NodeStateType::Leader {
-                        node_id: 0,
-                        nodes: HashMap::new(),
-                    }),
+                    r#type: Some(NodeTypeState::Leader { node_id: 0 }),
                     connections: HashMap::new(),
                 }
             } else {
@@ -384,5 +396,104 @@ impl NodeActor {
         }
 
         Ok(actor)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct PacketReaderActor {
+    id: ConnectionId,
+    recipient: Addr<NodeActor>,
+    stream: Addr<TcpStreamActor>,
+    buffer: Vec<u8>,
+}
+
+impl Actor for PacketReaderActor {
+    type Context = Context<Self>;
+
+    #[tracing::instrument]
+    fn stopped(&mut self, _: &mut Self::Context) {
+        self.stream.do_send(ActorStopMessage);
+        self.recipient
+            .do_send(NodeActorRemoveConnectionMessage::new(self.id));
+    }
+}
+
+impl Handler<ActorStopMessage> for PacketReaderActor {
+    type Result = <ActorStopMessage as Message>::Result;
+
+    fn handle(
+        &mut self,
+        _: ActorStopMessage,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        context.stop();
+    }
+}
+
+impl Handler<TcpStreamActorReceiveMessage> for PacketReaderActor {
+    type Result = <TcpStreamActorReceiveMessage as Message>::Result;
+
+    #[tracing::instrument]
+    fn handle(
+        &mut self,
+        message: TcpStreamActorReceiveMessage,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        let (result,) = message.into();
+
+        let bytes = match result {
+            Ok(b) => b,
+            Err(e) => {
+                error!("{:?}", e);
+                context.stop();
+                return;
+            }
+        };
+
+        self.buffer.extend(bytes);
+
+        loop {
+            let (read, packet) = match Packet::from_vec(&self.buffer) {
+                Ok((r, p)) => (r, p),
+                Err(ReadPacketError::UnexpectedEnd) => break,
+                Err(e) => {
+                    error!("{:?}", e);
+                    context.stop();
+                    return;
+                }
+            };
+
+            self.buffer.drain(0..read);
+
+            self.recipient
+                .do_send(PacketReaderActorReadPacketMessage::new(self.id, packet));
+        }
+    }
+}
+
+impl PacketReaderActor {
+    pub fn new(
+        id: ConnectionId,
+        recipient: Addr<NodeActor>,
+        stream: TcpStream,
+    ) -> (Addr<Self>, Addr<TcpStreamActor>) {
+        let context = Context::new();
+        let stream = TcpStreamActor::new(
+            context.address().recipient(),
+            Some(context.address().recipient()),
+            stream,
+        );
+
+        (
+            context.run(Self {
+                id,
+                recipient,
+                stream: stream.clone(),
+                buffer: Vec::default(),
+            }),
+            stream,
+        )
     }
 }

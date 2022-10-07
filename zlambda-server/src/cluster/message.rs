@@ -1,4 +1,4 @@
-use crate::cluster::ConnectionId;
+use crate::cluster::{ConnectionId, Packet};
 use actix::Message;
 use tokio::net::TcpStream;
 
@@ -57,3 +57,33 @@ impl NodeActorRegisterMessage {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct PacketReaderActorReadPacketMessage {
+    id: ConnectionId,
+    packet: Packet,
+}
+
+impl From<PacketReaderActorReadPacketMessage> for (ConnectionId, Packet) {
+    fn from(message: PacketReaderActorReadPacketMessage) -> Self {
+        (message.id, message.packet)
+    }
+}
+
+impl Message for PacketReaderActorReadPacketMessage {
+    type Result = ();
+}
+
+impl PacketReaderActorReadPacketMessage {
+    pub fn new(id: ConnectionId, packet: Packet) -> Self {
+        Self { id, packet }
+    }
+
+    pub fn id(&self) -> ConnectionId {
+        self.id
+    }
+
+    pub fn packet(&self) -> &Packet {
+        &self.packet
+    }
+}
