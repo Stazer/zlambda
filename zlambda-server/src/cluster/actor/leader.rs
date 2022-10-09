@@ -89,7 +89,7 @@ struct NodeState {
 pub struct LeaderNodeConnection {
     connection_id: ConnectionId,
     stream_address: Addr<TcpStreamActor>,
-    reader_address: Addr<PacketReaderActor>,
+    reader_address: Addr<PacketReaderActor<ConnectionId>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,13 +168,13 @@ impl Handler<TcpListenerActorAcceptMessage> for LeaderNodeActor {
     }
 }
 
-impl Handler<NodeActorRemoveConnectionMessage> for LeaderNodeActor {
-    type Result = <NodeActorRemoveConnectionMessage as Message>::Result;
+impl Handler<NodeActorRemoveConnectionMessage<ConnectionId>> for LeaderNodeActor {
+    type Result = <NodeActorRemoveConnectionMessage<ConnectionId> as Message>::Result;
 
     #[tracing::instrument]
     fn handle(
         &mut self,
-        message: NodeActorRemoveConnectionMessage,
+        message: NodeActorRemoveConnectionMessage<ConnectionId>,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         trace!("Destroy connection {}", message.connection_id());
@@ -193,13 +193,13 @@ impl Handler<NodeActorRemoveConnectionMessage> for LeaderNodeActor {
     }
 }
 
-impl Handler<PacketReaderActorReadPacketMessage> for LeaderNodeActor {
-    type Result = <PacketReaderActorReadPacketMessage as Message>::Result;
+impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for LeaderNodeActor {
+    type Result = <PacketReaderActorReadPacketMessage<ConnectionId> as Message>::Result;
 
     #[tracing::instrument]
     fn handle(
         &mut self,
-        message: PacketReaderActorReadPacketMessage,
+        message: PacketReaderActorReadPacketMessage<ConnectionId>,
         context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         let (connection_id, packet): (ConnectionId, Packet) = message.into();

@@ -1,31 +1,44 @@
 use crate::cluster::{ConnectionId, Packet};
 use actix::Message;
 use tokio::net::{TcpStream, ToSocketAddrs};
+use std::fmt::Debug;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct NodeActorRemoveConnectionMessage {
-    connection_id: ConnectionId,
+pub struct NodeActorRemoveConnectionMessage<T>
+where
+    T: Debug + 'static,
+{
+    connection_id: T,
 }
 
-impl From<NodeActorRemoveConnectionMessage> for (ConnectionId,) {
-    fn from(message: NodeActorRemoveConnectionMessage) -> Self {
+impl<T> From<NodeActorRemoveConnectionMessage<T>> for (T,)
+where
+    T: Debug
+{
+    fn from(message: NodeActorRemoveConnectionMessage<T>) -> Self {
         (message.connection_id,)
     }
 }
 
-impl Message for NodeActorRemoveConnectionMessage {
+impl<T> Message for NodeActorRemoveConnectionMessage<T>
+where
+    T: Debug + 'static,
+{
     type Result = ();
 }
 
-impl NodeActorRemoveConnectionMessage {
-    pub fn new(connection_id: ConnectionId) -> Self {
+impl<T> NodeActorRemoveConnectionMessage<T>
+where
+    T: Debug
+{
+    pub fn new(connection_id: T) -> Self {
         Self { connection_id }
     }
 
-    pub fn connection_id(&self) -> ConnectionId {
-        self.connection_id
+    pub fn connection_id(&self) -> &T {
+        &self.connection_id
     }
 }
 
@@ -59,28 +72,40 @@ impl NodeActorRegisterMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct PacketReaderActorReadPacketMessage {
-    id: ConnectionId,
+pub struct PacketReaderActorReadPacketMessage<T>
+where
+    T: Debug + 'static,
+{
+    id: T,
     packet: Packet,
 }
 
-impl From<PacketReaderActorReadPacketMessage> for (ConnectionId, Packet) {
-    fn from(message: PacketReaderActorReadPacketMessage) -> Self {
+impl<T> From<PacketReaderActorReadPacketMessage<T>> for (T, Packet)
+where
+    T: Debug + 'static,
+{
+    fn from(message: PacketReaderActorReadPacketMessage<T>) -> Self {
         (message.id, message.packet)
     }
 }
 
-impl Message for PacketReaderActorReadPacketMessage {
+impl<T> Message for PacketReaderActorReadPacketMessage<T>
+where
+    T: Debug + 'static,
+{
     type Result = ();
 }
 
-impl PacketReaderActorReadPacketMessage {
-    pub fn new(id: ConnectionId, packet: Packet) -> Self {
+impl<T> PacketReaderActorReadPacketMessage<T>
+where
+    T: Debug + 'static,
+{
+    pub fn new(id: T, packet: Packet) -> Self {
         Self { id, packet }
     }
 
-    pub fn id(&self) -> ConnectionId {
-        self.id
+    pub fn id(&self) -> &T {
+        &self.id
     }
 
     pub fn packet(&self) -> &Packet {

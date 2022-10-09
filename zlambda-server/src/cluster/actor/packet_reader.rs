@@ -17,30 +17,40 @@ use std::error::Error;
 use std::io;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tracing::{error, trace};
+use std::fmt::Debug;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct PacketReaderActor {
-    id: ConnectionId,
-    read_recipient: Recipient<PacketReaderActorReadPacketMessage>,
-    remove_recipient: Recipient<NodeActorRemoveConnectionMessage>,
+pub struct PacketReaderActor<T>
+where
+    T: Clone + Debug + Send + Sync + Unpin + 'static
+{
+    id: T,
+    read_recipient: Recipient<PacketReaderActorReadPacketMessage<T>>,
+    remove_recipient: Recipient<NodeActorRemoveConnectionMessage<T>>,
     stream: Addr<TcpStreamActor>,
     buffer: Vec<u8>,
 }
 
-impl Actor for PacketReaderActor {
+impl<T> Actor for PacketReaderActor<T>
+where
+    T: Clone + Debug + Send + Sync + Unpin + 'static
+{
     type Context = Context<Self>;
 
     #[tracing::instrument]
     fn stopped(&mut self, _: &mut Self::Context) {
         self.stream.do_send(ActorStopMessage);
         self.remove_recipient
-            .do_send(NodeActorRemoveConnectionMessage::new(self.id));
+            .do_send(NodeActorRemoveConnectionMessage::new(self.id.clone()));
     }
 }
 
-impl Handler<ActorStopMessage> for PacketReaderActor {
+impl<T> Handler<ActorStopMessage> for PacketReaderActor<T>
+where
+    T: Clone + Debug + Send + Sync + Unpin + 'static
+{
     type Result = <ActorStopMessage as Message>::Result;
 
     fn handle(
@@ -52,7 +62,10 @@ impl Handler<ActorStopMessage> for PacketReaderActor {
     }
 }
 
-impl Handler<TcpStreamActorReceiveMessage> for PacketReaderActor {
+impl<T> Handler<TcpStreamActorReceiveMessage> for PacketReaderActor<T>
+where
+    T: Clone + Debug + Send + Sync + Unpin + 'static
+{
     type Result = <TcpStreamActorReceiveMessage as Message>::Result;
 
     #[tracing::instrument]
@@ -88,16 +101,19 @@ impl Handler<TcpStreamActorReceiveMessage> for PacketReaderActor {
             self.buffer.drain(0..read);
 
             self.read_recipient
-                .do_send(PacketReaderActorReadPacketMessage::new(self.id, packet));
+                .do_send(PacketReaderActorReadPacketMessage::new(self.id.clone(), packet));
         }
     }
 }
 
-impl PacketReaderActor {
+impl<T> PacketReaderActor<T>
+where
+    T: Clone + Debug + Send + Sync + Unpin + 'static
+{
     pub fn new(
-        id: ConnectionId,
-        read_recipient: Recipient<PacketReaderActorReadPacketMessage>,
-        remove_recipient: Recipient<NodeActorRemoveConnectionMessage>,
+        id: T,
+        read_recipient: Recipient<PacketReaderActorReadPacketMessage<T>>,
+        remove_recipient: Recipient<NodeActorRemoveConnectionMessage<T>>,
         stream: TcpStream,
     ) -> (Addr<Self>, Addr<TcpStreamActor>) {
         let context = Context::new();

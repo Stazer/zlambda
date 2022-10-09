@@ -62,7 +62,7 @@ enum FollowerNodeConnectionType {
 struct FollowerNodeConnection {
     connection_id: ConnectionId,
     stream_address: Addr<TcpStreamActor>,
-    reader_address: Addr<PacketReaderActor>,
+    reader_address: Addr<PacketReaderActor<ConnectionId>>,
     r#type: Option<FollowerNodeConnectionType>,
 }
 
@@ -157,13 +157,13 @@ impl Handler<TcpListenerActorAcceptMessage> for FollowerNodeActor {
     }
 }
 
-impl Handler<NodeActorRemoveConnectionMessage> for FollowerNodeActor {
-    type Result = <NodeActorRemoveConnectionMessage as Message>::Result;
+impl Handler<NodeActorRemoveConnectionMessage<ConnectionId>> for FollowerNodeActor {
+    type Result = <NodeActorRemoveConnectionMessage<ConnectionId> as Message>::Result;
 
     #[tracing::instrument]
     fn handle(
         &mut self,
-        message: NodeActorRemoveConnectionMessage,
+        message: NodeActorRemoveConnectionMessage<ConnectionId>,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         trace!("Destroy connection {}", message.connection_id());
@@ -182,13 +182,13 @@ impl Handler<NodeActorRemoveConnectionMessage> for FollowerNodeActor {
     }
 }
 
-impl Handler<PacketReaderActorReadPacketMessage> for FollowerNodeActor {
-    type Result = <PacketReaderActorReadPacketMessage as Message>::Result;
+impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for FollowerNodeActor {
+    type Result = <PacketReaderActorReadPacketMessage<ConnectionId> as Message>::Result;
 
     #[tracing::instrument]
     fn handle(
         &mut self,
-        message: PacketReaderActorReadPacketMessage,
+        message: PacketReaderActorReadPacketMessage<ConnectionId>,
         context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         let (connection_id, packet): (ConnectionId, Packet) = message.into();
