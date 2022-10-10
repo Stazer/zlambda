@@ -14,17 +14,17 @@ use actix::{
 };
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::Debug;
 use std::io;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tracing::{error, trace};
-use std::fmt::Debug;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct PacketReaderActor<T>
 where
-    T: Clone + Debug + Send + Sync + Unpin + 'static
+    T: Clone + Debug + Send + Sync + Unpin + 'static,
 {
     id: T,
     read_recipient: Recipient<PacketReaderActorReadPacketMessage<T>>,
@@ -35,7 +35,7 @@ where
 
 impl<T> Actor for PacketReaderActor<T>
 where
-    T: Clone + Debug + Send + Sync + Unpin + 'static
+    T: Clone + Debug + Send + Sync + Unpin + 'static,
 {
     type Context = Context<Self>;
 
@@ -49,7 +49,7 @@ where
 
 impl<T> Handler<ActorStopMessage> for PacketReaderActor<T>
 where
-    T: Clone + Debug + Send + Sync + Unpin + 'static
+    T: Clone + Debug + Send + Sync + Unpin + 'static,
 {
     type Result = <ActorStopMessage as Message>::Result;
 
@@ -64,7 +64,7 @@ where
 
 impl<T> Handler<TcpStreamActorReceiveMessage> for PacketReaderActor<T>
 where
-    T: Clone + Debug + Send + Sync + Unpin + 'static
+    T: Clone + Debug + Send + Sync + Unpin + 'static,
 {
     type Result = <TcpStreamActorReceiveMessage as Message>::Result;
 
@@ -101,14 +101,17 @@ where
             self.buffer.drain(0..read);
 
             self.read_recipient
-                .do_send(PacketReaderActorReadPacketMessage::new(self.id.clone(), packet));
+                .do_send(PacketReaderActorReadPacketMessage::new(
+                    self.id.clone(),
+                    packet,
+                ));
         }
     }
 }
 
 impl<T> PacketReaderActor<T>
 where
-    T: Clone + Debug + Send + Sync + Unpin + 'static
+    T: Clone + Debug + Send + Sync + Unpin + 'static,
 {
     pub fn new(
         id: T,

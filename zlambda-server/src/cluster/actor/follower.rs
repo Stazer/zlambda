@@ -4,11 +4,11 @@ use crate::cluster::NodeId;
 use crate::cluster::{
     ConnectionId, LeaderConnectActorMessage, NodeActorRegisterMessage,
     NodeActorRemoveConnectionMessage, NodeRegisterResponsePacketError, Packet,
-    PacketReaderActorReadPacketMessage, ReadPacketError,
+    PacketReaderActorReadPacketMessage, ReadPacketError,NodeRegisterResponsePacketSuccessNodeData
 };
 use crate::common::{
     ActorExecuteMessage, ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
-    TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
+    TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage, 
 };
 use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, Recipient,
@@ -19,63 +19,67 @@ use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::io;
 use std::net::SocketAddr;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tracing::{error, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-struct FollowerNodeLeaderNode {
-    node_id: NodeId,
+struct LeaderNode {
+    id: NodeId,
     socket_address: SocketAddr,
-    connection_id: ConnectionId,
+    connection: Weak<Connection>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-struct FollowerNodeFollowerNode {
-    node_id: NodeId,
+struct FollowerNode {
+    id: NodeId,
     socket_address: SocketAddr,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-enum FollowerNodeNode {
-    Leader(Rc<FollowerNodeLeaderNode>),
-    Follower(FollowerNodeFollowerNode),
+enum Node {
+    Leader(Rc<LeaderNode>),
+    Follower(FollowerNode)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-enum FollowerNodeConnectionType {
-    Registration,
+enum ConnectionType {
     Client,
+    Leader(Weak<LeaderNode>),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-struct FollowerNodeConnection {
-    connection_id: ConnectionId,
+struct Connection {
+    id: ConnectionId,
     stream_address: Addr<TcpStreamActor>,
     reader_address: Addr<PacketReaderActor<ConnectionId>>,
-    r#type: Option<FollowerNodeConnectionType>,
+    r#type: Option<ConnectionType>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-enum FollowerNodeState {
-    Unregistered {
+enum State {
+    Unregistered,
+    Registering {
+        stream_address: Addr<TcpStreamActor>,
+        reader_address: Addr<PacketReaderActor<()>>,
     },
     Registered {
         node_id: NodeId,
-        leader_node: Rc<FollowerNodeLeaderNode>,
-        nodes: HashMap<NodeId, FollowerNodeNode>,
+        leader_node: Weak<LeaderNode>,
+        nodes: HashMap<NodeId, Rc<Node>>,
+        connections: HashMap<ConnectionId, Rc<Connection>>,
     },
 }
 
@@ -85,8 +89,7 @@ enum FollowerNodeState {
 pub struct FollowerNodeActor {
     node_address: Addr<NodeActor>,
     listener_address: Addr<TcpListenerActor>,
-    connections: HashMap<ConnectionId, FollowerNodeConnection>,
-    state: FollowerNodeState,
+    state: State,
 }
 
 impl Actor for FollowerNodeActor {
@@ -96,10 +99,22 @@ impl Actor for FollowerNodeActor {
         self.node_address.do_send(ActorStopMessage);
         self.listener_address.do_send(ActorStopMessage);
 
-        for connection in self.connections.values() {
-            connection.stream_address.do_send(ActorStopMessage);
-            connection.reader_address.do_send(ActorStopMessage);
-        }
+        match &self.state {
+            State::Unregistered => {}
+            State::Registering {
+                stream_address,
+                reader_address,
+            } => {
+                stream_address.do_send(ActorStopMessage);
+                reader_address.do_send(ActorStopMessage);
+            }
+            State::Registered { connections, .. } => {
+                for connection in connections.values() {
+                    connection.stream_address.do_send(ActorStopMessage);
+                    connection.reader_address.do_send(ActorStopMessage);
+                }
+            }
+        };
     }
 }
 
@@ -131,29 +146,39 @@ impl Handler<TcpListenerActorAcceptMessage> for FollowerNodeActor {
             (Ok(s),) => s,
         };
 
-        let connection_id = next_key(&self.connections);
+        let (connections,) = match &mut self.state {
+            State::Unregistered | State::Registering { .. } => {
+                error!("Follower node is not registered");
+                return;
+            }
+            State::Registered {
+                ref mut connections,
+                ..
+            } => (connections,),
+        };
+
+        let id = next_key(&connections);
 
         let (reader_address, stream_address) = PacketReaderActor::new(
-            connection_id,
+            id,
             context.address().recipient(),
             context.address().recipient(),
             stream,
         );
 
-        assert!(self
-            .connections
+        assert!(connections
             .insert(
-                connection_id,
-                FollowerNodeConnection {
-                    connection_id,
+                id,
+                Rc::new(Connection {
+                    id,
                     reader_address,
                     stream_address,
                     r#type: None,
-                }
+                }),
             )
             .is_none());
 
-        trace!("Connection {} created", connection_id);
+        trace!("Connection {} created", id);
     }
 }
 
@@ -166,17 +191,27 @@ impl Handler<NodeActorRemoveConnectionMessage<ConnectionId>> for FollowerNodeAct
         message: NodeActorRemoveConnectionMessage<ConnectionId>,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
+        let (connections,) = match self.state {
+            State::Unregistered | State::Registering { .. } => {
+                error!("Follower node is not registered");
+                return;
+            }
+            State::Registered {
+                ref mut connections,
+                ..
+            } => (connections,),
+        };
+
         trace!("Destroy connection {}", message.connection_id());
 
-        let connection = self
-            .connections
+        let connection = connections
             .get(&message.connection_id())
             .expect("Connection not found");
 
         connection.stream_address.do_send(ActorStopMessage);
         connection.reader_address.do_send(ActorStopMessage);
 
-        assert!(self.connections.remove(&message.connection_id()).is_none());
+        assert!(connections.remove(&message.connection_id()).is_none());
 
         trace!("Connection destroyed");
     }
@@ -191,15 +226,25 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for FollowerNodeA
         message: PacketReaderActorReadPacketMessage<ConnectionId>,
         context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
+        let (connections,) = match self.state {
+            State::Unregistered | State::Registering { .. } => {
+                error!("Follower node is not registered");
+                return;
+            }
+            State::Registered {
+                ref mut connections,
+                ..
+            } => (connections,),
+        };
+
         let (connection_id, packet): (ConnectionId, Packet) = message.into();
 
-        let connection = self
-            .connections
+        let connection = connections
             .get(&connection_id)
             .expect("Connection not found");
 
-        match (&self.state, packet) {
-            (FollowerNodeState::Unregistered {}, Packet::NodeRegisterResponse { result }) => {
+        /*match (&self.state, packet) {
+            (State::Unregistered {}, Packet::NodeRegisterResponse { result }) => {
                 match result {
                     Ok(o) => {}
                     Err(NodeRegisterResponsePacketError::NotRegistered) => {
@@ -210,7 +255,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for FollowerNodeA
                     }
                 }
             }
-            (FollowerNodeState::Unregistered {}, Packet::NodeRegisterRequest) => {
+            (State::Unregistered {}, Packet::NodeRegisterRequest) => {
                 connection
                     .stream_address
                     .do_send(TcpStreamActorSendMessage::new(
@@ -221,7 +266,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for FollowerNodeA
                         .expect("Cannot write NodeRegisterResponse"),
                     ))
             }
-            (FollowerNodeState::Registered { leader_node, .. }, Packet::NodeRegisterRequest) => {
+            (State::Registered { leader_node, .. }, Packet::NodeRegisterRequest) => {
                     connection
                         .stream_address
                         .do_send(TcpStreamActorSendMessage::new(
@@ -235,7 +280,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for FollowerNodeA
                         ))
 
             }
-            (FollowerNodeState::Registered { .. }, Packet::NodePing) => connection
+            (State::Registered { .. }, Packet::NodePing) => connection
                 .stream_address
                 .do_send(TcpStreamActorSendMessage::new(
                     (Packet::NodePong)
@@ -253,7 +298,108 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for FollowerNodeA
 
                 assert!(self.connections.remove(&connection_id).is_none())
             }
+        }*/
+    }
+}
+
+impl Handler<PacketReaderActorReadPacketMessage<()>> for FollowerNodeActor {
+    type Result = <PacketReaderActorReadPacketMessage<()> as Message>::Result;
+
+    #[tracing::instrument]
+    fn handle(
+        &mut self,
+        message: PacketReaderActorReadPacketMessage<()>,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        let (stream_address, reader_address) = match &self.state {
+            (State::Unregistered | State::Registered { .. }) => {
+                error!("Node is not registering");
+                return;
+            },
+            State::Registering { stream_address, reader_address } => (stream_address.clone(), reader_address.clone()),
+        };
+
+        let (_, packet): ((), Packet) = message.into();
+
+        match packet {
+            Packet::NodeRegisterResponse { result } => {
+                match result {
+                    Ok(o) => {
+                        let (node_id, nodes, leader_node_id): (NodeId, Vec<NodeRegisterResponsePacketSuccessNodeData>, NodeId) = o.into();
+
+                        let socket_addresses = nodes.into_iter().map(|node| {
+                            let (node_id, socket_address) = node.into();
+
+                            (node_id, socket_address)
+                        }).collect::<HashMap::<_, _>>();
+
+                        let mut leader_node = Rc::new(LeaderNode {
+                            id: leader_node_id,
+                            socket_address: socket_addresses.remove(&leader_node_id).expect(""),
+                            connection: Weak::new(),
+                        });
+
+                        let mut connections = HashMap::default();
+                        let connection_id = next_key(&connections);
+                        let connection = Rc::new(Connection {
+                            id: connection_id,
+                            stream_address,
+                            reader_address,
+                            r#type: Some(ConnectionType::Leader(Rc::downgrade(&leader_node))),
+                        });
+                        leader_node.connection = Rc::downgrade(&connection);
+                        connections.insert(connection_id, connection);
+
+                        let mut nodes = HashMap::default();
+                        nodes.insert(leader_node_id, Rc::new(Node::Leader(leader_node)));
+
+                        self.state = State::Registered {
+                            node_id,
+                            leader_node: Rc::downgrade(&leader_node),
+                            nodes,
+                            connections,
+                        };
+                    },
+                    Err(NodeRegisterResponsePacketError::NotALeader { leader_address }) => {
+                        error!("Not a leader");
+                        self.state = State::Unregistered;
+                        stream_address.do_send(ActorStopMessage);
+                        reader_address.do_send(ActorStopMessage);
+                        context.address().do_send(LeaderConnectActorMessage::new(leader_address))
+                    },
+                    Err(NodeRegisterResponsePacketError::NotRegistered) => {
+                        error!("Not registered");
+                        self.state = State::Unregistered;
+                        context.stop()
+                    },
+                }
+            }
+            packet => {
+                error!(
+                    "Unhandled packet {:?}",
+                    packet
+                );
+
+                stream_address.do_send(ActorStopMessage);
+                reader_address.do_send(ActorStopMessage);
+                self.state = State::Unregistered;
+
+                context.stop()
+            }
         }
+    }
+}
+
+impl Handler<NodeActorRemoveConnectionMessage<()>> for FollowerNodeActor {
+    type Result = <NodeActorRemoveConnectionMessage<()> as Message>::Result;
+
+    #[tracing::instrument]
+    fn handle(
+        &mut self,
+        message: NodeActorRemoveConnectionMessage<()>,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        //let (_, packet): ((), Packet) = message.into();
     }
 }
 
@@ -273,6 +419,17 @@ where
 
         trace!("Connect to {}", &socket_address);
 
+        match self.state {
+            State::Unregistered => {}
+            State::Registering { .. } => {
+                error!("Node is registering");
+            }
+            State::Registered { .. } => {
+                error!("Node is registered");
+            }
+        };
+        trace!("Connect to {}", &socket_address);
+
         let packet = Packet::NodeRegisterRequest
             .to_bytes()
             .expect("Cannot create NodeRegisterRequest");
@@ -281,27 +438,17 @@ where
             .into_actor(self)
             .map(move |result, actor, context| match result {
                 Ok(stream) => {
-                    let connection_id = next_key(&actor.connections);
-
                     let (reader_address, stream_address) = PacketReaderActor::new(
-                        connection_id,
+                        (),
                         context.address().recipient(),
                         context.address().recipient(),
                         stream,
                     );
 
-                    assert!(actor
-                        .connections
-                        .insert(
-                            connection_id,
-                            FollowerNodeConnection {
-                                connection_id,
-                                reader_address,
-                                stream_address: stream_address.clone(),
-                                r#type: Some(FollowerNodeConnectionType::Registration),
-                            }
-                        )
-                        .is_none());
+                    actor.state = State::Registering {
+                        stream_address: stream_address.clone(),
+                        reader_address,
+                    };
 
                     stream_address.do_send(TcpStreamActorSendMessage::new(packet));
                 }
@@ -330,8 +477,7 @@ impl FollowerNodeActor {
                 Some(context.address().recipient()),
                 listener,
             ),
-            connections: HashMap::default(),
-            state: FollowerNodeState::Unregistered {},
+            state: State::Unregistered,
         });
 
         actor.do_send(LeaderConnectActorMessage::new(leader_stream_address));

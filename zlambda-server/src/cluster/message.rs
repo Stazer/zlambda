@@ -1,7 +1,7 @@
 use crate::cluster::{ConnectionId, Packet};
 use actix::Message;
-use tokio::net::{TcpStream, ToSocketAddrs};
 use std::fmt::Debug;
+use tokio::net::{TcpStream, ToSocketAddrs};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,7 +15,7 @@ where
 
 impl<T> From<NodeActorRemoveConnectionMessage<T>> for (T,)
 where
-    T: Debug
+    T: Debug,
 {
     fn from(message: NodeActorRemoveConnectionMessage<T>) -> Self {
         (message.connection_id,)
@@ -31,7 +31,7 @@ where
 
 impl<T> NodeActorRemoveConnectionMessage<T>
 where
-    T: Debug
+    T: Debug,
 {
     pub fn new(connection_id: T) -> Self {
         Self { connection_id }

@@ -43,19 +43,20 @@ impl NodeRegisterResponsePacketSuccessNodeData {
 pub struct NodeRegisterResponsePacketSuccessData {
     node_id: NodeId,
     nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>,
+    leader_node_id: NodeId,
 }
 
 impl From<NodeRegisterResponsePacketSuccessData>
-    for (NodeId, Vec<NodeRegisterResponsePacketSuccessNodeData>)
+    for (NodeId, Vec<NodeRegisterResponsePacketSuccessNodeData>, NodeId)
 {
     fn from(response: NodeRegisterResponsePacketSuccessData) -> Self {
-        (response.node_id, response.nodes)
+        (response.node_id, response.nodes, response.leader_node_id)
     }
 }
 
 impl NodeRegisterResponsePacketSuccessData {
-    pub fn new(node_id: NodeId, nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>) -> Self {
-        Self { node_id, nodes }
+    pub fn new(node_id: NodeId, nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>, leader_node_id: NodeId) -> Self {
+        Self { node_id, nodes, leader_node_id }
     }
 
     pub fn node_id(&self) -> NodeId {
@@ -64,6 +65,10 @@ impl NodeRegisterResponsePacketSuccessData {
 
     pub fn nodes(&self) -> &Vec<NodeRegisterResponsePacketSuccessNodeData> {
         &self.nodes
+    }
+
+    pub fn leader_node_id(&self) -> NodeId {
+        self.leader_node_id
     }
 }
 
@@ -92,7 +97,7 @@ impl error::Error for NodeRegisterResponsePacketError {}
 pub enum Packet {
     NodeRegisterRequest,
     NodeRegisterResponse {
-        result: Result<NodeId, NodeRegisterResponsePacketError>,
+        result: Result<NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketError>,
     },
     NodePing,
     NodePong,
