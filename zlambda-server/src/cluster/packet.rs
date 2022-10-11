@@ -47,7 +47,11 @@ pub struct NodeRegisterResponsePacketSuccessData {
 }
 
 impl From<NodeRegisterResponsePacketSuccessData>
-    for (NodeId, Vec<NodeRegisterResponsePacketSuccessNodeData>, NodeId)
+    for (
+        NodeId,
+        Vec<NodeRegisterResponsePacketSuccessNodeData>,
+        NodeId,
+    )
 {
     fn from(response: NodeRegisterResponsePacketSuccessData) -> Self {
         (response.node_id, response.nodes, response.leader_node_id)
@@ -55,8 +59,16 @@ impl From<NodeRegisterResponsePacketSuccessData>
 }
 
 impl NodeRegisterResponsePacketSuccessData {
-    pub fn new(node_id: NodeId, nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>, leader_node_id: NodeId) -> Self {
-        Self { node_id, nodes, leader_node_id }
+    pub fn new(
+        node_id: NodeId,
+        nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>,
+        leader_node_id: NodeId,
+    ) -> Self {
+        Self {
+            node_id,
+            nodes,
+            leader_node_id,
+        }
     }
 
     pub fn node_id(&self) -> NodeId {
@@ -95,7 +107,9 @@ impl error::Error for NodeRegisterResponsePacketError {}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
-    NodeRegisterRequest,
+    NodeRegisterRequest {
+        local_address: SocketAddr,
+    },
     NodeRegisterResponse {
         result: Result<NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketError>,
     },
