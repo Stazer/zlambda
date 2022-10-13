@@ -113,7 +113,7 @@ enum Type {
         listener_local_address: SocketAddr,
         connections: HashMap<ConnectionId, LeaderConnection>,
         nodes: HashMap<NodeId, LeaderNode>,
-        heartbeat_spawn_handle: SpawnHandle,
+        heartbeat_spawn_handle: Option<SpawnHandle>,
     },
     Follower {
         state: FollowerState,
@@ -133,27 +133,40 @@ pub struct NodeActor {
 impl Actor for NodeActor {
     type Context = Context<Self>;
 
-    fn stopped(&mut self, _context: &mut Self::Context) {
+    fn stopped(&mut self, context: &mut Self::Context) {
         match &self.r#type {
-            Type::Leader { connections, .. } => {
+            Type::Leader { connections, listener_actor_address, mut heartbeat_spawn_handle, .. } => {
+                listener_actor_address.do_send(ActorStopMessage);
+
+                match heartbeat_spawn_handle.take() {
+                    Some(heartbeat_spawn_handle) => {
+                        context.cancel_future(heartbeat_spawn_handle);
+                    },
+                    None => {},
+                };
+
                 for connection in connections.values() {
                     connection.stream_actor_address.do_send(ActorStopMessage);
                     connection.reader_actor_address.do_send(ActorStopMessage);
                 }
             }
-            Type::Follower { state, .. } => match state {
-                FollowerState::Unregistered => {}
-                FollowerState::Registering {
-                    stream_actor_address,
-                    reader_actor_address,
-                } => {
-                    stream_actor_address.do_send(ActorStopMessage);
-                    reader_actor_address.do_send(ActorStopMessage);
-                }
-                FollowerState::Registered { connections, .. } => {
-                    for connection in connections.values() {
-                        connection.stream_actor_address.do_send(ActorStopMessage);
-                        connection.reader_actor_address.do_send(ActorStopMessage);
+            Type::Follower { state, listener_actor_address, .. } => {
+                listener_actor_address.do_send(ActorStopMessage);
+
+                match state {
+                    FollowerState::Unregistered => {}
+                    FollowerState::Registering {
+                        stream_actor_address,
+                        reader_actor_address,
+                    } => {
+                        stream_actor_address.do_send(ActorStopMessage);
+                        reader_actor_address.do_send(ActorStopMessage);
+                    }
+                    FollowerState::Registered { connections, .. } => {
+                        for connection in connections.values() {
+                            connection.stream_actor_address.do_send(ActorStopMessage);
+                            connection.reader_actor_address.do_send(ActorStopMessage);
+                        }
                     }
                 }
             },
@@ -592,7 +605,7 @@ impl NodeActor {
                     listener_local_address,
                     connections: HashMap::default(),
                     nodes: HashMap::default(),
-                    heartbeat_spawn_handle: context.run_interval(
+                    heartbeat_spawn_handle: Some(context.run_interval(
                         Duration::new(2, 0),
                         |actor, context| {
                             let connections = match &actor.r#type {
@@ -621,7 +634,7 @@ impl NodeActor {
                                 }
                             };
                         },
-                    ),
+                    )),
                 },
             })),
             Some(address) => {
