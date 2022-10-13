@@ -88,14 +88,12 @@ impl NodeRegisterResponsePacketSuccessData {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum NodeRegisterResponsePacketError {
-    NotRegistered,
     NotALeader { leader_address: SocketAddr },
 }
 
 impl Display for NodeRegisterResponsePacketError {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
-            Self::NotRegistered => write!(formatter, "Not registered"),
             Self::NotALeader { .. } => write!(formatter, "Not a leader"),
         }
     }
@@ -107,14 +105,15 @@ impl error::Error for NodeRegisterResponsePacketError {}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
+    Ping,
+    Pong,
     NodeRegisterRequest {
         local_address: SocketAddr,
     },
     NodeRegisterResponse {
         result: Result<NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketError>,
     },
-    NodePing,
-    NodePong,
+    NodeRegisterAcknowledgement,
 }
 
 impl Packet {
