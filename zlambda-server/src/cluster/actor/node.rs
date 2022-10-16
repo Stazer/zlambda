@@ -5,7 +5,7 @@ use crate::cluster::{
     ConnectionId, LeaderConnectActorMessage, NodeActorRegisterMessage,
     NodeActorRemoveConnectionMessage, NodeRegisterResponsePacketError,
     NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketSuccessNodeData, Packet,
-    PacketReaderActorReadPacketMessage, ReadPacketError,
+    PacketReaderActorReadPacketMessage, ReadPacketError, TermId,
 };
 use crate::common::{
     ActorExecuteMessage, ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
@@ -80,7 +80,7 @@ enum LeaderNodeState {
 #[derive(Debug)]
 struct LeaderNode {
     node_id: NodeId,
-    connection_id: ConnectionId,
+    connection_id: Option<ConnectionId>,
     socket_address: SocketAddr,
     state: LeaderNodeState,
 }
@@ -96,6 +96,7 @@ enum FollowerState {
     },
     Registered {
         node_id: NodeId,
+        term_id: TermId,
         leader_node_id: NodeId,
         leader_connection_id: NodeId,
         nodes: HashMap<NodeId, FollowerNode>,
@@ -108,7 +109,8 @@ enum FollowerState {
 #[derive(Debug)]
 enum Type {
     Leader {
-        id: NodeId,
+        node_id: NodeId,
+        term_id: TermId,
         listener_actor_address: Addr<TcpListenerActor>,
         listener_local_address: SocketAddr,
         connections: HashMap<ConnectionId, LeaderConnection>,
@@ -120,7 +122,8 @@ enum Type {
         listener_actor_address: Addr<TcpListenerActor>,
         listener_local_address: SocketAddr,
     },
-    Candidate {},
+    Candidate {
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,14 +138,19 @@ impl Actor for NodeActor {
 
     fn stopped(&mut self, context: &mut Self::Context) {
         match &self.r#type {
-            Type::Leader { connections, listener_actor_address, mut heartbeat_spawn_handle, .. } => {
+            Type::Leader {
+                connections,
+                listener_actor_address,
+                mut heartbeat_spawn_handle,
+                ..
+            } => {
                 listener_actor_address.do_send(ActorStopMessage);
 
                 match heartbeat_spawn_handle.take() {
                     Some(heartbeat_spawn_handle) => {
                         context.cancel_future(heartbeat_spawn_handle);
-                    },
-                    None => {},
+                    }
+                    None => {}
                 };
 
                 for connection in connections.values() {
@@ -150,7 +158,11 @@ impl Actor for NodeActor {
                     connection.reader_actor_address.do_send(ActorStopMessage);
                 }
             }
-            Type::Follower { state, listener_actor_address, .. } => {
+            Type::Follower {
+                state,
+                listener_actor_address,
+                ..
+            } => {
                 listener_actor_address.do_send(ActorStopMessage);
 
                 match state {
@@ -169,7 +181,7 @@ impl Actor for NodeActor {
                         }
                     }
                 }
-            },
+            }
             Type::Candidate {} => {}
         }
 
@@ -199,7 +211,8 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
 
         match &mut self.r#type {
             Type::Leader {
-                id,
+                node_id: leader_node_id,
+                term_id,
                 ref mut connections,
                 ref mut nodes,
                 ..
@@ -209,13 +222,13 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                         .get_mut(&connection_id)
                         .expect("Invalid connection");
 
-                    let node_id = next_key(&nodes);
+                    let follower_node_id = next_key(&nodes);
 
                     nodes.insert(
-                        node_id,
+                        follower_node_id,
                         LeaderNode {
-                            node_id,
-                            connection_id,
+                            node_id: follower_node_id,
+                            connection_id: Some(connection_id),
                             socket_address: SocketAddr::new(
                                 connection.peer_address.ip(),
                                 local_address.port(),
@@ -224,14 +237,17 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                         },
                     );
 
-                    connection.r#type = Some(LeaderConnectionType::Node { node_id });
+                    connection.r#type = Some(LeaderConnectionType::Node {
+                        node_id: follower_node_id,
+                    });
 
                     connection
                         .stream_actor_address
                         .try_send(TcpStreamActorSendMessage::new(
                             Packet::NodeRegisterResponse {
                                 result: Ok(NodeRegisterResponsePacketSuccessData::new(
-                                    node_id,
+                                    follower_node_id,
+                                    *term_id,
                                     nodes
                                         .values()
                                         .map(|node| {
@@ -241,7 +257,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                                             )
                                         })
                                         .collect(),
-                                    *id,
+                                    *leader_node_id,
                                 )),
                             }
                             .to_bytes()
@@ -251,7 +267,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
 
                     trace!(
                         "Node {} registered with connection {}",
-                        node_id,
+                        follower_node_id,
                         connection_id
                     );
                 }
@@ -294,8 +310,9 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                 } => match packet {
                     Packet::NodeRegisterResponse { result } => match result {
                         Ok(data) => {
-                            let (node_id, nodes, leader_node_id): (
+                            let (node_id, term_id, nodes, leader_node_id): (
                                 NodeId,
+                                TermId,
                                 Vec<NodeRegisterResponsePacketSuccessNodeData>,
                                 NodeId,
                             ) = data.into();
@@ -304,6 +321,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
 
                             *state = FollowerState::Registered {
                                 node_id,
+                                term_id,
                                 leader_node_id,
                                 leader_connection_id: connection_id,
                                 nodes: nodes
@@ -405,6 +423,18 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                             .try_send(TcpStreamActorSendMessage::new(bytes))
                             .expect("Cannot send TcpStreamActorSendMessage");
                     }
+                    Packet::NodeUpdate { nodes: new_nodes } => {
+                        nodes.clear();
+
+                        for node in new_nodes {
+                            let (node_id, socket_address) = node.into();
+
+                            nodes.insert(node_id, FollowerNode {
+                                node_id,
+                                socket_address
+                            });
+                        }
+                    }
                     packet => {
                         error!(
                                 "Received invalid packet {:?} from connection {} while being a registered follower",
@@ -435,8 +465,19 @@ impl Handler<NodeActorRemoveConnectionMessage<ConnectionId>> for NodeActor {
         match &mut self.r#type {
             Type::Leader {
                 ref mut connections,
+                ref mut nodes,
                 ..
             } => {
+                let connection = connections.get(&connection_id).expect("Invalid connection");
+
+                match connection.r#type {
+                    Some(LeaderConnectionType::Node { node_id }) => {
+                        let node = nodes.get_mut(&node_id).expect("Invalid node");
+                        node.connection_id = None;
+                    }
+                    None => {}
+                };
+
                 connections
                     .remove(&connection_id)
                     .expect("Invalid connection");
@@ -483,7 +524,6 @@ impl Handler<TcpListenerActorAcceptMessage> for NodeActor {
         match self.r#type {
             Type::Leader {
                 ref mut connections,
-                id,
                 ..
             } => {
                 let connection_id = next_key(&connections);
@@ -596,7 +636,8 @@ impl NodeActor {
         match leader_stream_address {
             None => Ok(Self::create(|context| Self {
                 r#type: Type::Leader {
-                    id: 0,
+                    node_id: 0,
+                    term_id: 0,
                     listener_actor_address: TcpListenerActor::new(
                         context.address().recipient(),
                         Some(context.address().recipient()),
@@ -615,9 +656,17 @@ impl NodeActor {
                                     for node in nodes.values() {
                                         if matches!(node.state, LeaderNodeState::Registered { .. })
                                         {
+                                            let connection_id = match node.connection_id {
+                                                Some(connection_id) => connection_id,
+                                                None => {
+                                                    continue;
+                                                }
+                                            };
+
                                             let connection = connections
-                                                .get(&node.connection_id)
+                                                .get(&connection_id)
                                                 .expect("Invalid connection");
+
                                             connection
                                                 .stream_actor_address
                                                 .try_send(TcpStreamActorSendMessage::new(

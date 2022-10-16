@@ -1,4 +1,4 @@
-use crate::cluster::NodeId;
+use crate::cluster::{NodeId, TermId};
 use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,7 @@ impl NodeRegisterResponsePacketSuccessNodeData {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NodeRegisterResponsePacketSuccessData {
     node_id: NodeId,
+    term_id: TermId,
     nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>,
     leader_node_id: NodeId,
 }
@@ -49,23 +50,31 @@ pub struct NodeRegisterResponsePacketSuccessData {
 impl From<NodeRegisterResponsePacketSuccessData>
     for (
         NodeId,
+        TermId,
         Vec<NodeRegisterResponsePacketSuccessNodeData>,
         NodeId,
     )
 {
     fn from(response: NodeRegisterResponsePacketSuccessData) -> Self {
-        (response.node_id, response.nodes, response.leader_node_id)
+        (
+            response.node_id,
+            response.term_id,
+            response.nodes,
+            response.leader_node_id,
+        )
     }
 }
 
 impl NodeRegisterResponsePacketSuccessData {
     pub fn new(
         node_id: NodeId,
+        term_id: TermId,
         nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>,
         leader_node_id: NodeId,
     ) -> Self {
         Self {
             node_id,
+            term_id,
             nodes,
             leader_node_id,
         }
@@ -73,6 +82,10 @@ impl NodeRegisterResponsePacketSuccessData {
 
     pub fn node_id(&self) -> NodeId {
         self.node_id
+    }
+
+    pub fn term_id(&self) -> TermId {
+        self.term_id
     }
 
     pub fn nodes(&self) -> &Vec<NodeRegisterResponsePacketSuccessNodeData> {
@@ -104,6 +117,37 @@ impl error::Error for NodeRegisterResponsePacketError {}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct NodeUpdateNodeData {
+    node_id: NodeId,
+    socket_address: SocketAddr
+}
+
+impl From<NodeUpdateNodeData> for (NodeId, SocketAddr) {
+    fn from(data: NodeUpdateNodeData) -> Self {
+        (data.node_id, data.socket_address)
+    }
+}
+
+impl NodeUpdateNodeData {
+    pub fn new(node_id: NodeId, socket_address: SocketAddr) -> Self {
+        Self {
+            node_id,
+            socket_address,
+        }
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.node_id
+    }
+
+    pub fn socket_address(&self) -> &SocketAddr {
+        &self.socket_address
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
     Ping,
     Pong,
@@ -114,6 +158,16 @@ pub enum Packet {
         result: Result<NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketError>,
     },
     NodeRegisterAcknowledgement,
+    NodeUpdate {
+        nodes: Vec<NodeUpdateNodeData>,
+    },
+    ReplicateRequest {
+        term_id: TermId,
+
+    },
+    ReplicateResponse {
+
+    },
 }
 
 impl Packet {
