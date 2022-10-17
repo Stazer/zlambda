@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::algorithm::next_key;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,19 +33,25 @@ pub enum LogEntryType {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LogEntry {
     id: LogEntryId,
+    term_id: TermId,
     r#type: LogEntryType,
 }
 
 impl LogEntry {
-    pub fn new(id: LogEntryId, r#type: LogEntryType) -> Self {
+    pub fn new(id: LogEntryId, term_id: TermId, r#type: LogEntryType) -> Self {
         Self {
             id,
+            term_id,
             r#type,
         }
     }
 
     pub fn id(&self) -> LogEntryId {
         self.id
+    }
+
+    pub fn term_id(&self) -> TermId {
+        self.term_id
     }
 
     pub fn r#type(&self) -> &LogEntryType {
@@ -55,41 +61,96 @@ impl LogEntry {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Clone, Debug)]
+pub enum LeaderLogEntryState {
+    Uncommitted,
+    Committed,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct LeaderLogEntry {
+    data: LogEntry,
+    state: LeaderLogEntryState,
+    acknowledged_begin_node_ids: HashSet<NodeId>,
+}
+
+impl LeaderLogEntry {
+    pub fn data(&self) -> &LogEntry {
+        &self.data
+    }
+
+    pub fn state(&self) -> &LeaderLogEntryState {
+        &self.state
+    }
+
+    pub fn acknowledged_begin_node_ids(&self) -> &HashSet<NodeId> {
+        &self.acknowledged_begin_node_ids
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug, Default)]
 pub struct LeaderLog {
-    next_id: LogEntryId,
-    uncommitted_entries: HashMap<LogEntryId, LogEntry>,
-    committed_entries: HashMap<LogEntryId, LogEntry>,
+    entries: HashMap<LogEntryId, LeaderLogEntry>
 }
 
 impl LeaderLog {
-    pub fn committed_entries(&self) -> &HashMap<LogEntryId, LogEntry> {
-        &self.committed_entries
+    pub fn entries(&self) -> &HashMap<LogEntryId, LeaderLogEntry> {
+        &self.entries
     }
 
-    pub fn uncommitted_entries(&self) -> &HashMap<LogEntryId, LogEntry> {
-        &self.uncommitted_entries
-    }
+    pub fn begin(&mut self, term_id: TermId, r#type: LogEntryType) -> LogEntryId {
+        let id = next_key(&self.entries);
 
-    pub fn begin(&mut self, r#type: LogEntryType) -> LogEntryId {
-        let id = self.next_id;
-        self.next_id += 1;
-
-        self.uncommitted_entries.insert(id, LogEntry {
-            id,
-            r#type,
+        self.entries.insert(id, LeaderLogEntry {
+            data: LogEntry {
+                id,
+                term_id,
+                r#type,
+            },
+            state: LeaderLogEntryState::Uncommitted,
+            acknowledged_begin_node_ids: HashSet::default(),
         });
 
-        id
+        0
     }
 
-    pub fn commit(&mut self, id: LogEntryId) {
-        let entry = match self.uncommitted_entries.remove(&id) {
-            Some(entry) => entry,
-            None => return,
+    pub fn acknowledge_begin(&mut self, id: LogEntryId, node_id: NodeId) {
+        match self.entries.get_mut(&id) {
+            Some(entry) => {
+                entry.acknowledged_begin_node_ids.insert(node_id);
+            },
+            None => {},
         };
+    }
+}
 
-        self.committed_entries.insert(id, entry);
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub enum FollowerLogEntryState {
+    Uncommitted,
+    Committed,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct FollowerLogEntry {
+    data: LogEntry,
+    state: FollowerLogEntryState,
+}
+
+impl FollowerLogEntry {
+    pub fn data(&self) -> &LogEntry {
+        &self.data
+    }
+
+    pub fn state(&self) -> &FollowerLogEntryState {
+        &self.state
     }
 }
 
@@ -97,24 +158,27 @@ impl LeaderLog {
 
 #[derive(Debug, Default)]
 pub struct FollowerLog {
-    uncommitted_entries: HashMap<LogEntryId, LogEntry>,
-    committed_entries: HashMap<LogEntryId, LogEntry>,
+    entries: HashMap<LogEntryId, FollowerLogEntry>,
 }
 
 impl FollowerLog {
-    pub fn committed_entries(&self) -> &HashMap<LogEntryId, LogEntry> {
-        &self.committed_entries
+    pub fn entries(&self) -> &HashMap<LogEntryId, FollowerLogEntry> {
+        &self.entries
     }
 
-    pub fn uncommitted_entries(&self) -> &HashMap<LogEntryId, LogEntry> {
-        &self.uncommitted_entries
-    }
-
-    pub fn begin(&mut self, entry: LogEntry) {
-        self.uncommitted_entries.insert(entry.id(), entry);
+    pub fn begin(&mut self, data: LogEntry) {
+        self.entries.insert(data.id(), FollowerLogEntry {
+            data,
+            state: FollowerLogEntryState::Uncommitted,
+        });
     }
 
     pub fn commit(&mut self, id: LogEntryId) {
-
+        match self.entries.get_mut(&id) {
+            Some(entry) => {
+                entry.state = FollowerLogEntryState::Committed
+            }
+            None => {},
+        };
     }
 }

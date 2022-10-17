@@ -287,6 +287,8 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                     let mut node = nodes.get_mut(&node_id).expect("Invalid node");
                     node.state = LeaderNodeState::Registered {};
                 }
+                Packet::LogEntryResponse { log_entry_id } => {
+                }
                 Packet::Pong => {
                     trace!("Received pong from connection {}", connection_id);
                 }
@@ -428,11 +430,11 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                             .try_send(TcpStreamActorSendMessage::new(bytes))
                             .expect("Cannot send TcpStreamActorSendMessage");
                     }
-                    Packet::LogEntryRequest { term_id, log_entry } => {
-                        //log.begin()
+                    Packet::LogEntryRequest { log_entry } => {
+                        log.begin(log_entry);
                     }
                     Packet::LogEntryAcknowledgement { log_entry_id } => {
-
+                        log.commit(log_entry_id);
                     }
                     packet => {
                         error!(

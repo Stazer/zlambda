@@ -162,7 +162,6 @@ pub enum Packet {
         nodes: Vec<NodeUpdateNodeData>,
     },
     LogEntryRequest {
-        term_id: TermId,
         log_entry: LogEntry,
     },
     LogEntryResponse {
