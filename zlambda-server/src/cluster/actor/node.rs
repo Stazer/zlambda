@@ -6,6 +6,7 @@ use crate::cluster::{
     NodeActorRemoveConnectionMessage, NodeRegisterResponsePacketError,
     NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketSuccessNodeData, Packet,
     PacketReaderActorReadPacketMessage, ReadPacketError, TermId,
+    LogEntryId, LogEntry, FollowerLog, LeaderLog,
 };
 use crate::common::{
     ActorExecuteMessage, ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
@@ -101,6 +102,7 @@ enum FollowerState {
         leader_connection_id: NodeId,
         nodes: HashMap<NodeId, FollowerNode>,
         connections: HashMap<ConnectionId, FollowerConnection>,
+        log: FollowerLog,
     },
 }
 
@@ -116,6 +118,7 @@ enum Type {
         connections: HashMap<ConnectionId, LeaderConnection>,
         nodes: HashMap<NodeId, LeaderNode>,
         heartbeat_spawn_handle: Option<SpawnHandle>,
+        log: LeaderLog,
     },
     Follower {
         state: FollowerState,
@@ -347,6 +350,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                                         reader_actor_address: reader_actor_address.clone(),
                                     },
                                 )]),
+                                log: FollowerLog::default(),
                             };
 
                             stream_actor_address
@@ -392,6 +396,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                     leader_connection_id,
                     nodes,
                     connections,
+                    log,
                     ..
                 } => match packet {
                     Packet::Ping => {
@@ -423,17 +428,11 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                             .try_send(TcpStreamActorSendMessage::new(bytes))
                             .expect("Cannot send TcpStreamActorSendMessage");
                     }
-                    Packet::NodeUpdate { nodes: new_nodes } => {
-                        nodes.clear();
+                    Packet::LogEntryRequest { term_id, log_entry } => {
+                        //log.begin()
+                    }
+                    Packet::LogEntryAcknowledgement { log_entry_id } => {
 
-                        for node in new_nodes {
-                            let (node_id, socket_address) = node.into();
-
-                            nodes.insert(node_id, FollowerNode {
-                                node_id,
-                                socket_address
-                            });
-                        }
                     }
                     packet => {
                         error!(
@@ -684,6 +683,7 @@ impl NodeActor {
                             };
                         },
                     )),
+                    log: LeaderLog::default(),
                 },
             })),
             Some(address) => {

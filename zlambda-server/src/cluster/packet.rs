@@ -1,4 +1,4 @@
-use crate::cluster::{NodeId, TermId};
+use crate::cluster::{NodeId, TermId, LogEntry, LogEntryId};
 use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
@@ -161,12 +161,15 @@ pub enum Packet {
     NodeUpdate {
         nodes: Vec<NodeUpdateNodeData>,
     },
-    ReplicateRequest {
+    LogEntryRequest {
         term_id: TermId,
-
+        log_entry: LogEntry,
     },
-    ReplicateResponse {
-
+    LogEntryResponse {
+        log_entry_id: LogEntryId,
+    },
+    LogEntryAcknowledgement {
+        log_entry_id: LogEntryId,
     },
 }
 
