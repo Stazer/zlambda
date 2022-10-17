@@ -1,15 +1,16 @@
+mod leader;
 mod node;
 mod packet_reader;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub use node::*;
-pub(self) use packet_reader::*;
+pub use packet_reader::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use crate::common::{TcpStreamActor, ActorStopMessage};
-use actix::{Message, Addr, Actor, Context, Handler, ActorContext};
+use crate::common::{ActorStopMessage, TcpStreamActor};
+use actix::{Actor, ActorContext, Addr, Context, Handler, Message};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,7 +29,7 @@ impl Handler<ActorStopMessage> for ReplicatorActor {
     fn handle(
         &mut self,
         _message: ActorStopMessage,
-        context: &mut <Self as Actor>::Context
+        context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         context.stop();
     }

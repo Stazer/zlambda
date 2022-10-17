@@ -2,11 +2,10 @@ use crate::algorithm::next_key;
 use crate::cluster::actor::PacketReaderActor;
 use crate::cluster::NodeId;
 use crate::cluster::{
-    ConnectionId, LeaderConnectActorMessage, NodeActorRegisterMessage,
-    NodeActorRemoveConnectionMessage, NodeRegisterResponsePacketError,
+    ConnectionId, FollowerLog, LeaderConnectActorMessage, LeaderLog, LogEntry, LogEntryId,
+    NodeActorRegisterMessage, NodeActorRemoveConnectionMessage, NodeRegisterResponsePacketError,
     NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketSuccessNodeData, Packet,
     PacketReaderActorReadPacketMessage, ReadPacketError, TermId,
-    LogEntryId, LogEntry, FollowerLog, LeaderLog,
 };
 use crate::common::{
     ActorExecuteMessage, ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
@@ -125,8 +124,7 @@ enum Type {
         listener_actor_address: Addr<TcpListenerActor>,
         listener_local_address: SocketAddr,
     },
-    Candidate {
-    },
+    Candidate {},
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -287,8 +285,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                     let mut node = nodes.get_mut(&node_id).expect("Invalid node");
                     node.state = LeaderNodeState::Registered {};
                 }
-                Packet::LogEntryResponse { log_entry_id } => {
-                }
+                Packet::LogEntryResponse { log_entry_id } => {}
                 Packet::Pong => {
                     trace!("Received pong from connection {}", connection_id);
                 }

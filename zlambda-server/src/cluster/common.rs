@@ -1,6 +1,6 @@
+use crate::algorithm::next_key;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use crate::algorithm::next_key;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,8 +25,7 @@ pub type LogEntryId = u64;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum LogEntryType {
-}
+pub enum LogEntryType {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -94,7 +93,7 @@ impl LeaderLogEntry {
 
 #[derive(Debug, Default)]
 pub struct LeaderLog {
-    entries: HashMap<LogEntryId, LeaderLogEntry>
+    entries: HashMap<LogEntryId, LeaderLogEntry>,
 }
 
 impl LeaderLog {
@@ -105,15 +104,18 @@ impl LeaderLog {
     pub fn begin(&mut self, term_id: TermId, r#type: LogEntryType) -> LogEntryId {
         let id = next_key(&self.entries);
 
-        self.entries.insert(id, LeaderLogEntry {
-            data: LogEntry {
-                id,
-                term_id,
-                r#type,
+        self.entries.insert(
+            id,
+            LeaderLogEntry {
+                data: LogEntry {
+                    id,
+                    term_id,
+                    r#type,
+                },
+                state: LeaderLogEntryState::Uncommitted,
+                acknowledged_begin_node_ids: HashSet::default(),
             },
-            state: LeaderLogEntryState::Uncommitted,
-            acknowledged_begin_node_ids: HashSet::default(),
-        });
+        );
 
         0
     }
@@ -122,8 +124,8 @@ impl LeaderLog {
         match self.entries.get_mut(&id) {
             Some(entry) => {
                 entry.acknowledged_begin_node_ids.insert(node_id);
-            },
-            None => {},
+            }
+            None => {}
         };
     }
 }
@@ -167,18 +169,19 @@ impl FollowerLog {
     }
 
     pub fn begin(&mut self, data: LogEntry) {
-        self.entries.insert(data.id(), FollowerLogEntry {
-            data,
-            state: FollowerLogEntryState::Uncommitted,
-        });
+        self.entries.insert(
+            data.id(),
+            FollowerLogEntry {
+                data,
+                state: FollowerLogEntryState::Uncommitted,
+            },
+        );
     }
 
     pub fn commit(&mut self, id: LogEntryId) {
         match self.entries.get_mut(&id) {
-            Some(entry) => {
-                entry.state = FollowerLogEntryState::Committed
-            }
-            None => {},
+            Some(entry) => entry.state = FollowerLogEntryState::Committed,
+            None => {}
         };
     }
 }

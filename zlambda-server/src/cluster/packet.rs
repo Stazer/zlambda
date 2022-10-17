@@ -1,4 +1,4 @@
-use crate::cluster::{NodeId, TermId, LogEntry, LogEntryId};
+use crate::cluster::{LogEntry, LogEntryId, NodeId, TermId};
 use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
@@ -119,7 +119,7 @@ impl error::Error for NodeRegisterResponsePacketError {}
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NodeUpdateNodeData {
     node_id: NodeId,
-    socket_address: SocketAddr
+    socket_address: SocketAddr,
 }
 
 impl From<NodeUpdateNodeData> for (NodeId, SocketAddr) {
@@ -250,5 +250,30 @@ impl error::Error for WritePacketError {}
 impl From<postcard::Error> for WritePacketError {
     fn from(error: postcard::Error) -> Self {
         Self::PostcardError(error)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Default)]
+pub struct PacketReader {
+    buffer: Vec<u8>,
+}
+
+impl PacketReader {
+    pub fn push(&mut self, bytes: Bytes) {
+        self.buffer.extend(bytes);
+    }
+
+    pub fn next(&mut self) -> Result<Option<Packet>, ReadPacketError> {
+        let (read, packet) = match Packet::from_vec(&self.buffer) {
+            Ok((read, packet)) => (read, packet),
+            Err(ReadPacketError::UnexpectedEnd) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+
+        self.buffer.drain(0..read);
+
+        Ok(Some(packet))
     }
 }
