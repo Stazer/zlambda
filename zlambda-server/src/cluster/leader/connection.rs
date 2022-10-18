@@ -1,15 +1,14 @@
 use crate::cluster::{
-    ConnectionId, NodeActorRemoveConnectionMessage, NodeId, Packet, PacketReaderActor,
-    PacketReaderActorReadPacketMessage, PacketReader,
+    ConnectionId, NodeActorRemoveConnectionMessage, Packet, PacketReader,
 };
 use crate::common::{
-    ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor,
+    ActorStopMessage, TcpStreamActor,
     TcpStreamActorReceiveMessage,
 };
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
-use std::collections::HashMap;
-use tokio::net::{TcpListener, TcpStream};
-use tracing::{error, trace};
+
+use tokio::net::{TcpStream};
+use tracing::{error};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -71,7 +70,7 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
             };
 
             match packet {
-                Packet::NodeRegisterRequest { local_address } => {
+                Packet::NodeRegisterRequest { local_address: _ } => {
 
                 }
                 _ => {

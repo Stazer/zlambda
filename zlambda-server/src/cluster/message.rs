@@ -1,4 +1,4 @@
-use crate::cluster::{ConnectionId, Packet};
+use crate::cluster::{Packet};
 use actix::Message;
 use std::fmt::Debug;
 use tokio::net::{TcpStream, ToSocketAddrs};

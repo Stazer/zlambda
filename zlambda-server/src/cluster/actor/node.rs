@@ -2,21 +2,20 @@ use crate::algorithm::next_key;
 use crate::cluster::actor::PacketReaderActor;
 use crate::cluster::NodeId;
 use crate::cluster::{
-    ConnectionId, FollowerLog, LeaderConnectActorMessage, LeaderLog, LogEntry, LogEntryId,
-    NodeActorRegisterMessage, NodeActorRemoveConnectionMessage, NodeRegisterResponsePacketError,
+    ConnectionId, FollowerLog, LeaderConnectActorMessage, LeaderLog, NodeActorRemoveConnectionMessage, NodeRegisterResponsePacketError,
     NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketSuccessNodeData, Packet,
-    PacketReaderActorReadPacketMessage, ReadPacketError, TermId,
+    PacketReaderActorReadPacketMessage, TermId,
 };
 use crate::common::{
-    ActorExecuteMessage, ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
-    TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
+    ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
+    TcpStreamActor, TcpStreamActorSendMessage,
 };
 use actix::{
-    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, Recipient,
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message,
     ResponseActFuture, SpawnHandle, WrapFuture,
 };
 use std::collections::HashMap;
-use std::error::Error;
+
 use std::fmt::{Debug, Display};
 use std::io;
 use std::net::SocketAddr;
@@ -273,7 +272,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                     );
                 }
                 Packet::NodeRegisterAcknowledgement => {
-                    let mut connection = connections
+                    let connection = connections
                         .get_mut(&connection_id)
                         .expect("Invalid connection");
 
@@ -285,7 +284,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
                     let mut node = nodes.get_mut(&node_id).expect("Invalid node");
                     node.state = LeaderNodeState::Registered {};
                 }
-                Packet::LogEntryResponse { log_entry_id } => {}
+                Packet::LogEntryResponse { log_entry_id: _ } => {}
                 Packet::Pong => {
                     trace!("Received pong from connection {}", connection_id);
                 }
@@ -362,7 +361,7 @@ impl Handler<PacketReaderActorReadPacketMessage<ConnectionId>> for NodeActor {
 
                             trace!("Registered as node {}", node_id);
                         }
-                        Err(NodeRegisterResponsePacketError::NotALeader { leader_address }) => {
+                        Err(NodeRegisterResponsePacketError::NotALeader { leader_address: _ }) => {
                             stream_actor_address
                                 .try_send(ActorStopMessage)
                                 .expect("Cannot send ActorStopMessage");
@@ -646,8 +645,8 @@ impl NodeActor {
                     nodes: HashMap::default(),
                     heartbeat_spawn_handle: Some(context.run_interval(
                         Duration::new(2, 0),
-                        |actor, context| {
-                            let connections = match &actor.r#type {
+                        |actor, _context| {
+                            let _connections = match &actor.r#type {
                                 Type::Leader {
                                     nodes, connections, ..
                                 } => {

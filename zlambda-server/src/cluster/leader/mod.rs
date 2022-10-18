@@ -9,17 +9,15 @@ pub use follower::*;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use crate::cluster::{
-    ConnectionId, NodeActorRemoveConnectionMessage, NodeId, Packet, PacketReaderActor,
-    PacketReaderActorReadPacketMessage, PacketReader,
+    ConnectionId, NodeId,
 };
 use crate::common::{
-    ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor,
-    TcpStreamActorReceiveMessage,
+    ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
 };
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
 use std::collections::HashMap;
-use tokio::net::{TcpListener, TcpStream};
-use tracing::{error, trace};
+use tokio::net::{TcpListener};
+use tracing::{error};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,7 +57,7 @@ impl Handler<TcpListenerActorAcceptMessage> for LeaderNodeActor {
         let (result,) = message.into();
 
         match result {
-            Ok(tcp_stream) => {
+            Ok(_tcp_stream) => {
 
             }
             Err(error) => {
