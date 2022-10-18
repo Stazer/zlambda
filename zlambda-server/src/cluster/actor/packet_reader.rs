@@ -1,21 +1,13 @@
-
-
 use crate::cluster::{
     NodeActorRemoveConnectionMessage, Packet, PacketReaderActorReadPacketMessage, ReadPacketError,
 };
-use crate::common::{
-    ActorStopMessage,
-    TcpStreamActor, TcpStreamActorReceiveMessage,
-};
-use actix::{
-    Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message, Recipient,
-};
-
+use crate::common::{ActorStopMessage, TcpStreamActor, TcpStreamActorReceiveMessage};
+use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message, Recipient};
 
 use std::fmt::Debug;
 
-use tokio::net::{TcpStream};
-use tracing::{error};
+use tokio::net::TcpStream;
+use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

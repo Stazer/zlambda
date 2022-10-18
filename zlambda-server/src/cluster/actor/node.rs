@@ -2,13 +2,14 @@ use crate::algorithm::next_key;
 use crate::cluster::actor::PacketReaderActor;
 use crate::cluster::NodeId;
 use crate::cluster::{
-    ConnectionId, FollowerLog, LeaderConnectActorMessage, LeaderLog, NodeActorRemoveConnectionMessage, NodeRegisterResponsePacketError,
+    ConnectionId, FollowerLog, LeaderConnectActorMessage, LeaderLog,
+    NodeActorRemoveConnectionMessage, NodeRegisterResponsePacketError,
     NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketSuccessNodeData, Packet,
     PacketReaderActorReadPacketMessage, TermId,
 };
 use crate::common::{
-    ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage,
-    TcpStreamActor, TcpStreamActorSendMessage,
+    ActorStopMessage, TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor,
+    TcpStreamActorSendMessage,
 };
 use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message,

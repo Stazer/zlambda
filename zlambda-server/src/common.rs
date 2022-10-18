@@ -123,7 +123,7 @@ impl TcpStreamActorSendMessage {
 
 #[derive(Debug)]
 pub struct UpdateReceiveRecipientActorMessage {
-    recipient: Recipient<TcpStreamActorReceiveMessage>
+    recipient: Recipient<TcpStreamActorReceiveMessage>,
 }
 
 impl From<UpdateReceiveRecipientActorMessage> for (Recipient<TcpStreamActorReceiveMessage>,) {
@@ -197,14 +197,18 @@ impl StreamHandler<Result<Bytes, io::Error>> for TcpStreamActor {
     fn handle(&mut self, item: Result<Bytes, io::Error>, context: &mut <Self as Actor>::Context) {
         let receive_recipient = self.receive_recipient.clone();
 
-        context.wait(async move {
-            tracing::trace!("BEFORE");
+        context.wait(
+            async move {
+                tracing::trace!("BEFORE");
 
-            receive_recipient
-                .send(TcpStreamActorReceiveMessage::new(item)).await;
+                receive_recipient
+                    .send(TcpStreamActorReceiveMessage::new(item))
+                    .await;
 
-            tracing::trace!("AFTER");
-        }.into_actor(self));
+                tracing::trace!("AFTER");
+            }
+            .into_actor(self),
+        );
     }
 }
 
