@@ -122,6 +122,23 @@ impl TcpStreamActorSendMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct UpdateReceiveRecipientActorMessage {
+    recipient: Recipient<TcpStreamActorReceiveMessage>
+}
+
+impl From<UpdateReceiveRecipientActorMessage> for (Recipient<TcpStreamActorReceiveMessage>,) {
+    fn from(message: UpdateReceiveRecipientActorMessage) -> Self {
+        (message.recipient,)
+    }
+}
+
+impl Message for UpdateReceiveRecipientActorMessage {
+    type Result = ();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct TcpStreamActor {
     receive_recipient: Recipient<TcpStreamActorReceiveMessage>,
     stop_recipient: Option<Recipient<ActorStopMessage>>,
@@ -177,9 +194,17 @@ impl Handler<TcpStreamActorSendMessage> for TcpStreamActor {
 
 impl StreamHandler<Result<Bytes, io::Error>> for TcpStreamActor {
     #[tracing::instrument]
-    fn handle(&mut self, item: Result<Bytes, io::Error>, _context: &mut <Self as Actor>::Context) {
-        self.receive_recipient
-            .do_send(TcpStreamActorReceiveMessage::new(item));
+    fn handle(&mut self, item: Result<Bytes, io::Error>, context: &mut <Self as Actor>::Context) {
+        let receive_recipient = self.receive_recipient.clone();
+
+        context.wait(async move {
+            tracing::trace!("BEFORE");
+
+            receive_recipient
+                .send(TcpStreamActorReceiveMessage::new(item)).await;
+
+            tracing::trace!("AFTER");
+        }.into_actor(self));
     }
 }
 

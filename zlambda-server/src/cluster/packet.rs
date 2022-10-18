@@ -255,7 +255,7 @@ impl From<postcard::Error> for WritePacketError {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PacketReader {
     buffer: Vec<u8>,
 }
