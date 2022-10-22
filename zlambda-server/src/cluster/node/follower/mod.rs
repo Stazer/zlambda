@@ -10,7 +10,10 @@ pub use unregistered::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message, WrapFuture};
+use crate::cluster::NodeActor;
+use crate::common::TcpListenerActor;
+use actix::{Actor, Addr, AsyncContext, Context, Handler, Message};
+use std::fmt::Debug;
 use std::net::SocketAddr;
 use tokio::net::ToSocketAddrs;
 
@@ -59,7 +62,7 @@ impl Handler<UpdateFollowerNodeActorMessage> for FollowerNodeActor {
     fn handle(
         &mut self,
         message: UpdateFollowerNodeActorMessage,
-        context: &mut <Self as Actor>::Context,
+        _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         let (actor,) = message.into();
         *self = actor;
@@ -67,14 +70,23 @@ impl Handler<UpdateFollowerNodeActorMessage> for FollowerNodeActor {
 }
 
 impl FollowerNodeActor {
-    pub fn new<T>(leader_address: T) -> Addr<Self>
+    pub fn new<T>(
+        registration_address: T,
+        node_actor_address: Addr<NodeActor>,
+        tcp_listener_actor_address: Addr<TcpListenerActor>,
+        tcp_listener_socket_local_address: SocketAddr,
+    ) -> Addr<Self>
     where
-        T: ToSocketAddrs,
+        T: ToSocketAddrs + Send + Sync + Debug + 'static,
     {
         Self::create(move |context| {
-            let actor = UnregisteredFollowerNodeActor::new(context.address());
-
-            Self::Unregistered(actor)
+            Self::Unregistered(UnregisteredFollowerNodeActor::new(
+                registration_address,
+                node_actor_address,
+                context.address(),
+                tcp_listener_actor_address,
+                tcp_listener_socket_local_address,
+            ))
         })
     }
 }

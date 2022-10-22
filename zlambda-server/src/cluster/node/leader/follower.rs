@@ -1,16 +1,16 @@
-use crate::cluster::{ConnectionId, NodeId, PacketReader};
+use crate::cluster::{ConnectionId, LeaderNodeActor, NodeId, PacketReader, FollowerUpgradeActorMessage};
 use crate::common::{TcpStreamActor, TcpStreamActorReceiveMessage};
-use actix::{Actor, Addr, Context, Handler, Message};
-
+use actix::{Actor, Addr, Context, Handler, Message, AsyncContext, MailboxError};
 use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct LeaderNodeFollowerActor {
+    leader_node_actor_address: Addr<LeaderNodeActor>,
+    tcp_stream_actor_address: Addr<TcpStreamActor>,
     node_id: NodeId,
     connection_id: ConnectionId,
-    tcp_stream_actor_address: Addr<TcpStreamActor>,
     packet_reader: PacketReader,
 }
 
@@ -61,18 +61,25 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeFollowerActor {
 }
 
 impl LeaderNodeFollowerActor {
-    pub fn new(
-        node_id: NodeId,
-        connection_id: ConnectionId,
+    pub async fn new(
+        leader_node_actor_address: Addr<LeaderNodeActor>,
         tcp_stream_actor_address: Addr<TcpStreamActor>,
+        connection_id: ConnectionId,
         packet_reader: PacketReader,
-    ) -> Addr<Self> {
-        (Self {
+    ) -> Result<Addr<Self>, MailboxError> {
+        let context: <Self as Actor>::Context = Context::new();
+
+        let node_id = leader_node_actor_address.send(FollowerUpgradeActorMessage::new(
+            connection_id,
+            context.address(),
+        )).await?;
+
+        Ok(context.run(Self {
+            leader_node_actor_address,
+            tcp_stream_actor_address,
             node_id,
             connection_id,
-            tcp_stream_actor_address,
             packet_reader,
-        })
-        .start()
+        }))
     }
 }

@@ -1,4 +1,3 @@
-#![feature(box_into_pin)]
 #![feature(duration_constants)]
 #![feature(async_closure)]
 #![feature(associated_type_defaults)]

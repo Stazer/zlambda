@@ -1,9 +1,8 @@
 use crate::cluster::LeaderNodeFollowerActor;
-use crate::cluster::{ConnectionId, Packet, PacketReader};
-use crate::common::{ActorStopMessage, TcpStreamActor, TcpStreamActorReceiveMessage};
-use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
+use crate::cluster::{ConnectionId, LeaderNodeActor, Packet, PacketReader};
+use crate::common::{TcpStreamActor, TcpStreamActorReceiveMessage};
+use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message, ActorFutureExt, WrapFuture};
 use std::mem::take;
-
 use tokio::net::TcpStream;
 use tracing::error;
 
@@ -12,25 +11,13 @@ use tracing::error;
 #[derive(Debug)]
 pub struct LeaderNodeConnectionActor {
     id: ConnectionId,
+    leader_node_actor_address: Addr<LeaderNodeActor>,
     tcp_stream_actor_address: Addr<TcpStreamActor>,
     packet_reader: PacketReader,
 }
 
 impl Actor for LeaderNodeConnectionActor {
     type Context = Context<Self>;
-}
-
-impl Handler<ActorStopMessage> for LeaderNodeConnectionActor {
-    type Result = <ActorStopMessage as Message>::Result;
-
-    #[tracing::instrument]
-    fn handle(
-        &mut self,
-        _message: ActorStopMessage,
-        context: &mut <Self as Actor>::Context,
-    ) -> Self::Result {
-        context.stop()
-    }
 }
 
 impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
@@ -48,7 +35,9 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
             Ok(bytes) => bytes,
             Err(error) => {
                 error!("{}", error);
-                todo!();
+                context.stop();
+
+                return;
             }
         };
 
@@ -62,17 +51,38 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
                 }
                 Err(error) => {
                     error!("{}", error);
-                    todo!();
+                    context.stop();
+
+                    return;
                 }
             };
 
             match packet {
                 Packet::NodeRegisterRequest { local_address: _ } => {
-                    LeaderNodeFollowerActor::new(
-                        0,
-                        self.id,
-                        self.tcp_stream_actor_address.clone(),
-                        take(&mut self.packet_reader),
+                    let leader_node_actor_address = self.leader_node_actor_address.clone();
+                    let tcp_stream_actor_address = self.tcp_stream_actor_address.clone();
+                    let connection_id = self.id;
+                    let packet_reader = take(&mut self.packet_reader);
+
+                    context.wait(
+                        async move {
+                            LeaderNodeFollowerActor::new(
+                                leader_node_actor_address,
+                                tcp_stream_actor_address,
+                                connection_id,
+                                packet_reader,
+                            ).await
+                        }
+                        .into_actor(self)
+                            .map(|result, _actor, context| {
+                                match result {
+                                    Ok(_) => {},
+                                    Err(e) => {
+                                        error!("{}", e);
+                                        context.stop();
+                                    }
+                                }
+                            }),
                     );
                 }
                 _ => {
@@ -84,12 +94,16 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
 }
 
 impl LeaderNodeConnectionActor {
-    fn new(id: ConnectionId, tcp_stream: TcpStream) -> Addr<Self> {
+    pub fn new(
+        leader_node_actor_address: Addr<LeaderNodeActor>,
+        tcp_stream: TcpStream,
+        id: ConnectionId,
+    ) -> Addr<Self> {
         Self::create(move |context| Self {
             id,
+            leader_node_actor_address,
             tcp_stream_actor_address: TcpStreamActor::new(
                 context.address().recipient(),
-                None,
                 tcp_stream,
             ),
             packet_reader: PacketReader::default(),
