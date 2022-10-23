@@ -1,16 +1,18 @@
 use crate::cluster::LeaderNodeFollowerActor;
-use crate::cluster::{ConnectionId, LeaderNodeActor, Packet, PacketReader};
-use crate::common::{TcpStreamActor, TcpStreamActorReceiveMessage};
-use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message, ActorFutureExt, WrapFuture};
+use crate::cluster::{LeaderNodeActor, Packet, PacketReader};
+use crate::common::{StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage};
+use actix::{
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, WrapFuture,
+};
 use std::mem::take;
 use tokio::net::TcpStream;
-use tracing::error;
+use tracing::{error};
+use futures::FutureExt;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct LeaderNodeConnectionActor {
-    id: ConnectionId,
     leader_node_actor_address: Addr<LeaderNodeActor>,
     tcp_stream_actor_address: Addr<TcpStreamActor>,
     packet_reader: PacketReader,
@@ -29,13 +31,24 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
         message: TcpStreamActorReceiveMessage,
         context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        let (bytes,) = message.into();
+        let (result,) = message.into();
 
-        let bytes = match bytes {
+        let bytes = match result {
             Ok(bytes) => bytes,
             Err(error) => {
                 error!("{}", error);
-                context.stop();
+
+                let future = self.tcp_stream_actor_address.send(StopActorMessage);
+
+                context.wait(
+                    async move {
+                        future.await.expect("Cannot send StopActorMessage");
+                    }
+                    .into_actor(self)
+                    .map(|_result, _actor, context| {
+                        context.stop();
+                    }),
+                );
 
                 return;
             }
@@ -51,39 +64,33 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
                 }
                 Err(error) => {
                     error!("{}", error);
-                    context.stop();
+
+                    let future = self.tcp_stream_actor_address.send(StopActorMessage);
+
+                    context.wait(
+                        async move {
+                            future.await.expect("Cannot send StopActorMessage");
+                        }
+                        .into_actor(self)
+                        .map(|_result, _actor, context| {
+                            context.stop();
+                        }),
+                    );
 
                     return;
                 }
             };
 
             match packet {
-                Packet::NodeRegisterRequest { local_address: _ } => {
-                    let leader_node_actor_address = self.leader_node_actor_address.clone();
-                    let tcp_stream_actor_address = self.tcp_stream_actor_address.clone();
-                    let connection_id = self.id;
-                    let packet_reader = take(&mut self.packet_reader);
+                Packet::NodeRegisterRequest { local_address } => {
+                    let future = LeaderNodeFollowerActor::new(
+                        self.leader_node_actor_address.clone(),
+                        self.tcp_stream_actor_address.clone(),
+                        take(&mut self.packet_reader),
+                        local_address,
+                    ).map(|_address| {});
 
-                    context.wait(
-                        async move {
-                            LeaderNodeFollowerActor::new(
-                                leader_node_actor_address,
-                                tcp_stream_actor_address,
-                                connection_id,
-                                packet_reader,
-                            ).await
-                        }
-                        .into_actor(self)
-                            .map(|result, _actor, context| {
-                                match result {
-                                    Ok(_) => {},
-                                    Err(e) => {
-                                        error!("{}", e);
-                                        context.stop();
-                                    }
-                                }
-                            }),
-                    );
+                    context.wait(async move { future.await }.into_actor(self));
                 }
                 _ => {
                     unimplemented!()
@@ -97,10 +104,8 @@ impl LeaderNodeConnectionActor {
     pub fn new(
         leader_node_actor_address: Addr<LeaderNodeActor>,
         tcp_stream: TcpStream,
-        id: ConnectionId,
     ) -> Addr<Self> {
         Self::create(move |context| Self {
-            id,
             leader_node_actor_address,
             tcp_stream_actor_address: TcpStreamActor::new(
                 context.address().recipient(),

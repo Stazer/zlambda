@@ -65,6 +65,9 @@ impl NodeActor {
                 None => Self::Leader(LeaderNodeActor::new(
                     context.address(),
                     tcp_listener_actor_address,
+                    0,
+                    0,
+                    [(0, tcp_listener_socket_local_address)].into(),
                 )),
             }
         }))

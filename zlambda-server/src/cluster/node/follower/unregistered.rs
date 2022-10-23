@@ -97,6 +97,18 @@ where
                         }
                     };
 
+                    let peer_address = match tcp_stream.peer_addr() {
+                        Ok(peer_address) => peer_address,
+                        Err(e) => {
+                            error!("{}", e);
+                            context.stop();
+
+                            return;
+                        }
+                    };
+
+                    trace!("Connected to {:?}", peer_address);
+
                     match follower_node_actor_address.try_send(UpdateFollowerNodeActorMessage::new(
                         FollowerNodeActor::Registering(RegisteringFollowerNodeActor::new(
                             node_actor_address,

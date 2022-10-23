@@ -1,7 +1,8 @@
-use crate::cluster::{LogEntry, LogEntryId, NodeId, TermId};
+use crate::cluster::{NodeId, TermId};
 use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::net::SocketAddr;
@@ -9,58 +10,22 @@ use std::net::SocketAddr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct NodeRegisterResponsePacketSuccessNodeData {
-    node_id: NodeId,
-    socket_address: SocketAddr,
-}
-
-impl From<NodeRegisterResponsePacketSuccessNodeData> for (NodeId, SocketAddr) {
-    fn from(response: NodeRegisterResponsePacketSuccessNodeData) -> Self {
-        (response.node_id, response.socket_address)
-    }
-}
-
-impl NodeRegisterResponsePacketSuccessNodeData {
-    pub fn new(node_id: NodeId, socket_address: SocketAddr) -> Self {
-        Self {
-            node_id,
-            socket_address,
-        }
-    }
-
-    pub fn node_id(&self) -> NodeId {
-        self.node_id
-    }
-
-    pub fn socket_address(&self) -> &SocketAddr {
-        &self.socket_address
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NodeRegisterResponsePacketSuccessData {
     node_id: NodeId,
-    term_id: TermId,
-    nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>,
     leader_node_id: NodeId,
+    term_id: TermId,
+    node_socket_addresses: HashMap<NodeId, SocketAddr>,
 }
 
 impl From<NodeRegisterResponsePacketSuccessData>
-    for (
-        NodeId,
-        TermId,
-        Vec<NodeRegisterResponsePacketSuccessNodeData>,
-        NodeId,
-    )
+    for (NodeId, NodeId, TermId, HashMap<NodeId, SocketAddr>)
 {
     fn from(response: NodeRegisterResponsePacketSuccessData) -> Self {
         (
             response.node_id,
-            response.term_id,
-            response.nodes,
             response.leader_node_id,
+            response.term_id,
+            response.node_socket_addresses,
         )
     }
 }
@@ -68,15 +33,15 @@ impl From<NodeRegisterResponsePacketSuccessData>
 impl NodeRegisterResponsePacketSuccessData {
     pub fn new(
         node_id: NodeId,
-        term_id: TermId,
-        nodes: Vec<NodeRegisterResponsePacketSuccessNodeData>,
         leader_node_id: NodeId,
+        term_id: TermId,
+        node_socket_addresses: HashMap<NodeId, SocketAddr>,
     ) -> Self {
         Self {
             node_id,
-            term_id,
-            nodes,
             leader_node_id,
+            term_id,
+            node_socket_addresses,
         }
     }
 
@@ -84,16 +49,16 @@ impl NodeRegisterResponsePacketSuccessData {
         self.node_id
     }
 
+    pub fn leader_node_id(&self) -> NodeId {
+        self.leader_node_id
+    }
+
     pub fn term_id(&self) -> TermId {
         self.term_id
     }
 
-    pub fn nodes(&self) -> &Vec<NodeRegisterResponsePacketSuccessNodeData> {
-        &self.nodes
-    }
-
-    pub fn leader_node_id(&self) -> NodeId {
-        self.leader_node_id
+    pub fn node_socket_addresses(&self) -> &HashMap<NodeId, SocketAddr> {
+        &self.node_socket_addresses
     }
 }
 
@@ -161,7 +126,7 @@ pub enum Packet {
     NodeUpdate {
         nodes: Vec<NodeUpdateNodeData>,
     },
-    LogEntryRequest {
+    /*LogEntryRequest {
         log_entry: LogEntry,
     },
     LogEntryResponse {
@@ -169,7 +134,7 @@ pub enum Packet {
     },
     LogEntryAcknowledgement {
         log_entry_id: LogEntryId,
-    },
+    },*/
 }
 
 impl Packet {

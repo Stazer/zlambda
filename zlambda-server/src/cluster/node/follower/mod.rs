@@ -16,9 +16,11 @@ use actix::{Actor, Addr, AsyncContext, Context, Handler, Message};
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use tokio::net::ToSocketAddrs;
+use tracing::trace;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct UpdateFollowerNodeActorMessage {
     actor: FollowerNodeActor,
 }
@@ -59,6 +61,7 @@ impl Actor for FollowerNodeActor {
 impl Handler<UpdateFollowerNodeActorMessage> for FollowerNodeActor {
     type Result = <UpdateFollowerNodeActorMessage as Message>::Result;
 
+    #[tracing::instrument]
     fn handle(
         &mut self,
         message: UpdateFollowerNodeActorMessage,
@@ -66,6 +69,15 @@ impl Handler<UpdateFollowerNodeActorMessage> for FollowerNodeActor {
     ) -> Self::Result {
         let (actor,) = message.into();
         *self = actor;
+
+        trace!(
+            "Change to {} state",
+            match self {
+                Self::Unregistered(_) => "unregistered",
+                Self::Registering(_) => "registering",
+                Self::Registered(_) => "registered",
+            }
+        );
     }
 }
 

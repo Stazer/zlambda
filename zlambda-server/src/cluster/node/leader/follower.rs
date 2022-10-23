@@ -1,6 +1,14 @@
-use crate::cluster::{ConnectionId, LeaderNodeActor, NodeId, PacketReader, FollowerUpgradeActorMessage};
-use crate::common::{TcpStreamActor, TcpStreamActorReceiveMessage};
-use actix::{Actor, Addr, Context, Handler, Message, AsyncContext, MailboxError};
+use crate::cluster::{
+    ConnectionId, CreateFollowerActorMessage, LeaderNodeActor, NodeId,
+    NodeRegisterResponsePacketSuccessData, Packet, PacketReader,
+};
+use crate::common::{
+    StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
+    UpdateRecipientActorMessage,
+};
+use actix::{Actor, Addr, AsyncContext, Context, Handler, MailboxError, Message};
+use futures::{FutureExt, TryFutureExt};
+use std::net::SocketAddr;
 use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -10,12 +18,15 @@ pub struct LeaderNodeFollowerActor {
     leader_node_actor_address: Addr<LeaderNodeActor>,
     tcp_stream_actor_address: Addr<TcpStreamActor>,
     node_id: NodeId,
-    connection_id: ConnectionId,
     packet_reader: PacketReader,
 }
 
 impl Actor for LeaderNodeFollowerActor {
     type Context = Context<Self>;
+
+    #[tracing::instrument]
+    fn stopped(&mut self, context: &mut Self::Context) {
+    }
 }
 
 impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeFollowerActor {
@@ -64,21 +75,99 @@ impl LeaderNodeFollowerActor {
     pub async fn new(
         leader_node_actor_address: Addr<LeaderNodeActor>,
         tcp_stream_actor_address: Addr<TcpStreamActor>,
-        connection_id: ConnectionId,
         packet_reader: PacketReader,
-    ) -> Result<Addr<Self>, MailboxError> {
+        follower_socket_address: SocketAddr,
+    ) -> Option<Addr<Self>> {
         let context: <Self as Actor>::Context = Context::new();
 
-        let node_id = leader_node_actor_address.send(FollowerUpgradeActorMessage::new(
-            connection_id,
-            context.address(),
-        )).await?;
+        match tcp_stream_actor_address
+            .send(UpdateRecipientActorMessage::new(
+                context.address().recipient(),
+            ))
+            .await
+        {
+            Ok(()) => {}
+            Err(error) => {
+                tcp_stream_actor_address
+                    .send(StopActorMessage)
+                    .map(|_result| ())
+                    .await;
 
-        Ok(context.run(Self {
+                Err::<(), _>(error).expect("Cannot send UpdateRecipientActorMessage");
+
+                return None;
+            }
+        }
+
+        let (node_id, leader_node_id, term_id, node_socket_addresses) =
+            match leader_node_actor_address
+                .send(CreateFollowerActorMessage::new(
+                    follower_socket_address,
+                    context.address(),
+                ))
+                .await
+            {
+                Ok(result) => result.into(),
+                Err(error) => {
+                    tcp_stream_actor_address
+                        .send(StopActorMessage)
+                        .map(|_result| ())
+                        .await;
+
+                    Err::<(), _>(error).expect("Cannot send FollowerUpgradeActorMessage");
+
+                return None;
+                }
+            };
+
+        let bytes = match (Packet::NodeRegisterResponse {
+            result: Ok(NodeRegisterResponsePacketSuccessData::new(
+                node_id,
+                leader_node_id,
+                term_id,
+                node_socket_addresses.clone(),
+            )),
+        }.to_bytes())
+        {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                tcp_stream_actor_address
+                    .send(StopActorMessage)
+                    .map(|_result| ())
+                    .await;
+
+                Err::<(), _>(error).expect("Cannot write NodeRegisterResponse");
+
+                return None;
+            }
+        };
+
+        match tcp_stream_actor_address.send(TcpStreamActorSendMessage::new(bytes)).await {
+            Ok(result) => {
+                match result {
+                    Ok(()) => {
+                    }
+                    Err(error) => {
+                        error!("{}", error);
+                    },
+                }
+            },
+            Err(error) => {
+                tcp_stream_actor_address
+                    .send(StopActorMessage)
+                    .map(|_result| ())
+                    .await;
+
+                Err::<(), _>(error).expect("Cannot write TcpStreamActorSendMessage");
+
+                return None;
+            },
+        };
+
+        Some(context.run(Self {
             leader_node_actor_address,
             tcp_stream_actor_address,
             node_id,
-            connection_id,
             packet_reader,
         }))
     }

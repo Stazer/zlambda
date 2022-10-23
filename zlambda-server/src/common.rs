@@ -1,11 +1,10 @@
 use actix::{
-    Actor, Addr, AsyncContext, AtomicResponse, Context, Handler, Message, Recipient, StreamHandler,
-    WrapFuture,
+    Actor, ActorContext, Addr, AsyncContext, AtomicResponse, Context, Handler, Message, Recipient,
+    ResponseActFuture, StreamHandler, WrapFuture,
 };
 use bytes::Bytes;
 use std::fmt::Debug;
 use std::io;
-
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::OwnedWriteHalf;
@@ -70,8 +69,12 @@ impl TcpStreamActorSendMessage {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type UpdateReceiveRecipientActorMessage =
-    UpdateRecipientActorMessage<TcpStreamActorReceiveMessage>;
+#[derive(Debug)]
+pub struct StopActorMessage;
+
+impl Message for StopActorMessage {
+    type Result = ();
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -86,7 +89,7 @@ impl Actor for TcpStreamActor {
 }
 
 impl Handler<TcpStreamActorSendMessage> for TcpStreamActor {
-    type Result = AtomicResponse<Self, <TcpStreamActorSendMessage as Message>::Result>;
+    type Result = ResponseActFuture<Self, <TcpStreamActorSendMessage as Message>::Result>;
 
     #[tracing::instrument]
     fn handle(
@@ -96,15 +99,43 @@ impl Handler<TcpStreamActorSendMessage> for TcpStreamActor {
     ) -> Self::Result {
         let owned_write_half = self.owned_write_half.clone();
 
-        AtomicResponse::new(Box::pin(
+        Box::pin(
             async move {
-                match owned_write_half.lock().await.write(message.data()).await {
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(e),
-                }
+                owned_write_half
+                    .lock()
+                    .await
+                    .write(message.data())
+                    .await
+                    .map(|_bytes| ())
             }
             .into_actor(self),
-        ))
+        )
+    }
+}
+
+impl Handler<StopActorMessage> for TcpStreamActor {
+    type Result = <StopActorMessage as Message>::Result;
+
+    #[tracing::instrument]
+    fn handle(
+        &mut self,
+        _message: StopActorMessage,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        context.stop();
+    }
+}
+
+impl Handler<UpdateRecipientActorMessage<TcpStreamActorReceiveMessage>> for TcpStreamActor {
+    type Result = <UpdateRecipientActorMessage<TcpStreamActorReceiveMessage> as Message>::Result;
+
+    #[tracing::instrument]
+    fn handle(
+        &mut self,
+        message: UpdateRecipientActorMessage<TcpStreamActorReceiveMessage>,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        (self.recipient,) = message.into();
     }
 }
 
@@ -115,13 +146,10 @@ impl StreamHandler<Result<Bytes, io::Error>> for TcpStreamActor {
 
         context.wait(
             async move {
-                tracing::trace!("BEFORE");
-
                 recipient
                     .send(TcpStreamActorReceiveMessage::new(item))
-                    .await;
-
-                tracing::trace!("AFTER");
+                    .await
+                    .expect("Cannot send TcpStreamActorReceiveMessage");
             }
             .into_actor(self),
         );
@@ -208,9 +236,7 @@ where
     T::Result: Send + 'static,
 {
     pub fn new(recipient: Recipient<T>) -> Self {
-        Self {
-            recipient,
-        }
+        Self { recipient }
     }
 
     pub fn recipient(&self) -> &Recipient<T> {

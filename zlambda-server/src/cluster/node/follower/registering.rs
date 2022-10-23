@@ -101,7 +101,9 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteringFollowerNodeActor {
             };
 
             match response {
-                Ok(_data) => {}
+                Ok(data) => {
+                    println!("{:?}", data);
+                }
                 Err(NodeRegisterResponsePacketError::NotALeader { leader_address }) => {
                     match self.follower_node_actor_address.try_send(
                         UpdateFollowerNodeActorMessage::new(FollowerNodeActor::Unregistered(
