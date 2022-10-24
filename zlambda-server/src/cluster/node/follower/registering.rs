@@ -5,7 +5,7 @@ use crate::cluster::{
 use crate::common::{
     TcpListenerActor, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
 };
-use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
+use actix::{Actor, WrapFuture, ActorContext, Addr, AsyncContext, Context, Handler, Message};
 use std::mem::take;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
@@ -105,7 +105,7 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteringFollowerNodeActor {
                 Ok(data) => {
                     let (node_id, leader_node_id, term_id, node_socket_addresses) = data.into();
 
-                    RegisteredFollowerNodeActor::new(
+                    let future = RegisteredFollowerNodeActor::new(
                         self.node_actor_address.clone(),
                         self.follower_node_actor_address.clone(),
                         self.tcp_listener_actor_address.clone(),
@@ -117,6 +117,12 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteringFollowerNodeActor {
                         term_id,
                         node_socket_addresses,
                     );
+
+                    context.wait(
+                        async move {
+                            future.await;
+                        }.into_actor(self)
+                    )
                 }
                 Err(NodeRegisterResponsePacketError::NotALeader { leader_address }) => {
                     match self.follower_node_actor_address.try_send(

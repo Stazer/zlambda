@@ -1,6 +1,11 @@
-use crate::cluster::{FollowerNodeActor, NodeActor, NodeId, PacketReader, TermId};
-use crate::common::{TcpListenerActor, TcpStreamActor, TcpStreamActorReceiveMessage};
-use actix::{Actor, ActorContext, Addr, Context, Handler, Message};
+use crate::cluster::{
+    FollowerNodeActor, NodeActor, NodeId, PacketReader, TermId, UpdateFollowerNodeActorMessage,
+};
+use crate::common::{
+    TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor, TcpStreamActorReceiveMessage,
+    UpdateRecipientActorMessage,
+};
+use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use tracing::{error, trace};
@@ -67,8 +72,21 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteredFollowerNodeActor {
     }
 }
 
+impl Handler<TcpListenerActorAcceptMessage> for RegisteredFollowerNodeActor {
+    type Result = <TcpListenerActorAcceptMessage as Message>::Result;
+
+    #[tracing::instrument]
+    fn handle(
+        &mut self,
+        message: TcpListenerActorAcceptMessage,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        todo!()
+    }
+}
+
 impl RegisteredFollowerNodeActor {
-    pub fn new(
+    pub async fn new(
         node_actor_address: Addr<NodeActor>,
         follower_node_actor_address: Addr<FollowerNodeActor>,
         tcp_listener_actor_address: Addr<TcpListenerActor>,
@@ -80,9 +98,25 @@ impl RegisteredFollowerNodeActor {
         leader_node_id: NodeId,
         node_socket_addresses: HashMap<NodeId, SocketAddr>,
     ) -> Addr<Self> {
-        Self::create(move |_context| Self {
+        let context = Context::new();
+
+        tcp_listener_actor_address
+            .send(UpdateRecipientActorMessage::new(
+                context.address().recipient(),
+            ))
+            .await
+            .expect("Cannot send UpdateRecipientActorMessage");
+
+        tcp_stream_actor_address
+            .send(UpdateRecipientActorMessage::new(
+                context.address().recipient(),
+            ))
+            .await
+            .expect("Cannot send UpdateRecipientActorMessage");
+
+        let actor = context.run(Self {
             node_actor_address,
-            follower_node_actor_address,
+            follower_node_actor_address: follower_node_actor_address.clone(),
             tcp_listener_actor_address,
             tcp_listener_socket_local_address,
             tcp_stream_actor_address,
@@ -91,6 +125,15 @@ impl RegisteredFollowerNodeActor {
             node_id,
             leader_node_id,
             node_socket_addresses,
-        })
+        });
+
+        follower_node_actor_address
+            .send(UpdateFollowerNodeActorMessage::new(
+                FollowerNodeActor::Registered(actor.clone()),
+            ))
+            .await
+            .expect("Cannot send UpdateFollowerNodeActorMessage");
+
+        actor
     }
 }
