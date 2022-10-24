@@ -25,8 +25,7 @@ impl Actor for LeaderNodeFollowerActor {
     type Context = Context<Self>;
 
     #[tracing::instrument]
-    fn stopped(&mut self, context: &mut Self::Context) {
-    }
+    fn stopped(&mut self, context: &mut Self::Context) {}
 }
 
 impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeFollowerActor {
@@ -116,7 +115,7 @@ impl LeaderNodeFollowerActor {
 
                     Err::<(), _>(error).expect("Cannot send FollowerUpgradeActorMessage");
 
-                return None;
+                    return None;
                 }
             };
 
@@ -127,7 +126,8 @@ impl LeaderNodeFollowerActor {
                 term_id,
                 node_socket_addresses.clone(),
             )),
-        }.to_bytes())
+        }
+        .to_bytes())
         {
             Ok(bytes) => bytes,
             Err(error) => {
@@ -142,14 +142,14 @@ impl LeaderNodeFollowerActor {
             }
         };
 
-        match tcp_stream_actor_address.send(TcpStreamActorSendMessage::new(bytes)).await {
-            Ok(result) => {
-                match result {
-                    Ok(()) => {
-                    }
-                    Err(error) => {
-                        error!("{}", error);
-                    },
+        match tcp_stream_actor_address
+            .send(TcpStreamActorSendMessage::new(bytes))
+            .await
+        {
+            Ok(result) => match result {
+                Ok(()) => {}
+                Err(error) => {
+                    error!("{}", error);
                 }
             },
             Err(error) => {
@@ -161,7 +161,7 @@ impl LeaderNodeFollowerActor {
                 Err::<(), _>(error).expect("Cannot write TcpStreamActorSendMessage");
 
                 return None;
-            },
+            }
         };
 
         Some(context.run(Self {

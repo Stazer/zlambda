@@ -1,6 +1,7 @@
-use crate::cluster::{FollowerNodeActor, NodeActor, PacketReader};
+use crate::cluster::{FollowerNodeActor, NodeActor, NodeId, PacketReader, TermId};
 use crate::common::{TcpListenerActor, TcpStreamActor, TcpStreamActorReceiveMessage};
 use actix::{Actor, ActorContext, Addr, Context, Handler, Message};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use tracing::{error, trace};
 
@@ -14,6 +15,10 @@ pub struct RegisteredFollowerNodeActor {
     tcp_listener_socket_local_address: SocketAddr,
     tcp_stream_actor_address: Addr<TcpStreamActor>,
     packet_reader: PacketReader,
+    node_socket_addresses: HashMap<NodeId, SocketAddr>,
+    term_id: TermId,
+    node_id: NodeId,
+    leader_node_id: NodeId,
 }
 
 impl Actor for RegisteredFollowerNodeActor {
@@ -70,6 +75,10 @@ impl RegisteredFollowerNodeActor {
         tcp_listener_socket_local_address: SocketAddr,
         tcp_stream_actor_address: Addr<TcpStreamActor>,
         packet_reader: PacketReader,
+        term_id: TermId,
+        node_id: NodeId,
+        leader_node_id: NodeId,
+        node_socket_addresses: HashMap<NodeId, SocketAddr>,
     ) -> Addr<Self> {
         Self::create(move |_context| Self {
             node_actor_address,
@@ -78,6 +87,10 @@ impl RegisteredFollowerNodeActor {
             tcp_listener_socket_local_address,
             tcp_stream_actor_address,
             packet_reader,
+            term_id,
+            node_id,
+            leader_node_id,
+            node_socket_addresses,
         })
     }
 }

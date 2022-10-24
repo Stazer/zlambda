@@ -16,9 +16,9 @@ use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecip
 use actix::dev::{MessageResponse, OneshotSender};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
 use std::collections::HashMap;
+use std::iter::once;
 use std::net::SocketAddr;
 use tracing::{error, trace};
-use std::iter::once;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -134,7 +134,7 @@ impl Message for CreateFollowerActorMessage {
     type Result = CreateFollowerActorMessageResponse;
 }
 
-impl CreateFollowerActorMessage{
+impl CreateFollowerActorMessage {
     pub fn new(
         socket_address: SocketAddr,
         follower_actor_address: Addr<LeaderNodeFollowerActor>,
@@ -172,12 +172,8 @@ impl Message for DestroyFollowerActorMessage {
 }
 
 impl DestroyFollowerActorMessage {
-    pub fn new(
-        node_id: NodeId,
-    ) -> Self {
-        Self {
-            node_id,
-        }
+    pub fn new(node_id: NodeId) -> Self {
+        Self { node_id }
     }
 
     pub fn node_id(&self) -> NodeId {
@@ -211,7 +207,11 @@ impl Handler<CreateFollowerActorMessage> for LeaderNodeActor {
         message: CreateFollowerActorMessage,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        let node_id = next_key(self.follower_actor_addresses.keys().chain(once(&self.node_id)));
+        let node_id = next_key(
+            self.follower_actor_addresses
+                .keys()
+                .chain(once(&self.node_id)),
+        );
 
         let (socket_address, follower_actor_address) = message.into();
         self.follower_actor_addresses

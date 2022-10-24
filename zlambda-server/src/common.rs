@@ -3,6 +3,7 @@ use actix::{
     ResponseActFuture, StreamHandler, WrapFuture,
 };
 use bytes::Bytes;
+use std::error::Error;
 use std::fmt::Debug;
 use std::io;
 use std::sync::Arc;
@@ -12,6 +13,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::io::ReaderStream;
+use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -290,5 +292,20 @@ impl TcpListenerActor {
 
             Self { recipient }
         })
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct UnrecoverableErrorHandler;
+
+impl UnrecoverableErrorHandler {
+    pub fn handle<A, E>(error: E, context: &mut A::Context)
+    where
+        A: Actor,
+        E: Error + 'static,
+    {
+        error!("{}", error);
+        context.stop();
     }
 }

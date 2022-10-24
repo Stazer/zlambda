@@ -4,10 +4,10 @@ use crate::common::{StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessa
 use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, WrapFuture,
 };
+use futures::FutureExt;
 use std::mem::take;
 use tokio::net::TcpStream;
-use tracing::{error};
-use futures::FutureExt;
+use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -88,7 +88,8 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
                         self.tcp_stream_actor_address.clone(),
                         take(&mut self.packet_reader),
                         local_address,
-                    ).map(|_address| {});
+                    )
+                    .map(|_address| {});
 
                     context.wait(async move { future.await }.into_actor(self));
                 }

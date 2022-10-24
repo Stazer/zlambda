@@ -123,9 +123,6 @@ pub enum Packet {
         result: Result<NodeRegisterResponsePacketSuccessData, NodeRegisterResponsePacketError>,
     },
     NodeRegisterAcknowledgement,
-    NodeUpdate {
-        nodes: Vec<NodeUpdateNodeData>,
-    },
     /*LogEntryRequest {
         log_entry: LogEntry,
     },

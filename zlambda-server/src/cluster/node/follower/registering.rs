@@ -1,11 +1,12 @@
 use crate::cluster::{
     FollowerNodeActor, NodeActor, NodeRegisterResponsePacketError, Packet, PacketReader,
-    UnregisteredFollowerNodeActor, UpdateFollowerNodeActorMessage,
+    RegisteredFollowerNodeActor, UnregisteredFollowerNodeActor, UpdateFollowerNodeActorMessage,
 };
 use crate::common::{
     TcpListenerActor, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
 };
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
+use std::mem::take;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 use tracing::error;
@@ -102,7 +103,20 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteringFollowerNodeActor {
 
             match response {
                 Ok(data) => {
-                    println!("{:?}", data);
+                    let (node_id, leader_node_id, term_id, node_socket_addresses) = data.into();
+
+                    RegisteredFollowerNodeActor::new(
+                        self.node_actor_address.clone(),
+                        self.follower_node_actor_address.clone(),
+                        self.tcp_listener_actor_address.clone(),
+                        self.tcp_listener_socket_local_address,
+                        self.tcp_stream_actor_address.clone(),
+                        take(&mut self.packet_reader),
+                        node_id,
+                        leader_node_id,
+                        term_id,
+                        node_socket_addresses,
+                    );
                 }
                 Err(NodeRegisterResponsePacketError::NotALeader { leader_address }) => {
                     match self.follower_node_actor_address.try_send(
