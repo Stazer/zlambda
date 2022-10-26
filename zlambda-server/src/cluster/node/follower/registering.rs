@@ -5,7 +5,7 @@ use crate::cluster::{
 use crate::common::{
     TcpListenerActor, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
 };
-use actix::{Actor, WrapFuture, ActorContext, Addr, AsyncContext, Context, Handler, Message};
+use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message, WrapFuture};
 use std::mem::take;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
@@ -121,7 +121,8 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteringFollowerNodeActor {
                     context.wait(
                         async move {
                             future.await;
-                        }.into_actor(self)
+                        }
+                        .into_actor(self),
                     )
                 }
                 Err(NodeRegisterResponsePacketError::NotALeader { leader_address }) => {

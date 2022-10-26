@@ -13,6 +13,33 @@ use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/*#[derive(Debug)]
+pub struct ReplicateActorMessage {
+    log_entry: LogEntry,
+}
+
+impl From<ReplicateActorMessage> for (LogEntry,) {
+    fn from(message: ReplicateActorMessage) -> Self {
+        (message.log_entry,)
+    }
+}
+
+impl Message for ReplicateActorMessage {
+    type Result = ();
+}
+
+impl ReplicateActorMessage {
+    pub fn new(log_entry: LogEntry) -> Self {
+        Self { log_entry }
+    }
+
+    pub fn log_entry(&self) -> &LogEntry {
+        &self.log_entry
+    }
+}*/
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub struct LeaderNodeFollowerActor {
     leader_node_actor_address: Addr<LeaderNodeActor>,

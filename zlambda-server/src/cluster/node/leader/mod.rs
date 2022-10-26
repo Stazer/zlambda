@@ -11,11 +11,14 @@ pub use follower::*;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use crate::algorithm::next_key;
-use crate::cluster::{ClientId, ConnectionId, NodeActor, NodeId, TermId};
+use crate::cluster::{
+    ClientId, ConnectionId, LogEntry, LogEntryId, LogEntryType, NodeActor, NodeId, TermId,
+};
 use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecipientActorMessage};
 use actix::dev::{MessageResponse, OneshotSender};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fmt::{self, Debug, Formatter};
 use std::iter::once;
 use std::net::SocketAddr;
 use tracing::{error, trace};
@@ -184,14 +187,193 @@ impl DestroyFollowerActorMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct AcknowledgeLogEntryActorMessage {
+    log_entry_id: LogEntryId,
+    node_id: NodeId,
+}
+
+impl From<AcknowledgeLogEntryActorMessage> for (LogEntryId, NodeId) {
+    fn from(message: AcknowledgeLogEntryActorMessage) -> Self {
+        (message.log_entry_id, message.node_id)
+    }
+}
+
+impl Message for AcknowledgeLogEntryActorMessage {
+    type Result = ();
+}
+
+impl AcknowledgeLogEntryActorMessage {
+    pub fn new(log_entry_id: LogEntryId, node_id: NodeId) -> Self {
+        Self {
+            log_entry_id,
+            node_id,
+        }
+    }
+
+    pub fn log_entry_id(&self) -> LogEntryId {
+        self.log_entry_id
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.node_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct LeaderNodeActorActorAddresses {
+    node: Addr<NodeActor>,
+    tcp_listener: Addr<TcpListenerActor>,
+    follower: HashMap<NodeId, Addr<LeaderNodeFollowerActor>>,
+    clients: HashMap<ClientId, Addr<LeaderNodeClientActor>>,
+}
+
+impl Debug for LeaderNodeActorActorAddresses {
+    fn fmt(&self, _formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        Ok(())
+    }
+}
+
+impl LeaderNodeActorActorAddresses {
+    pub fn new(
+        node: Addr<NodeActor>,
+        tcp_listener: Addr<TcpListenerActor>,
+        follower: HashMap<NodeId, Addr<LeaderNodeFollowerActor>>,
+        clients: HashMap<ClientId, Addr<LeaderNodeClientActor>>,
+    ) -> Self {
+        Self {
+            node,
+            tcp_listener,
+            follower,
+            clients,
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type CommittedLogEntry = LogEntry;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub struct UncommittedLogEntry {
+    id: LogEntryId,
+    r#type: LogEntryType,
+    acknowledging_nodes: HashSet<NodeId>,
+    acknowledged_nodes: HashSet<NodeId>,
+}
+
+impl From<UncommittedLogEntry> for CommittedLogEntry {
+    fn from(entry: UncommittedLogEntry) -> Self {
+        Self::new(entry.id, entry.r#type)
+    }
+}
+
+impl UncommittedLogEntry {
+    pub fn new(
+        id: LogEntryId,
+        r#type: LogEntryType,
+        acknowledging_nodes: HashSet<NodeId>,
+        acknowledged_nodes: HashSet<NodeId>,
+    ) -> Self {
+        Self {
+            id,
+            r#type,
+            acknowledging_nodes,
+            acknowledged_nodes,
+        }
+    }
+
+    pub fn id(&self) -> LogEntryId {
+        self.id
+    }
+
+    pub fn r#type(&self) -> &LogEntryType {
+        &self.r#type
+    }
+
+    pub fn acknowledging_nodes(&self) -> &HashSet<NodeId> {
+        &self.acknowledging_nodes
+    }
+
+    pub fn acknowledged_nodes(&self) -> &HashSet<NodeId> {
+        &self.acknowledged_nodes
+    }
+
+    pub fn quorum_count(&self) -> usize {
+        self.acknowledging_nodes.len() / 2
+    }
+
+    pub fn acknowledge(&mut self, node_id: NodeId) {
+        if !self.acknowledging_nodes.contains(&node_id) {
+            panic!(
+                "Cannot acknowledge log entry {} by node {}",
+                self.id, node_id
+            );
+        }
+
+        if self.acknowledged_nodes.contains(&node_id) {
+            panic!(
+                "Log entry {} already acknowledged by node {}",
+                self.id, node_id
+            );
+        }
+    }
+
+    pub fn committable(&self) -> bool {
+        self.acknowledging_nodes
+            .intersection(&self.acknowledged_nodes)
+            .count()
+            > self.quorum_count()
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Default)]
+pub struct LeaderNodeActorLogEntries {
+    uncommitted: HashMap<LogEntryId, UncommittedLogEntry>,
+    committed: HashMap<LogEntryId, CommittedLogEntry>,
+}
+
+impl LeaderNodeActorLogEntries {
+    pub fn acknowledge(&mut self, log_entry_id: LogEntryId, node_id: NodeId) -> Option<LogEntryId> {
+        let log_entry = self
+            .uncommitted
+            .get_mut(&log_entry_id)
+            .expect("Log entry should exist");
+        log_entry.acknowledge(node_id);
+
+        if log_entry.committable() {
+            let _ = log_entry;
+
+            self.committed.insert(
+                log_entry_id,
+                self.uncommitted
+                    .remove(&log_entry_id)
+                    .expect("Log entry should exist")
+                    .into(),
+            );
+
+            Some(log_entry_id)
+        } else {
+            None
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct LeaderNodeActor {
-    node_actor_address: Addr<NodeActor>,
-    tcp_listener_actor_address: Addr<TcpListenerActor>,
-    follower_actor_addresses: HashMap<NodeId, Addr<LeaderNodeFollowerActor>>,
-    client_actor_addresses: HashMap<ClientId, Addr<LeaderNodeClientActor>>,
+    actor_addresses: LeaderNodeActorActorAddresses,
+
     term_id: TermId,
     node_id: NodeId,
     node_socket_addresses: HashMap<NodeId, SocketAddr>,
+
+    log_entries: LeaderNodeActorLogEntries,
 }
 
 impl Actor for LeaderNodeActor {
@@ -208,13 +390,15 @@ impl Handler<CreateFollowerActorMessage> for LeaderNodeActor {
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         let node_id = next_key(
-            self.follower_actor_addresses
+            self.actor_addresses
+                .follower
                 .keys()
                 .chain(once(&self.node_id)),
         );
 
         let (socket_address, follower_actor_address) = message.into();
-        self.follower_actor_addresses
+        self.actor_addresses
+            .follower
             .insert(node_id, follower_actor_address);
         self.node_socket_addresses.insert(node_id, socket_address);
 
@@ -237,7 +421,7 @@ impl Handler<DestroyFollowerActorMessage> for LeaderNodeActor {
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         let (node_id,) = message.into();
-        self.follower_actor_addresses.remove(&node_id);
+        self.actor_addresses.follower.remove(&node_id);
     }
 }
 
@@ -264,6 +448,19 @@ impl Handler<TcpListenerActorAcceptMessage> for LeaderNodeActor {
     }
 }
 
+impl Handler<AcknowledgeLogEntryActorMessage> for LeaderNodeActor {
+    type Result = <AcknowledgeLogEntryActorMessage as Message>::Result;
+
+    fn handle(
+        &mut self,
+        message: AcknowledgeLogEntryActorMessage,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        self.log_entries
+            .acknowledge(message.log_entry_id(), message.node_id());
+    }
+}
+
 impl LeaderNodeActor {
     pub fn new(
         node_actor_address: Addr<NodeActor>,
@@ -278,13 +475,18 @@ impl LeaderNodeActor {
             ));
 
             Self {
-                node_actor_address,
-                tcp_listener_actor_address,
-                follower_actor_addresses: HashMap::default(),
-                client_actor_addresses: HashMap::default(),
+                actor_addresses: LeaderNodeActorActorAddresses::new(
+                    node_actor_address,
+                    tcp_listener_actor_address,
+                    HashMap::default(),
+                    HashMap::default(),
+                ),
+
                 term_id,
                 node_id,
                 node_socket_addresses,
+
+                log_entries: LeaderNodeActorLogEntries::default(),
             }
         })
     }

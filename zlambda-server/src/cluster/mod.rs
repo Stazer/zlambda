@@ -8,9 +8,9 @@ pub use packet::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use crate::algorithm::next_key;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,3 +31,64 @@ pub type TermId = u64;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type LogEntryId = u64;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum LogEntryType {
+    UpdateNodes(HashMap<NodeId, SocketAddr>),
+    Increment,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CommittedLogEntry {
+    id: LogEntryId,
+    r#type: LogEntryType,
+}
+
+impl CommittedLogEntry {
+    pub fn new(id: LogEntryId, r#type: LogEntryType) -> Self {
+        Self { id, r#type }
+    }
+
+    pub fn id(&self) -> LogEntryId {
+        self.id
+    }
+
+    pub fn r#type(&self) -> &LogEntryType {
+        &self.r#type
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LogEntry {
+    id: LogEntryId,
+    r#type: LogEntryType,
+}
+
+impl LogEntry {
+    pub fn new(id: LogEntryId, r#type: LogEntryType) -> Self {
+        Self { id, r#type }
+    }
+
+    pub fn id(&self) -> LogEntryId {
+        self.id
+    }
+
+    pub fn r#type(&self) -> &LogEntryType {
+        &self.r#type
+    }
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ClusterData {
+    term_id: TermId,
+    node_id: NodeId,
+    leader_node_id: NodeId,
+    socket_addresses: HashMap<NodeId, SocketAddr>,
+}

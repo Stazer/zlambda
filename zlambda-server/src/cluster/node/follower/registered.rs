@@ -1,29 +1,65 @@
 use crate::cluster::{
-    FollowerNodeActor, NodeActor, NodeId, PacketReader, TermId, UpdateFollowerNodeActorMessage,
+    FollowerNodeActor, LogEntry, LogEntryId, NodeActor, NodeId, Packet, PacketReader, TermId,
+    UpdateFollowerNodeActorMessage,
 };
 use crate::common::{
     TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor, TcpStreamActorReceiveMessage,
-    UpdateRecipientActorMessage,
+    TcpStreamActorSendMessage, UpdateRecipientActorMessage,
 };
-use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
+use actix::{
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, WrapFuture,
+};
 use std::collections::HashMap;
+use std::fmt::{self, Debug, Formatter};
 use std::net::SocketAddr;
 use tracing::{error, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub struct RegisteredFollowerNodeActorActorAddresses {
+    node: Addr<NodeActor>,
+    follower_node: Addr<FollowerNodeActor>,
+    tcp_listener: Addr<TcpListenerActor>,
+    tcp_stream: Addr<TcpStreamActor>,
+}
+
+impl Debug for RegisteredFollowerNodeActorActorAddresses {
+    fn fmt(&self, _formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        Ok(())
+    }
+}
+
+impl RegisteredFollowerNodeActorActorAddresses {
+    pub fn new(
+        node: Addr<NodeActor>,
+        follower_node: Addr<FollowerNodeActor>,
+        tcp_listener: Addr<TcpListenerActor>,
+        tcp_stream: Addr<TcpStreamActor>,
+    ) -> Self {
+        Self {
+            node,
+            follower_node,
+            tcp_listener,
+            tcp_stream,
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub struct RegisteredFollowerNodeActor {
-    node_actor_address: Addr<NodeActor>,
-    follower_node_actor_address: Addr<FollowerNodeActor>,
-    tcp_listener_actor_address: Addr<TcpListenerActor>,
+    actor_addresses: RegisteredFollowerNodeActorActorAddresses,
+
     tcp_listener_socket_local_address: SocketAddr,
-    tcp_stream_actor_address: Addr<TcpStreamActor>,
     packet_reader: PacketReader,
+
     node_socket_addresses: HashMap<NodeId, SocketAddr>,
     term_id: TermId,
     node_id: NodeId,
     leader_node_id: NodeId,
+
+    log_entries: HashMap<LogEntryId, LogEntry>,
 }
 
 impl Actor for RegisteredFollowerNodeActor {
@@ -67,7 +103,37 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteredFollowerNodeActor {
                 }
             };
 
-            trace!("{:?}", packet);
+            match packet {
+                Packet::LogEntryRequest { log_entry } => {
+                    let bytes = Packet::LogEntrySuccessResponse {
+                        log_entry_id: log_entry.id(),
+                    }
+                    .to_bytes()
+                    .expect("Cannot write LogEntrySuccessResponse");
+
+                    self.log_entries.insert(log_entry.id(), log_entry);
+
+                    let future = self
+                        .actor_addresses
+                        .tcp_stream
+                        .send(TcpStreamActorSendMessage::new(bytes));
+
+                    context.wait(async move { future.await }.into_actor(self).map(
+                        |result, _actor, context| {
+                            match result {
+                                Err(e) => {
+                                    error!("{}", e);
+                                    context.stop();
+                                }
+                                Ok(_) => {}
+                            };
+                        },
+                    ));
+                }
+                packet => {
+                    error!("Unhandled packet {:?} from leader", packet);
+                }
+            }
         }
     }
 }
@@ -115,16 +181,19 @@ impl RegisteredFollowerNodeActor {
             .expect("Cannot send UpdateRecipientActorMessage");
 
         let actor = context.run(Self {
-            node_actor_address,
-            follower_node_actor_address: follower_node_actor_address.clone(),
-            tcp_listener_actor_address,
+            actor_addresses: RegisteredFollowerNodeActorActorAddresses::new(
+                node_actor_address,
+                follower_node_actor_address.clone(),
+                tcp_listener_actor_address,
+                tcp_stream_actor_address,
+            ),
             tcp_listener_socket_local_address,
-            tcp_stream_actor_address,
             packet_reader,
             term_id,
             node_id,
             leader_node_id,
             node_socket_addresses,
+            log_entries: HashMap::default(),
         });
 
         follower_node_actor_address
