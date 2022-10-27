@@ -17,6 +17,8 @@ use crate::cluster::{
 use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecipientActorMessage};
 use actix::dev::{MessageResponse, OneshotSender};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
+use std::collections::hash_map::RandomState;
+use std::collections::hash_set::Intersection;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Debug, Formatter};
 use std::iter::once;
@@ -221,6 +223,33 @@ impl AcknowledgeLogEntryActorMessage {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
+pub struct BeginLogEntryActorMessage {
+    log_entry_type: LogEntryType,
+}
+
+impl From<BeginLogEntryActorMessage> for (LogEntryType,) {
+    fn from(message: BeginLogEntryActorMessage) -> Self {
+        (message.log_entry_type,)
+    }
+}
+
+impl Message for BeginLogEntryActorMessage {
+    type Result = ();
+}
+
+impl BeginLogEntryActorMessage {
+    pub fn new(log_entry_type: LogEntryType) -> Self {
+        Self { log_entry_type }
+    }
+
+    pub fn log_entry_type(&self) -> &LogEntryType {
+        &self.log_entry_type
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub struct LeaderNodeActorActorAddresses {
     node: Addr<NodeActor>,
     tcp_listener: Addr<TcpListenerActor>,
@@ -301,6 +330,11 @@ impl UncommittedLogEntry {
         &self.acknowledged_nodes
     }
 
+    pub fn remaining_acknowledging_nodes(&self) -> Intersection<'_, NodeId, RandomState> {
+        self.acknowledging_nodes
+            .intersection(&self.acknowledged_nodes)
+    }
+
     pub fn quorum_count(&self) -> usize {
         self.acknowledging_nodes.len() / 2
     }
@@ -322,10 +356,7 @@ impl UncommittedLogEntry {
     }
 
     pub fn committable(&self) -> bool {
-        self.acknowledging_nodes
-            .intersection(&self.acknowledged_nodes)
-            .count()
-            > self.quorum_count()
+        self.remaining_acknowledging_nodes().count() > self.quorum_count()
     }
 }
 
@@ -338,6 +369,20 @@ pub struct LeaderNodeActorLogEntries {
 }
 
 impl LeaderNodeActorLogEntries {
+    pub fn begin(&mut self, r#type: LogEntryType, nodes: HashSet<NodeId>) -> LogEntryId {
+        let id = next_key(self.uncommitted.keys().chain(self.committed.keys()));
+
+        trace!("Begin {}", id);
+
+        self.uncommitted
+            .insert(
+                id,
+                UncommittedLogEntry::new(id, r#type, nodes, HashSet::default()),
+            );
+
+        id
+    }
+
     pub fn acknowledge(&mut self, log_entry_id: LogEntryId, node_id: NodeId) -> Option<LogEntryId> {
         let log_entry = self
             .uncommitted
@@ -387,7 +432,7 @@ impl Handler<CreateFollowerActorMessage> for LeaderNodeActor {
     fn handle(
         &mut self,
         message: CreateFollowerActorMessage,
-        _context: &mut <Self as Actor>::Context,
+        context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         let node_id = next_key(
             self.actor_addresses
@@ -401,6 +446,8 @@ impl Handler<CreateFollowerActorMessage> for LeaderNodeActor {
             .follower
             .insert(node_id, follower_actor_address);
         self.node_socket_addresses.insert(node_id, socket_address);
+
+        context.notify(BeginLogEntryActorMessage::new(LogEntryType::UpdateNodes(self.node_socket_addresses.clone())));
 
         Self::Result::new(
             node_id,
@@ -448,16 +495,60 @@ impl Handler<TcpListenerActorAcceptMessage> for LeaderNodeActor {
     }
 }
 
+impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
+    type Result = <BeginLogEntryActorMessage as Message>::Result;
+
+    fn handle(
+        &mut self,
+        message: BeginLogEntryActorMessage,
+        _context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        let (r#type,) = message.into();
+
+        let log_entry_id = self.log_entries.begin(
+            r#type.clone(),
+            self.node_socket_addresses.keys().copied().collect(),
+        );
+
+        match self.log_entries.acknowledge(log_entry_id, self.node_id) {
+            None => {
+                for node_id in self
+                    .log_entries
+                    .uncommitted
+                    .get(&log_entry_id)
+                    .expect("Log entry should be uncommitted")
+                    .remaining_acknowledging_nodes()
+                {
+                    self.actor_addresses
+                        .follower
+                        .get(&node_id)
+                        .expect("Node id should have an follower actor address")
+                        .try_send(ReplicateLogEntryActorMessage::new(LogEntry::new(
+                            log_entry_id,
+                            r#type.clone(),
+                        )))
+                        .expect("Sending ReplicateLogEntryActorMessage should be successful");
+                }
+            }
+            Some(log_entry_id) => {
+                trace!("Replicated {} on one node", log_entry_id);
+            }
+        }
+    }
+}
+
 impl Handler<AcknowledgeLogEntryActorMessage> for LeaderNodeActor {
     type Result = <AcknowledgeLogEntryActorMessage as Message>::Result;
 
     fn handle(
         &mut self,
         message: AcknowledgeLogEntryActorMessage,
-        context: &mut <Self as Actor>::Context,
+        _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        self.log_entries
+        let a = self.log_entries
             .acknowledge(message.log_entry_id(), message.node_id());
+
+        trace!("Acknowledged {} on node {} ({:?})", message.log_entry_id(), message.node_id(), a);
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::cluster::{
-    ConnectionId, CreateFollowerActorMessage, LeaderNodeActor, NodeId,
-    NodeRegisterResponsePacketSuccessData, Packet, PacketReader,
+    ConnectionId, CreateFollowerActorMessage, LeaderNodeActor, LogEntry, NodeId,
+    NodeRegisterResponsePacketSuccessData, Packet, PacketReader, AcknowledgeLogEntryActorMessage,
 };
 use crate::common::{
     StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
@@ -13,22 +13,22 @@ use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/*#[derive(Debug)]
-pub struct ReplicateActorMessage {
+#[derive(Debug)]
+pub struct ReplicateLogEntryActorMessage {
     log_entry: LogEntry,
 }
 
-impl From<ReplicateActorMessage> for (LogEntry,) {
-    fn from(message: ReplicateActorMessage) -> Self {
+impl From<ReplicateLogEntryActorMessage> for (LogEntry,) {
+    fn from(message: ReplicateLogEntryActorMessage) -> Self {
         (message.log_entry,)
     }
 }
 
-impl Message for ReplicateActorMessage {
+impl Message for ReplicateLogEntryActorMessage {
     type Result = ();
 }
 
-impl ReplicateActorMessage {
+impl ReplicateLogEntryActorMessage {
     pub fn new(log_entry: LogEntry) -> Self {
         Self { log_entry }
     }
@@ -36,7 +36,7 @@ impl ReplicateActorMessage {
     pub fn log_entry(&self) -> &LogEntry {
         &self.log_entry
     }
-}*/
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,6 +53,27 @@ impl Actor for LeaderNodeFollowerActor {
 
     #[tracing::instrument]
     fn stopped(&mut self, context: &mut Self::Context) {}
+}
+
+impl Handler<ReplicateLogEntryActorMessage> for LeaderNodeFollowerActor {
+    type Result = <ReplicateLogEntryActorMessage as Message>::Result;
+
+    #[tracing::instrument]
+    fn handle(
+        &mut self,
+        message: ReplicateLogEntryActorMessage,
+        context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        let (log_entry,) = message.into();
+
+        let bytes = (Packet::LogEntryRequest { log_entry })
+            .to_bytes()
+            .expect("Writing LogEntryRequest should succeed");
+
+        self.tcp_stream_actor_address
+            .try_send(TcpStreamActorSendMessage::new(bytes))
+            .expect("Sending LogEntryRequest should succeed");
+    }
 }
 
 impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeFollowerActor {
@@ -89,8 +110,14 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeFollowerActor {
             };
 
             match packet {
-                _ => {
-                    unimplemented!()
+                Packet::LogEntrySuccessResponse {log_entry_id} => {
+                    self.leader_node_actor_address.try_send(AcknowledgeLogEntryActorMessage::new(
+                        self.node_id,
+                        log_entry_id,
+                    )).expect("Sending Log");
+                },
+                packet => {
+                    error!("Received unhandled packet {:?}", packet);
                 }
             }
         }

@@ -111,6 +111,8 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteredFollowerNodeActor {
                     .to_bytes()
                     .expect("Cannot write LogEntrySuccessResponse");
 
+                    trace!("Received {}", log_entry.id());
+
                     self.log_entries.insert(log_entry.id(), log_entry);
 
                     let future = self
