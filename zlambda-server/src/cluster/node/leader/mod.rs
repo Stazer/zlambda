@@ -353,10 +353,12 @@ impl UncommittedLogEntry {
                 self.id, node_id
             );
         }
+
+        self.acknowledged_nodes.insert(node_id);
     }
 
     pub fn committable(&self) -> bool {
-        self.remaining_acknowledging_nodes().count() > self.quorum_count()
+        self.remaining_acknowledging_nodes().count() <= self.quorum_count()
     }
 }
 
@@ -369,8 +371,12 @@ pub struct LeaderNodeActorLogEntries {
 }
 
 impl LeaderNodeActorLogEntries {
+    pub fn next_key(&self) -> LogEntryId {
+        next_key(self.uncommitted.keys().chain(self.committed.keys()))
+    }
+
     pub fn begin(&mut self, r#type: LogEntryType, nodes: HashSet<NodeId>) -> LogEntryId {
-        let id = next_key(self.uncommitted.keys().chain(self.committed.keys()));
+        let id = self.next_key();
 
         self.uncommitted.insert(
             id,
@@ -380,17 +386,19 @@ impl LeaderNodeActorLogEntries {
         id
     }
 
+    pub fn is_uncommitted(&self, log_entry_id: LogEntryId) -> bool {
+        self.uncommitted.get(&log_entry_id).is_some()
+    }
+
     pub fn acknowledge(&mut self, log_entry_id: LogEntryId, node_id: NodeId) -> Option<LogEntryId> {
         let log_entry = self
             .uncommitted
             .get_mut(&log_entry_id)
-            .expect("Log entry should exist");
+            .expect("Log entry should be existing as uncommitted");
         log_entry.acknowledge(node_id);
 
         if log_entry.committable() {
             let _ = log_entry;
-
-            self.uncommitted.remove(&log_entry_id);
 
             self.committed.insert(
                 log_entry_id,
@@ -512,8 +520,6 @@ impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
             self.node_socket_addresses.keys().copied().collect(),
         );
 
-        trace!("Begin {}, {:?}", log_entry_id, self.log_entries);
-
         for node_id in self
             .log_entries
             .uncommitted
@@ -551,15 +557,22 @@ impl Handler<AcknowledgeLogEntryActorMessage> for LeaderNodeActor {
         message: AcknowledgeLogEntryActorMessage,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        let a = self
-            .log_entries
-            .acknowledge(message.log_entry_id(), message.node_id());
+        if self.log_entries.is_uncommitted(message.log_entry_id()) {
+            match self
+                .log_entries
+                .acknowledge(message.log_entry_id(), message.node_id())
+            {
+                Some(log_entry_id) => {
+                    trace!("Replicated {} in cluster", log_entry_id);
+                }
+                None => {}
+            }
+        }
 
         trace!(
-            "Acknowledged {} on node {} ({:?})",
+            "Acknowledged {} on node {}",
             message.log_entry_id(),
             message.node_id(),
-            a
         );
     }
 }
