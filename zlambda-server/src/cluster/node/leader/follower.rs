@@ -1,6 +1,6 @@
 use crate::cluster::{
-    ConnectionId, CreateFollowerActorMessage, LeaderNodeActor, LogEntry, NodeId,
-    NodeRegisterResponsePacketSuccessData, Packet, PacketReader, AcknowledgeLogEntryActorMessage,
+    AcknowledgeLogEntryActorMessage, ConnectionId, CreateFollowerActorMessage, LeaderNodeActor,
+    LogEntry, NodeId, NodeRegisterResponsePacketSuccessData, Packet, PacketReader,
 };
 use crate::common::{
     StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
@@ -73,6 +73,8 @@ impl Handler<ReplicateLogEntryActorMessage> for LeaderNodeFollowerActor {
         self.tcp_stream_actor_address
             .try_send(TcpStreamActorSendMessage::new(bytes))
             .expect("Sending LogEntryRequest should succeed");
+
+        tracing::trace!("HELLO");
     }
 }
 
@@ -110,12 +112,14 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeFollowerActor {
             };
 
             match packet {
-                Packet::LogEntrySuccessResponse {log_entry_id} => {
-                    self.leader_node_actor_address.try_send(AcknowledgeLogEntryActorMessage::new(
-                        self.node_id,
-                        log_entry_id,
-                    )).expect("Sending Log");
-                },
+                Packet::LogEntrySuccessResponse { log_entry_id } => {
+                    self.leader_node_actor_address
+                        .try_send(AcknowledgeLogEntryActorMessage::new(
+                            self.node_id,
+                            log_entry_id,
+                        ))
+                        .expect("Sending AcknowledgeLogEntryActorMessage should be successful");
+                }
                 packet => {
                     error!("Received unhandled packet {:?}", packet);
                 }

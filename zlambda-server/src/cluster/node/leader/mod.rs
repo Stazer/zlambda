@@ -18,7 +18,7 @@ use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecip
 use actix::dev::{MessageResponse, OneshotSender};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
 use std::collections::hash_map::RandomState;
-use std::collections::hash_set::Intersection;
+use std::collections::hash_set::Difference;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Debug, Formatter};
 use std::iter::once;
@@ -330,9 +330,9 @@ impl UncommittedLogEntry {
         &self.acknowledged_nodes
     }
 
-    pub fn remaining_acknowledging_nodes(&self) -> Intersection<'_, NodeId, RandomState> {
+    pub fn remaining_acknowledging_nodes(&self) -> Difference<'_, NodeId, RandomState> {
         self.acknowledging_nodes
-            .intersection(&self.acknowledged_nodes)
+            .difference(&self.acknowledged_nodes)
     }
 
     pub fn quorum_count(&self) -> usize {
@@ -372,13 +372,10 @@ impl LeaderNodeActorLogEntries {
     pub fn begin(&mut self, r#type: LogEntryType, nodes: HashSet<NodeId>) -> LogEntryId {
         let id = next_key(self.uncommitted.keys().chain(self.committed.keys()));
 
-        trace!("Begin {}", id);
-
-        self.uncommitted
-            .insert(
-                id,
-                UncommittedLogEntry::new(id, r#type, nodes, HashSet::default()),
-            );
+        self.uncommitted.insert(
+            id,
+            UncommittedLogEntry::new(id, r#type, nodes, HashSet::default()),
+        );
 
         id
     }
@@ -392,6 +389,8 @@ impl LeaderNodeActorLogEntries {
 
         if log_entry.committable() {
             let _ = log_entry;
+
+            self.uncommitted.remove(&log_entry_id);
 
             self.committed.insert(
                 log_entry_id,
@@ -447,7 +446,9 @@ impl Handler<CreateFollowerActorMessage> for LeaderNodeActor {
             .insert(node_id, follower_actor_address);
         self.node_socket_addresses.insert(node_id, socket_address);
 
-        context.notify(BeginLogEntryActorMessage::new(LogEntryType::UpdateNodes(self.node_socket_addresses.clone())));
+        context.notify(BeginLogEntryActorMessage::new(LogEntryType::UpdateNodes(
+            self.node_socket_addresses.clone(),
+        )));
 
         Self::Result::new(
             node_id,
@@ -498,6 +499,7 @@ impl Handler<TcpListenerActorAcceptMessage> for LeaderNodeActor {
 impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
     type Result = <BeginLogEntryActorMessage as Message>::Result;
 
+    #[tracing::instrument]
     fn handle(
         &mut self,
         message: BeginLogEntryActorMessage,
@@ -510,29 +512,32 @@ impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
             self.node_socket_addresses.keys().copied().collect(),
         );
 
+        trace!("Begin {}, {:?}", log_entry_id, self.log_entries);
+
+        for node_id in self
+            .log_entries
+            .uncommitted
+            .get(&log_entry_id)
+            .expect("Log entry should be uncommitted")
+            .remaining_acknowledging_nodes()
+            .filter(|x| **x != self.node_id)
+        {
+            self.actor_addresses
+                .follower
+                .get(node_id)
+                .expect("Node id should have an follower actor address")
+                .try_send(ReplicateLogEntryActorMessage::new(LogEntry::new(
+                    log_entry_id,
+                    r#type.clone(),
+                )))
+                .expect("Sending ReplicateLogEntryActorMessage should be successful");
+        }
+
         match self.log_entries.acknowledge(log_entry_id, self.node_id) {
-            None => {
-                for node_id in self
-                    .log_entries
-                    .uncommitted
-                    .get(&log_entry_id)
-                    .expect("Log entry should be uncommitted")
-                    .remaining_acknowledging_nodes()
-                {
-                    self.actor_addresses
-                        .follower
-                        .get(&node_id)
-                        .expect("Node id should have an follower actor address")
-                        .try_send(ReplicateLogEntryActorMessage::new(LogEntry::new(
-                            log_entry_id,
-                            r#type.clone(),
-                        )))
-                        .expect("Sending ReplicateLogEntryActorMessage should be successful");
-                }
-            }
             Some(log_entry_id) => {
                 trace!("Replicated {} on one node", log_entry_id);
             }
+            None => {}
         }
     }
 }
@@ -540,15 +545,22 @@ impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
 impl Handler<AcknowledgeLogEntryActorMessage> for LeaderNodeActor {
     type Result = <AcknowledgeLogEntryActorMessage as Message>::Result;
 
+    #[tracing::instrument]
     fn handle(
         &mut self,
         message: AcknowledgeLogEntryActorMessage,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        let a = self.log_entries
+        let a = self
+            .log_entries
             .acknowledge(message.log_entry_id(), message.node_id());
 
-        trace!("Acknowledged {} on node {} ({:?})", message.log_entry_id(), message.node_id(), a);
+        trace!(
+            "Acknowledged {} on node {} ({:?})",
+            message.log_entry_id(),
+            message.node_id(),
+            a
+        );
     }
 }
 
