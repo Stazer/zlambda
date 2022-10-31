@@ -342,8 +342,8 @@ impl UncommittedLogEntry {
     pub fn acknowledge(&mut self, node_id: NodeId) {
         if !self.acknowledging_nodes.contains(&node_id) {
             panic!(
-                "Cannot acknowledge log entry {} by node {}",
-                self.id, node_id
+                "log entry {} does not need to be acknowledged by node {}",
+                self.id, node_id,
             );
         }
 
@@ -354,6 +354,7 @@ impl UncommittedLogEntry {
             );
         }
 
+        self.acknowledging_nodes.remove(&node_id);
         self.acknowledged_nodes.insert(node_id);
     }
 
