@@ -87,8 +87,6 @@ pub struct LogEntryResponsePacketResult {}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Packet {
-    Ping,
-    Pong,
     NodeRegisterRequest {
         local_address: SocketAddr,
     },

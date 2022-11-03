@@ -1,12 +1,16 @@
+mod actor;
 mod client;
 mod connection;
 mod follower;
+mod message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub use actor::*;
 pub use client::*;
 pub use connection::*;
 pub use follower::*;
+pub use message::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,260 +28,6 @@ use std::fmt::{self, Debug, Formatter};
 use std::iter::once;
 use std::net::SocketAddr;
 use tracing::{error, trace};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct DestroyConnectionActorMessage {
-    connection_id: ConnectionId,
-}
-
-impl From<DestroyConnectionActorMessage> for (ConnectionId,) {
-    fn from(message: DestroyConnectionActorMessage) -> Self {
-        (message.connection_id,)
-    }
-}
-
-impl Message for DestroyConnectionActorMessage {
-    type Result = ();
-}
-
-impl DestroyConnectionActorMessage {
-    pub fn new(connection_id: ConnectionId) -> Self {
-        Self { connection_id }
-    }
-
-    pub fn connection_id(&self) -> ConnectionId {
-        self.connection_id
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct CreateFollowerActorMessageResponse {
-    node_id: NodeId,
-    leader_node_id: NodeId,
-    term_id: TermId,
-    node_socket_addresses: HashMap<NodeId, SocketAddr>,
-}
-
-impl From<CreateFollowerActorMessageResponse>
-    for (NodeId, NodeId, TermId, HashMap<NodeId, SocketAddr>)
-{
-    fn from(result: CreateFollowerActorMessageResponse) -> Self {
-        (
-            result.node_id,
-            result.leader_node_id,
-            result.term_id,
-            result.node_socket_addresses,
-        )
-    }
-}
-
-impl<A, M> MessageResponse<A, M> for CreateFollowerActorMessageResponse
-where
-    A: Actor,
-    M: Message<Result = Self>,
-{
-    fn handle(self, _context: &mut A::Context, sender: Option<OneshotSender<M::Result>>) {
-        if let Some(sender) = sender {
-            sender
-                .send(self)
-                .expect("Cannot send FollowerUpgradeActorMessageResponse");
-        }
-    }
-}
-
-impl CreateFollowerActorMessageResponse {
-    pub fn new(
-        node_id: NodeId,
-        leader_node_id: NodeId,
-        term_id: TermId,
-        node_socket_addresses: HashMap<NodeId, SocketAddr>,
-    ) -> Self {
-        Self {
-            node_id,
-            leader_node_id,
-            term_id,
-            node_socket_addresses,
-        }
-    }
-
-    pub fn node_id(&self) -> NodeId {
-        self.node_id
-    }
-
-    pub fn leader_node_id(&self) -> NodeId {
-        self.leader_node_id
-    }
-
-    pub fn term_id(&self) -> TermId {
-        self.term_id
-    }
-
-    pub fn node_socket_addresses(&self) -> &HashMap<NodeId, SocketAddr> {
-        &self.node_socket_addresses
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct CreateFollowerActorMessage {
-    socket_address: SocketAddr,
-    follower_actor_address: Addr<LeaderNodeFollowerActor>,
-}
-
-impl From<CreateFollowerActorMessage> for (SocketAddr, Addr<LeaderNodeFollowerActor>) {
-    fn from(message: CreateFollowerActorMessage) -> Self {
-        (message.socket_address, message.follower_actor_address)
-    }
-}
-
-impl Message for CreateFollowerActorMessage {
-    type Result = CreateFollowerActorMessageResponse;
-}
-
-impl CreateFollowerActorMessage {
-    pub fn new(
-        socket_address: SocketAddr,
-        follower_actor_address: Addr<LeaderNodeFollowerActor>,
-    ) -> Self {
-        Self {
-            socket_address,
-            follower_actor_address,
-        }
-    }
-
-    pub fn socket_address(&self) -> &SocketAddr {
-        &self.socket_address
-    }
-
-    pub fn follower_actor_address(&self) -> &Addr<LeaderNodeFollowerActor> {
-        &self.follower_actor_address
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct DestroyFollowerActorMessage {
-    node_id: NodeId,
-}
-
-impl From<DestroyFollowerActorMessage> for (NodeId,) {
-    fn from(message: DestroyFollowerActorMessage) -> Self {
-        (message.node_id,)
-    }
-}
-
-impl Message for DestroyFollowerActorMessage {
-    type Result = ();
-}
-
-impl DestroyFollowerActorMessage {
-    pub fn new(node_id: NodeId) -> Self {
-        Self { node_id }
-    }
-
-    pub fn node_id(&self) -> NodeId {
-        self.node_id
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct AcknowledgeLogEntryActorMessage {
-    log_entry_id: LogEntryId,
-    node_id: NodeId,
-}
-
-impl From<AcknowledgeLogEntryActorMessage> for (LogEntryId, NodeId) {
-    fn from(message: AcknowledgeLogEntryActorMessage) -> Self {
-        (message.log_entry_id, message.node_id)
-    }
-}
-
-impl Message for AcknowledgeLogEntryActorMessage {
-    type Result = ();
-}
-
-impl AcknowledgeLogEntryActorMessage {
-    pub fn new(log_entry_id: LogEntryId, node_id: NodeId) -> Self {
-        Self {
-            log_entry_id,
-            node_id,
-        }
-    }
-
-    pub fn log_entry_id(&self) -> LogEntryId {
-        self.log_entry_id
-    }
-
-    pub fn node_id(&self) -> NodeId {
-        self.node_id
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct BeginLogEntryActorMessage {
-    log_entry_type: LogEntryType,
-}
-
-impl From<BeginLogEntryActorMessage> for (LogEntryType,) {
-    fn from(message: BeginLogEntryActorMessage) -> Self {
-        (message.log_entry_type,)
-    }
-}
-
-impl Message for BeginLogEntryActorMessage {
-    type Result = ();
-}
-
-impl BeginLogEntryActorMessage {
-    pub fn new(log_entry_type: LogEntryType) -> Self {
-        Self { log_entry_type }
-    }
-
-    pub fn log_entry_type(&self) -> &LogEntryType {
-        &self.log_entry_type
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub struct LeaderNodeActorActorAddresses {
-    node: Addr<NodeActor>,
-    tcp_listener: Addr<TcpListenerActor>,
-    follower: HashMap<NodeId, Addr<LeaderNodeFollowerActor>>,
-    clients: HashMap<ClientId, Addr<LeaderNodeClientActor>>,
-}
-
-impl Debug for LeaderNodeActorActorAddresses {
-    fn fmt(&self, _formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        Ok(())
-    }
-}
-
-impl LeaderNodeActorActorAddresses {
-    pub fn new(
-        node: Addr<NodeActor>,
-        tcp_listener: Addr<TcpListenerActor>,
-        follower: HashMap<NodeId, Addr<LeaderNodeFollowerActor>>,
-        clients: HashMap<ClientId, Addr<LeaderNodeClientActor>>,
-    ) -> Self {
-        Self {
-            node,
-            tcp_listener,
-            follower,
-            clients,
-        }
-    }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -369,6 +119,7 @@ impl UncommittedLogEntry {
 pub struct LeaderNodeActorLogEntries {
     uncommitted: HashMap<LogEntryId, UncommittedLogEntry>,
     committed: HashMap<LogEntryId, CommittedLogEntry>,
+    last_committed_id: LogEntryId,
 }
 
 impl LeaderNodeActorLogEntries {
@@ -396,6 +147,7 @@ impl LeaderNodeActorLogEntries {
             .uncommitted
             .get_mut(&log_entry_id)
             .expect("Log entry should be existing as uncommitted");
+
         log_entry.acknowledge(node_id);
 
         if log_entry.committable() {
@@ -409,202 +161,58 @@ impl LeaderNodeActorLogEntries {
                     .into(),
             );
 
+            self.last_committed_id = next_key(self.committed.keys());
+
             Some(log_entry_id)
         } else {
             None
+        }
+    }
+
+    pub fn last_committed_id(&self) -> LogEntryId {
+        self.last_committed_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct LeaderNodeActorActorAddresses {
+    node: Addr<NodeActor>,
+    tcp_listener: Addr<TcpListenerActor>,
+    pub follower: HashMap<NodeId, Addr<LeaderNodeFollowerActor>>,
+    clients: HashMap<ClientId, Addr<LeaderNodeClientActor>>,
+}
+
+impl Debug for LeaderNodeActorActorAddresses {
+    fn fmt(&self, _formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        Ok(())
+    }
+}
+
+impl LeaderNodeActorActorAddresses {
+    pub fn new(
+        node: Addr<NodeActor>,
+        tcp_listener: Addr<TcpListenerActor>,
+        follower: HashMap<NodeId, Addr<LeaderNodeFollowerActor>>,
+        clients: HashMap<ClientId, Addr<LeaderNodeClientActor>>,
+    ) -> Self {
+        Self {
+            node,
+            tcp_listener,
+            follower,
+            clients,
         }
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
-pub struct LeaderNodeActor {
-    actor_addresses: LeaderNodeActorActorAddresses,
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    term_id: TermId,
-    node_id: NodeId,
-    node_socket_addresses: HashMap<NodeId, SocketAddr>,
+    #[test]
+    fn test_acknowledgement() {
 
-    log_entries: LeaderNodeActorLogEntries,
-}
-
-impl Actor for LeaderNodeActor {
-    type Context = Context<Self>;
-}
-
-impl Handler<CreateFollowerActorMessage> for LeaderNodeActor {
-    type Result = <CreateFollowerActorMessage as Message>::Result;
-
-    #[tracing::instrument]
-    fn handle(
-        &mut self,
-        message: CreateFollowerActorMessage,
-        context: &mut <Self as Actor>::Context,
-    ) -> Self::Result {
-        let node_id = next_key(
-            self.actor_addresses
-                .follower
-                .keys()
-                .chain(once(&self.node_id)),
-        );
-
-        let (socket_address, follower_actor_address) = message.into();
-        self.actor_addresses
-            .follower
-            .insert(node_id, follower_actor_address);
-        self.node_socket_addresses.insert(node_id, socket_address);
-
-        context.notify(BeginLogEntryActorMessage::new(LogEntryType::UpdateNodes(
-            self.node_socket_addresses.clone(),
-        )));
-
-        Self::Result::new(
-            node_id,
-            self.node_id,
-            self.term_id,
-            self.node_socket_addresses.clone(),
-        )
-    }
-}
-
-impl Handler<DestroyFollowerActorMessage> for LeaderNodeActor {
-    type Result = <DestroyFollowerActorMessage as Message>::Result;
-
-    #[tracing::instrument]
-    fn handle(
-        &mut self,
-        message: DestroyFollowerActorMessage,
-        _context: &mut <Self as Actor>::Context,
-    ) -> Self::Result {
-        let (node_id,) = message.into();
-        self.actor_addresses.follower.remove(&node_id);
-    }
-}
-
-impl Handler<TcpListenerActorAcceptMessage> for LeaderNodeActor {
-    type Result = <TcpListenerActorAcceptMessage as Message>::Result;
-
-    #[tracing::instrument]
-    fn handle(
-        &mut self,
-        message: TcpListenerActorAcceptMessage,
-        context: &mut <Self as Actor>::Context,
-    ) -> Self::Result {
-        let (result,) = message.into();
-
-        match result {
-            Ok(tcp_stream) => {
-                LeaderNodeConnectionActor::new(context.address(), tcp_stream);
-            }
-            Err(error) => {
-                error!("{}", error);
-                context.stop();
-            }
-        }
-    }
-}
-
-impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
-    type Result = <BeginLogEntryActorMessage as Message>::Result;
-
-    #[tracing::instrument]
-    fn handle(
-        &mut self,
-        message: BeginLogEntryActorMessage,
-        _context: &mut <Self as Actor>::Context,
-    ) -> Self::Result {
-        let (r#type,) = message.into();
-
-        let log_entry_id = self.log_entries.begin(
-            r#type.clone(),
-            self.node_socket_addresses.keys().copied().collect(),
-        );
-
-        for node_id in self
-            .log_entries
-            .uncommitted
-            .get(&log_entry_id)
-            .expect("Log entry should be uncommitted")
-            .remaining_acknowledging_nodes()
-            .filter(|x| **x != self.node_id)
-        {
-            self.actor_addresses
-                .follower
-                .get(node_id)
-                .expect("Node id should have an follower actor address")
-                .try_send(ReplicateLogEntryActorMessage::new(LogEntry::new(
-                    log_entry_id,
-                    r#type.clone(),
-                )))
-                .expect("Sending ReplicateLogEntryActorMessage should be successful");
-        }
-
-        match self.log_entries.acknowledge(log_entry_id, self.node_id) {
-            Some(log_entry_id) => {
-                trace!("Replicated {} on one node", log_entry_id);
-            }
-            None => {}
-        }
-    }
-}
-
-impl Handler<AcknowledgeLogEntryActorMessage> for LeaderNodeActor {
-    type Result = <AcknowledgeLogEntryActorMessage as Message>::Result;
-
-    #[tracing::instrument]
-    fn handle(
-        &mut self,
-        message: AcknowledgeLogEntryActorMessage,
-        _context: &mut <Self as Actor>::Context,
-    ) -> Self::Result {
-        if self.log_entries.is_uncommitted(message.log_entry_id()) {
-            match self
-                .log_entries
-                .acknowledge(message.log_entry_id(), message.node_id())
-            {
-                Some(log_entry_id) => {
-                    trace!("Replicated {} in cluster", log_entry_id);
-                }
-                None => {}
-            }
-        }
-
-        trace!(
-            "Acknowledged {} on node {}",
-            message.log_entry_id(),
-            message.node_id(),
-        );
-    }
-}
-
-impl LeaderNodeActor {
-    pub fn new(
-        node_actor_address: Addr<NodeActor>,
-        tcp_listener_actor_address: Addr<TcpListenerActor>,
-        term_id: TermId,
-        node_id: NodeId,
-        node_socket_addresses: HashMap<NodeId, SocketAddr>,
-    ) -> Addr<LeaderNodeActor> {
-        Self::create(move |context| {
-            tcp_listener_actor_address.do_send(UpdateRecipientActorMessage::new(
-                context.address().recipient(),
-            ));
-
-            Self {
-                actor_addresses: LeaderNodeActorActorAddresses::new(
-                    node_actor_address,
-                    tcp_listener_actor_address,
-                    HashMap::default(),
-                    HashMap::default(),
-                ),
-
-                term_id,
-                node_id,
-                node_socket_addresses,
-
-                log_entries: LeaderNodeActorLogEntries::default(),
-            }
-        })
     }
 }
