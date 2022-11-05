@@ -86,7 +86,7 @@ impl UncommittedLogEntry {
     }
 
     pub fn quorum_count(&self) -> usize {
-        self.acknowledging_nodes.len() / 2
+        self.acknowledging_nodes.len() / 2 + 1
     }
 
     pub fn acknowledge(&mut self, node_id: NodeId) {
@@ -208,11 +208,144 @@ impl LeaderNodeActorActorAddresses {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod test {
+    /*use super::*;
 
     #[test]
-    fn test_acknowledgement() {
+    fn test_quorum_count_with_cluster_size_of_one() {
+        let entry = UncommittedLogEntry::new(
+            0,
+            LogEntryType::Add(2),
+            [0].into(),
+            [].into(),
+        );
 
+        assert_eq!(entry.quorum_count(), 1);
     }
+
+    #[test]
+    fn test_quorum_count_with_cluster_size_of_two() {
+        let entry = UncommittedLogEntry::new(
+            0,
+            LogEntryType::Add(2),
+            [0, 1].into(),
+            [].into(),
+        );
+
+        assert_eq!(entry.quorum_count(), 2);
+    }
+
+    #[test]
+    fn test_quorum_count_with_cluster_size_of_three() {
+        let entry = UncommittedLogEntry::new(
+            0,
+            LogEntryType::Add(2),
+            [0, 1, 2].into(),
+            [].into(),
+        );
+
+        assert_eq!(entry.quorum_count(), 2);
+    }
+
+    #[test]
+    fn test_quorum_count_with_cluster_size_of_four() {
+        let entry = UncommittedLogEntry::new(
+            0,
+            LogEntryType::Add(2),
+            [0, 1, 2, 4].into(),
+            [].into(),
+        );
+
+        assert_eq!(entry.quorum_count(), 3);
+    }
+
+    #[test]
+    fn test_quorum_count_with_cluster_size_of_five() {
+        let entry = UncommittedLogEntry::new(
+            0,
+            LogEntryType::Add(2),
+            [0, 1, 2, 4, 5].into(),
+            [].into(),
+        );
+
+        assert_eq!(entry.quorum_count(), 3);
+    }
+
+    #[test]
+    fn test_committable_with_no_acknowledged_nodes() {
+        let entry = UncommittedLogEntry::new(
+            0,
+            LogEntryType::Add(2),
+            [0, 1, 2, 4, 5].into(),
+            [].into(),
+        );
+
+        assert_eq!(entry.committable(), false);
+    }
+
+    #[test]
+    fn test_committable_with_one_acknowledged_nodes() {
+        let entry = UncommittedLogEntry::new(
+            0,
+            LogEntryType::Add(2),
+            [0, 1, 2, 4, 5].into(),
+            [0].into(),
+        );
+
+        assert_eq!(entry.committable(), false);
+    }
+
+    #[test]
+    fn test_committable_with_two_acknowledged_nodes() {
+        let entry = UncommittedLogEntry::new(
+            0,
+            LogEntryType::Add(2),
+            [0, 1, 2, 4, 5].into(),
+            [0, 1].into(),
+        );
+
+        assert_eq!(entry.committable(), false);
+    }
+
+    #[test]
+    fn test_committable_with_three_acknowledged_nodes() {
+        let entry = UncommittedLogEntry::new(
+            0,
+            LogEntryType::Add(2),
+            [0, 1, 2, 4, 5].into(),
+            [0, 1, 3].into(),
+        );
+
+        assert_eq!(entry.committable(), true);
+    }
+
+    #[test]
+    fn test_log_entry_id_order() {
+        let mut entries = LeaderNodeActorLogEntries::default();
+        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
+        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
+        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
+        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
+
+        assert_eq!(entries.begin(LogEntryType::Add(5), [0, 1, 2].into()), 4);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_faulty_double_acknowledgement() {
+        let mut entries = LeaderNodeActorLogEntries::default();
+        let id = entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
+        entries.acknowledge(id, 0);
+        entries.acknowledge(id, 0);
+    }
+
+    #[test]
+    fn test_small_acknowledgement() {
+        let mut entries = LeaderNodeActorLogEntries::default();
+        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
+        let id = entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
+        entries.acknowledge(id, 0);
+
+        assert_eq!(entries.acknowledge(id, 1), Some(id));
+    }*/
 }

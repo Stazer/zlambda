@@ -37,7 +37,7 @@ pub type LogEntryId = u64;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum LogEntryType {
     UpdateNodes(HashMap<NodeId, SocketAddr>),
-    Increment,
+    Add(i32),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

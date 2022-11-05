@@ -1,7 +1,7 @@
 use crate::algorithm::next_key;
 use crate::cluster::{
-    ClientId, ConnectionId, LogEntry, LogEntryId, LogEntryType, NodeActor, NodeId, TermId,
-    LeaderNodeFollowerActor,
+    ClientId, ConnectionId, LeaderNodeFollowerActor, LogEntry, LogEntryId, LogEntryType, NodeActor,
+    NodeId, TermId,
 };
 use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecipientActorMessage};
 use actix::dev::{MessageResponse, OneshotSender};

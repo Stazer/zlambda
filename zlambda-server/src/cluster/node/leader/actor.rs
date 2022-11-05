@@ -3,19 +3,18 @@ use crate::cluster::{
     ClientId, ConnectionId, LogEntry, LogEntryId, LogEntryType, NodeActor, NodeId, TermId,
 };
 use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecipientActorMessage};
-use actix::dev::{MessageResponse, OneshotSender};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
-use std::collections::hash_map::RandomState;
-use std::collections::hash_set::Difference;
-use std::collections::{HashMap, HashSet};
-use std::fmt::{self, Debug, Formatter};
+use std::collections::{HashMap};
 use std::iter::once;
 use std::net::SocketAddr;
 use tracing::{error, trace};
 
-use crate::cluster::{LeaderNodeConnectionActor, DestroyFollowerActorMessage, BeginLogEntryActorMessage, LeaderNodeActorActorAddresses, LeaderNodeActorLogEntries, CreateFollowerActorMessage};
-use crate::cluster::ReplicateLogEntryActorMessage;
 use crate::cluster::AcknowledgeLogEntryActorMessage;
+use crate::cluster::ReplicateLogEntryActorMessage;
+use crate::cluster::{
+    BeginLogEntryActorMessage, CreateFollowerActorMessage, DestroyFollowerActorMessage,
+    LeaderNodeActorActorAddresses, LeaderNodeActorLogEntries, LeaderNodeConnectionActor,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
