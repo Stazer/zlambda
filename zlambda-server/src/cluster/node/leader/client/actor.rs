@@ -1,4 +1,4 @@
-use crate::cluster::{ConnectionId, NodeId, PacketReader};
+use crate::cluster::{ConnectionId, LeaderNodeClientActorAddresses, NodeId, PacketReader};
 use crate::common::{TcpStreamActor, TcpStreamActorReceiveMessage};
 use actix::{Actor, Addr, Context, Handler, Message};
 use tracing::error;
@@ -7,9 +7,9 @@ use tracing::error;
 
 #[derive(Debug)]
 pub struct LeaderNodeClientActor {
+    actor_addresses: LeaderNodeClientActorAddresses,
     node_id: NodeId,
     connection_id: ConnectionId,
-    tcp_stream_actor_address: Addr<TcpStreamActor>,
     packet_reader: PacketReader,
 }
 
@@ -67,9 +67,10 @@ impl LeaderNodeClientActor {
         packet_reader: PacketReader,
     ) -> Addr<Self> {
         (Self {
+            actor_addresses: LeaderNodeClientActorAddresses::new(tcp_stream_actor_address),
+
             node_id,
             connection_id,
-            tcp_stream_actor_address,
             packet_reader,
         })
         .start()

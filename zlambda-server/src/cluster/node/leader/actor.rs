@@ -42,14 +42,14 @@ impl Handler<CreateFollowerActorMessage> for LeaderNodeActor {
     ) -> Self::Result {
         let node_id = next_key(
             self.actor_addresses
-                .follower
+                .follower()
                 .keys()
                 .chain(once(&self.node_id)),
         );
 
         let (socket_address, follower_actor_address) = message.into();
         self.actor_addresses
-            .follower
+            .follower_mut()
             .insert(node_id, follower_actor_address);
         self.node_socket_addresses.insert(node_id, socket_address);
 
@@ -76,7 +76,7 @@ impl Handler<DestroyFollowerActorMessage> for LeaderNodeActor {
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
         let (node_id,) = message.into();
-        self.actor_addresses.follower.remove(&node_id);
+        self.actor_addresses.follower_mut().remove(&node_id);
     }
 }
 
@@ -127,7 +127,7 @@ impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
             .filter(|x| **x != self.node_id)
         {
             self.actor_addresses
-                .follower
+                .follower()
                 .get(node_id)
                 .expect("Node id should have an follower actor address")
                 .try_send(ReplicateLogEntryActorMessage::new(

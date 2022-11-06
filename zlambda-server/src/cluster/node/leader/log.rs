@@ -1,14 +1,8 @@
 use crate::algorithm::next_key;
-use crate::cluster::{
-    ClientId, LeaderNodeClientActor, LeaderNodeFollowerActor, LogEntryId, LogEntryType, NodeActor,
-    NodeId,
-};
-use crate::common::TcpListenerActor;
-use actix::Addr;
+use crate::cluster::{LogEntryId, LogEntryType, NodeId};
 use std::collections::hash_map::RandomState;
 use std::collections::hash_set::Difference;
 use std::collections::{HashMap, HashSet};
-use std::fmt::{self, Debug, Formatter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -138,37 +132,6 @@ impl LeaderNodeActorLogEntries {
             } else {
                 break;
             }
-        }
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub struct LeaderNodeActorActorAddresses {
-    node: Addr<NodeActor>,
-    tcp_listener: Addr<TcpListenerActor>,
-    pub follower: HashMap<NodeId, Addr<LeaderNodeFollowerActor>>,
-    clients: HashMap<ClientId, Addr<LeaderNodeClientActor>>,
-}
-
-impl Debug for LeaderNodeActorActorAddresses {
-    fn fmt(&self, _formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        Ok(())
-    }
-}
-
-impl LeaderNodeActorActorAddresses {
-    pub fn new(
-        node: Addr<NodeActor>,
-        tcp_listener: Addr<TcpListenerActor>,
-        follower: HashMap<NodeId, Addr<LeaderNodeFollowerActor>>,
-        clients: HashMap<ClientId, Addr<LeaderNodeClientActor>>,
-    ) -> Self {
-        Self {
-            node,
-            tcp_listener,
-            follower,
-            clients,
         }
     }
 }

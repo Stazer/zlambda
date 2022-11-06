@@ -1,6 +1,7 @@
 use crate::cluster::{
-    AcknowledgeLogEntryActorMessage, CreateFollowerActorMessage, LeaderNodeActor, NodeId,
-    NodeRegisterResponsePacketSuccessData, Packet, PacketReader, ReplicateLogEntryActorMessage,
+    AcknowledgeLogEntryActorMessage, CreateFollowerActorMessage, LeaderNodeActor,
+    LeaderNodeFollowerActorAddresses, NodeId, NodeRegisterResponsePacketSuccessData, Packet,
+    PacketReader, ReplicateLogEntryActorMessage,
 };
 use crate::common::{
     StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
@@ -15,10 +16,10 @@ use tracing::error;
 
 #[derive(Debug)]
 pub struct LeaderNodeFollowerActor {
-    leader_node_actor_address: Addr<LeaderNodeActor>,
-    tcp_stream_actor_address: Addr<TcpStreamActor>,
+    actor_addresses: LeaderNodeFollowerActorAddresses,
     node_id: NodeId,
     packet_reader: PacketReader,
+    //log_entries_buffer: Vec<(LogEntryId, LogEntryType)>,
 }
 
 impl Actor for LeaderNodeFollowerActor {
@@ -47,7 +48,10 @@ impl Handler<ReplicateLogEntryActorMessage> for LeaderNodeFollowerActor {
         .to_bytes()
         .expect("Writing LogEntryRequest should succeed");
 
-        self.tcp_stream_actor_address
+        self.actor_addresses
+            .tcp_stream()
+            .as_ref()
+            .unwrap()
             .try_send(TcpStreamActorSendMessage::new(bytes))
             .expect("Sending LogEntryRequest should succeed");
     }
@@ -88,7 +92,8 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeFollowerActor {
 
             match packet {
                 Packet::LogEntrySuccessResponse { log_entry_id } => {
-                    self.leader_node_actor_address
+                    self.actor_addresses
+                        .leader_node()
                         .try_send(AcknowledgeLogEntryActorMessage::new(
                             log_entry_id,
                             self.node_id,
@@ -198,8 +203,10 @@ impl LeaderNodeFollowerActor {
         };
 
         Some(context.run(Self {
-            leader_node_actor_address,
-            tcp_stream_actor_address,
+            actor_addresses: LeaderNodeFollowerActorAddresses::new(
+                leader_node_actor_address,
+                Some(tcp_stream_actor_address),
+            ),
             node_id,
             packet_reader,
         }))

@@ -1,6 +1,7 @@
 use crate::cluster::{
-    FollowerNodeActor, NodeActor, NodeId, Packet, PacketReader, RegisteredFollowerNodeLogEntries,
-    TermId, UpdateFollowerNodeActorMessage,
+    FollowerNodeActor, NodeActor, NodeId, Packet, PacketReader,
+    RegisteredFollowerNodeActorActorAddresses, RegisteredFollowerNodeLogEntries, TermId,
+    UpdateFollowerNodeActorMessage,
 };
 use crate::common::{
     TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor, TcpStreamActorReceiveMessage,
@@ -10,40 +11,8 @@ use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, WrapFuture,
 };
 use std::collections::HashMap;
-use std::fmt::{self, Debug, Formatter};
 use std::net::SocketAddr;
 use tracing::{error, trace};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub struct RegisteredFollowerNodeActorActorAddresses {
-    node: Addr<NodeActor>,
-    follower_node: Addr<FollowerNodeActor>,
-    tcp_listener: Addr<TcpListenerActor>,
-    tcp_stream: Addr<TcpStreamActor>,
-}
-
-impl Debug for RegisteredFollowerNodeActorActorAddresses {
-    fn fmt(&self, _formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        Ok(())
-    }
-}
-
-impl RegisteredFollowerNodeActorActorAddresses {
-    pub fn new(
-        node: Addr<NodeActor>,
-        follower_node: Addr<FollowerNodeActor>,
-        tcp_listener: Addr<TcpListenerActor>,
-        tcp_stream: Addr<TcpStreamActor>,
-    ) -> Self {
-        Self {
-            node,
-            follower_node,
-            tcp_listener,
-            tcp_stream,
-        }
-    }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -123,7 +92,7 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteredFollowerNodeActor {
 
                     let future = self
                         .actor_addresses
-                        .tcp_stream
+                        .tcp_stream()
                         .send(TcpStreamActorSendMessage::new(bytes));
 
                     context.wait(async move { future.await }.into_actor(self).map(

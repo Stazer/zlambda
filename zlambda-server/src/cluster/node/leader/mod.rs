@@ -1,4 +1,5 @@
 mod actor;
+mod actor_addresses;
 mod client;
 mod connection;
 mod follower;
@@ -8,6 +9,7 @@ mod message;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub use actor::*;
+pub use actor_addresses::*;
 pub use client::*;
 pub use connection::*;
 pub use follower::*;
