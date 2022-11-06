@@ -1,7 +1,7 @@
 use crate::cluster::{
     AcknowledgeLogEntryActorMessage, CreateFollowerActorMessage, LeaderNodeActor,
     LeaderNodeFollowerActorAddresses, LogEntryId, LogEntryType, NodeId,
-    NodeRegisterResponsePacketSuccessData, Packet, PacketReader, ReplicateLogEntryActorMessage,
+    NodeRegisterResponsePacketSuccessData, Packet, PacketReader, ReplicateLogEntryActorMessage, SendLogEntryRequestActorMessage,
 };
 use crate::common::{
     StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
@@ -11,6 +11,8 @@ use actix::{Actor, Addr, AsyncContext, Context, Handler, Message};
 use futures::FutureExt;
 use std::net::SocketAddr;
 use tracing::error;
+use std::cmp::max;
+use std::mem::take;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +21,9 @@ pub struct LeaderNodeFollowerActor {
     actor_addresses: LeaderNodeFollowerActorAddresses,
     node_id: NodeId,
     packet_reader: PacketReader,
+
     log_entries_buffer: Vec<(LogEntryId, LogEntryType)>,
+    last_committed_log_entry_id: Option<LogEntryId>,
 }
 
 impl Actor for LeaderNodeFollowerActor {
@@ -40,19 +44,34 @@ impl Handler<ReplicateLogEntryActorMessage> for LeaderNodeFollowerActor {
     ) -> Self::Result {
         let (log_entry_id, log_entry_type, last_committed_log_entry_id) = message.into();
 
-        let bytes = (Packet::LogEntryRequest {
-            log_entries: [(log_entry_id, log_entry_type)].into(),
-            last_committed_log_entry_id,
-        })
-        .to_bytes()
-        .expect("Writing LogEntryRequest should succeed");
+        self.log_entries_buffer.push((log_entry_id, log_entry_type));
+        self.last_committed_log_entry_id = max(last_committed_log_entry_id, self.last_committed_log_entry_id);
 
-        self.actor_addresses
-            .tcp_stream()
-            .as_ref()
-            .unwrap()
-            .try_send(TcpStreamActorSendMessage::new(bytes))
-            .expect("Sending LogEntryRequest should succeed");
+        context.notify(SendLogEntryRequestActorMessage);
+    }
+}
+
+impl Handler<SendLogEntryRequestActorMessage> for LeaderNodeFollowerActor {
+    type Result = <SendLogEntryRequestActorMessage as Message>::Result;
+
+    fn handle(
+        &mut self,
+        _message: SendLogEntryRequestActorMessage,
+        _context: &mut <Self as Actor>::Context,
+    ) -> Self::Result {
+        let tcp_stream = match self.actor_addresses.tcp_stream() {
+            Some(tcp_stream) => tcp_stream,
+            None => return,
+        };
+
+        let bytes = (Packet::LogEntryRequest {
+            log_entries: take(&mut self.log_entries_buffer),
+            last_committed_log_entry_id: self.last_committed_log_entry_id,
+        })
+            .to_bytes()
+            .expect("Writing LogEntryRequest should succeed");
+
+        tcp_stream.try_send(TcpStreamActorSendMessage::new(bytes)).expect("Sending LogEntryRequest should succeed");
     }
 }
 
@@ -209,6 +228,7 @@ impl LeaderNodeFollowerActor {
             node_id,
             packet_reader,
             log_entries_buffer: Vec::default(),
+            last_committed_log_entry_id: None,
         }))
     }
 }

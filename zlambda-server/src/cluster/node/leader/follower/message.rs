@@ -49,3 +49,12 @@ impl ReplicateLogEntryActorMessage {
         self.last_committed_log_entry_id
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct SendLogEntryRequestActorMessage;
+
+impl Message for SendLogEntryRequestActorMessage {
+    type Result = ();
+}
