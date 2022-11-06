@@ -1,14 +1,13 @@
 use crate::cluster::{
-    AcknowledgeLogEntryActorMessage, ConnectionId, CreateFollowerActorMessage, LeaderNodeActor,
-    LogEntry, NodeId, NodeRegisterResponsePacketSuccessData, Packet, PacketReader,
-    ReplicateLogEntryActorMessage,
+    AcknowledgeLogEntryActorMessage, CreateFollowerActorMessage, LeaderNodeActor, NodeId,
+    NodeRegisterResponsePacketSuccessData, Packet, PacketReader, ReplicateLogEntryActorMessage,
 };
 use crate::common::{
     StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
     UpdateRecipientActorMessage,
 };
-use actix::{Actor, Addr, AsyncContext, Context, Handler, MailboxError, Message};
-use futures::{FutureExt, TryFutureExt};
+use actix::{Actor, Addr, AsyncContext, Context, Handler, Message};
+use futures::FutureExt;
 use std::net::SocketAddr;
 use tracing::error;
 
@@ -38,11 +37,15 @@ impl Handler<ReplicateLogEntryActorMessage> for LeaderNodeFollowerActor {
         message: ReplicateLogEntryActorMessage,
         context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        let (log_entry,) = message.into();
+        let (log_entry_id, log_entry_type, last_committed_log_entry_id) = message.into();
 
-        let bytes = (Packet::LogEntryRequest { log_entry })
-            .to_bytes()
-            .expect("Writing LogEntryRequest should succeed");
+        let bytes = (Packet::LogEntryRequest {
+            log_entry_id,
+            log_entry_type,
+            last_committed_log_entry_id,
+        })
+        .to_bytes()
+        .expect("Writing LogEntryRequest should succeed");
 
         self.tcp_stream_actor_address
             .try_send(TcpStreamActorSendMessage::new(bytes))

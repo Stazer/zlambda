@@ -1,18 +1,10 @@
-use crate::algorithm::next_key;
 use crate::cluster::{
-    ClientId, ConnectionId, LeaderNodeFollowerActor, LogEntry, LogEntryId, LogEntryType, NodeActor,
-    NodeId, TermId,
+    ConnectionId, LeaderNodeFollowerActor, LogEntryId, LogEntryType, NodeId, TermId,
 };
-use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecipientActorMessage};
 use actix::dev::{MessageResponse, OneshotSender};
-use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
-use std::collections::hash_map::RandomState;
-use std::collections::hash_set::Difference;
-use std::collections::{HashMap, HashSet};
-use std::fmt::{self, Debug, Formatter};
-use std::iter::once;
+use actix::{Actor, Addr, Message};
+use std::collections::HashMap;
 use std::net::SocketAddr;
-use tracing::{error, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

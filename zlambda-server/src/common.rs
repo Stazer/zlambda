@@ -1,5 +1,5 @@
 use actix::{
-    Actor, ActorContext, Addr, AsyncContext, AtomicResponse, Context, Handler, Message, Recipient,
+    Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message, Recipient,
     ResponseActFuture, StreamHandler, WrapFuture,
 };
 use bytes::Bytes;

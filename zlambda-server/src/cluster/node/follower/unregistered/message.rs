@@ -1,8 +1,6 @@
-use actix::{
-    Message
-};
-use tokio::net::ToSocketAddrs;
+use actix::Message;
 use std::fmt::Debug;
+use tokio::net::ToSocketAddrs;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

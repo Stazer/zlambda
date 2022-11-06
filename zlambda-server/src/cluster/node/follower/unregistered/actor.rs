@@ -1,6 +1,6 @@
 use crate::cluster::{
-    FollowerNodeActor, NodeActor, RegisteringFollowerNodeActor, UpdateFollowerNodeActorMessage,
-    RegisterActorMessage,
+    FollowerNodeActor, NodeActor, RegisterActorMessage, RegisteringFollowerNodeActor,
+    UpdateFollowerNodeActorMessage,
 };
 use crate::common::TcpListenerActor;
 use actix::{
@@ -8,8 +8,8 @@ use actix::{
 };
 use std::fmt::Debug;
 use std::net::SocketAddr;
-use tokio::net::ToSocketAddrs;
 use tokio::net::TcpStream;
+use tokio::net::ToSocketAddrs;
 use tracing::{error, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

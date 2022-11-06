@@ -1,0 +1,16 @@
+use crate::cluster::NodeId;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type LogEntryId = u64;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum LogEntryType {
+    UpdateNodes(HashMap<NodeId, SocketAddr>),
+    Add(i32),
+}

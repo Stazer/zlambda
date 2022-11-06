@@ -1,4 +1,4 @@
-use crate::cluster::{LogEntry, LogEntryId, NodeId, TermId};
+use crate::cluster::{LogEntryId, LogEntryType, NodeId, TermId};
 use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
@@ -95,7 +95,9 @@ pub enum Packet {
     },
     NodeRegisterAcknowledgement,
     LogEntryRequest {
-        log_entry: LogEntry,
+        log_entry_id: LogEntryId,
+        log_entry_type: LogEntryType,
+        last_committed_log_entry_id: Option<LogEntryId>,
     },
     LogEntrySuccessResponse {
         log_entry_id: LogEntryId,

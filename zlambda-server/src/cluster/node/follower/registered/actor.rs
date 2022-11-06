@@ -1,6 +1,6 @@
 use crate::cluster::{
-    FollowerNodeActor, LogEntry, LogEntryId, NodeActor, NodeId, Packet, PacketReader, TermId,
-    UpdateFollowerNodeActorMessage,
+    FollowerNodeActor, NodeActor, NodeId, Packet, PacketReader, RegisteredFollowerNodeLogEntries,
+    TermId, UpdateFollowerNodeActorMessage,
 };
 use crate::common::{
     TcpListenerActor, TcpListenerActorAcceptMessage, TcpStreamActor, TcpStreamActorReceiveMessage,
@@ -59,7 +59,7 @@ pub struct RegisteredFollowerNodeActor {
     node_id: NodeId,
     leader_node_id: NodeId,
 
-    log_entries: HashMap<LogEntryId, LogEntry>,
+    log_entries: RegisteredFollowerNodeLogEntries,
 }
 
 impl Actor for RegisteredFollowerNodeActor {
@@ -104,16 +104,22 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteredFollowerNodeActor {
             };
 
             match packet {
-                Packet::LogEntryRequest { log_entry } => {
-                    let bytes = Packet::LogEntrySuccessResponse {
-                        log_entry_id: log_entry.id(),
+                Packet::LogEntryRequest {
+                    log_entry_id,
+                    log_entry_type,
+                    last_committed_log_entry_id,
+                } => {
+                    let bytes = Packet::LogEntrySuccessResponse { log_entry_id }
+                        .to_bytes()
+                        .expect("Cannot write LogEntrySuccessResponse");
+
+                    trace!("Received {}", log_entry_id);
+
+                    self.log_entries.append(log_entry_id, log_entry_type);
+
+                    if let Some(last_committed_log_entry_id) = last_committed_log_entry_id {
+                        self.log_entries.commit(last_committed_log_entry_id);
                     }
-                    .to_bytes()
-                    .expect("Cannot write LogEntrySuccessResponse");
-
-                    trace!("Received {}", log_entry.id());
-
-                    self.log_entries.insert(log_entry.id(), log_entry);
 
                     let future = self
                         .actor_addresses
@@ -195,7 +201,7 @@ impl RegisteredFollowerNodeActor {
             node_id,
             leader_node_id,
             node_socket_addresses,
-            log_entries: HashMap::default(),
+            log_entries: RegisteredFollowerNodeLogEntries::default(),
         });
 
         follower_node_actor_address

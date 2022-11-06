@@ -1,7 +1,5 @@
 use crate::algorithm::next_key;
-use crate::cluster::{
-    ClientId, ConnectionId, LogEntry, LogEntryId, LogEntryType, NodeActor, NodeId, TermId,
-};
+use crate::cluster::{LogEntryType, NodeActor, NodeId, TermId};
 use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecipientActorMessage};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
 use std::collections::HashMap;
@@ -132,16 +130,22 @@ impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
                 .follower
                 .get(node_id)
                 .expect("Node id should have an follower actor address")
-                .try_send(ReplicateLogEntryActorMessage::new(LogEntry::new(
+                .try_send(ReplicateLogEntryActorMessage::new(
                     log_entry_id,
                     r#type.clone(),
-                )))
+                    self.log_entries.last_committed_log_entry_id(),
+                ))
                 .expect("Sending ReplicateLogEntryActorMessage should be successful");
         }
 
         self.log_entries.acknowledge(log_entry_id, self.node_id);
 
-        if self.log_entries.get(log_entry_id).expect("Log entry should exist").is_committed() {
+        if self
+            .log_entries
+            .get(log_entry_id)
+            .expect("Log entry should exist")
+            .is_committed()
+        {
             trace!("Replicated {} on one node", log_entry_id);
         }
     }
@@ -156,9 +160,15 @@ impl Handler<AcknowledgeLogEntryActorMessage> for LeaderNodeActor {
         message: AcknowledgeLogEntryActorMessage,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        self.log_entries.acknowledge(message.log_entry_id(), message.node_id());
+        self.log_entries
+            .acknowledge(message.log_entry_id(), message.node_id());
 
-        if self.log_entries.get(message.log_entry_id()).expect("Log entry should exist").is_committed() {
+        if self
+            .log_entries
+            .get(message.log_entry_id())
+            .expect("Log entry should exist")
+            .is_committed()
+        {
             trace!(
                 "Acknowledged {} on node {}",
                 message.log_entry_id(),
