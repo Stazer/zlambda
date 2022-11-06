@@ -95,8 +95,7 @@ pub enum Packet {
     },
     NodeRegisterAcknowledgement,
     LogEntryRequest {
-        log_entry_id: LogEntryId,
-        log_entry_type: LogEntryType,
+        log_entries: Vec<(LogEntryId, LogEntryType)>,
         last_committed_log_entry_id: Option<LogEntryId>,
     },
     LogEntrySuccessResponse {

@@ -17,7 +17,10 @@ impl Debug for LeaderNodeFollowerActorAddresses {
 }
 
 impl LeaderNodeFollowerActorAddresses {
-    pub fn new(leader_node: Addr<LeaderNodeActor>, tcp_stream: Option<Addr<TcpStreamActor>>) -> Self {
+    pub fn new(
+        leader_node: Addr<LeaderNodeActor>,
+        tcp_stream: Option<Addr<TcpStreamActor>>,
+    ) -> Self {
         Self {
             leader_node,
             tcp_stream,

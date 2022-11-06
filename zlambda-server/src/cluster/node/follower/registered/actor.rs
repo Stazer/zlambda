@@ -74,38 +74,39 @@ impl Handler<TcpStreamActorReceiveMessage> for RegisteredFollowerNodeActor {
 
             match packet {
                 Packet::LogEntryRequest {
-                    log_entry_id,
-                    log_entry_type,
+                    log_entries,
                     last_committed_log_entry_id,
                 } => {
-                    let bytes = Packet::LogEntrySuccessResponse { log_entry_id }
-                        .to_bytes()
-                        .expect("Cannot write LogEntrySuccessResponse");
+                    for (log_entry_id, log_entry_type) in log_entries.into_iter() {
+                        let bytes = Packet::LogEntrySuccessResponse { log_entry_id }
+                            .to_bytes()
+                            .expect("Cannot write LogEntrySuccessResponse");
 
-                    trace!("Received {}", log_entry_id);
+                        trace!("Received {}", log_entry_id);
 
-                    self.log_entries.append(log_entry_id, log_entry_type);
+                        self.log_entries.append(log_entry_id, log_entry_type);
 
-                    if let Some(last_committed_log_entry_id) = last_committed_log_entry_id {
-                        self.log_entries.commit(last_committed_log_entry_id);
+                        if let Some(last_committed_log_entry_id) = last_committed_log_entry_id {
+                            self.log_entries.commit(last_committed_log_entry_id);
+                        }
+
+                        let future = self
+                            .actor_addresses
+                            .tcp_stream()
+                            .send(TcpStreamActorSendMessage::new(bytes));
+
+                        context.wait(async move { future.await }.into_actor(self).map(
+                            |result, _actor, context| {
+                                match result {
+                                    Err(e) => {
+                                        error!("{}", e);
+                                        context.stop();
+                                    }
+                                    Ok(_) => {}
+                                };
+                            },
+                        ));
                     }
-
-                    let future = self
-                        .actor_addresses
-                        .tcp_stream()
-                        .send(TcpStreamActorSendMessage::new(bytes));
-
-                    context.wait(async move { future.await }.into_actor(self).map(
-                        |result, _actor, context| {
-                            match result {
-                                Err(e) => {
-                                    error!("{}", e);
-                                    context.stop();
-                                }
-                                Ok(_) => {}
-                            };
-                        },
-                    ));
                 }
                 packet => {
                     error!("Unhandled packet {:?} from leader", packet);

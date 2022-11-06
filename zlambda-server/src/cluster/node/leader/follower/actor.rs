@@ -41,8 +41,7 @@ impl Handler<ReplicateLogEntryActorMessage> for LeaderNodeFollowerActor {
         let (log_entry_id, log_entry_type, last_committed_log_entry_id) = message.into();
 
         let bytes = (Packet::LogEntryRequest {
-            log_entry_id,
-            log_entry_type,
+            log_entries: [(log_entry_id, log_entry_type)].into(),
             last_committed_log_entry_id,
         })
         .to_bytes()
