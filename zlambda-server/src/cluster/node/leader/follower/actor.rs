@@ -1,7 +1,7 @@
 use crate::cluster::{
     AcknowledgeLogEntryActorMessage, CreateFollowerActorMessage, LeaderNodeActor,
-    LeaderNodeFollowerActorAddresses, NodeId, NodeRegisterResponsePacketSuccessData, Packet,
-    PacketReader, ReplicateLogEntryActorMessage,
+    LeaderNodeFollowerActorAddresses, LogEntryId, LogEntryType, NodeId,
+    NodeRegisterResponsePacketSuccessData, Packet, PacketReader, ReplicateLogEntryActorMessage,
 };
 use crate::common::{
     StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
@@ -19,7 +19,7 @@ pub struct LeaderNodeFollowerActor {
     actor_addresses: LeaderNodeFollowerActorAddresses,
     node_id: NodeId,
     packet_reader: PacketReader,
-    //log_entries_buffer: Vec<(LogEntryId, LogEntryType)>,
+    log_entries_buffer: Vec<(LogEntryId, LogEntryType)>,
 }
 
 impl Actor for LeaderNodeFollowerActor {
@@ -208,6 +208,7 @@ impl LeaderNodeFollowerActor {
             ),
             node_id,
             packet_reader,
+            log_entries_buffer: Vec::default(),
         }))
     }
 }

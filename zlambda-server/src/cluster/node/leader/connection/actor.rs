@@ -1,5 +1,7 @@
-use crate::cluster::LeaderNodeFollowerActor;
-use crate::cluster::{LeaderNodeActor, Packet, PacketReader};
+use crate::cluster::{
+    LeaderNodeActor, LeaderNodeConnectionActorAddresses, LeaderNodeFollowerActor, Packet,
+    PacketReader,
+};
 use crate::common::{StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage};
 use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, WrapFuture,
@@ -13,8 +15,7 @@ use tracing::error;
 
 #[derive(Debug)]
 pub struct LeaderNodeConnectionActor {
-    leader_node_actor_address: Addr<LeaderNodeActor>,
-    tcp_stream_actor_address: Addr<TcpStreamActor>,
+    actor_addresses: LeaderNodeConnectionActorAddresses,
     packet_reader: PacketReader,
 }
 
@@ -38,7 +39,7 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
             Err(error) => {
                 error!("{}", error);
 
-                let future = self.tcp_stream_actor_address.send(StopActorMessage);
+                let future = self.actor_addresses.tcp_stream().send(StopActorMessage);
 
                 context.wait(
                     async move {
@@ -65,7 +66,7 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
                 Err(error) => {
                     error!("{}", error);
 
-                    let future = self.tcp_stream_actor_address.send(StopActorMessage);
+                    let future = self.actor_addresses.tcp_stream().send(StopActorMessage);
 
                     context.wait(
                         async move {
@@ -84,8 +85,8 @@ impl Handler<TcpStreamActorReceiveMessage> for LeaderNodeConnectionActor {
             match packet {
                 Packet::NodeRegisterRequest { local_address } => {
                     let future = LeaderNodeFollowerActor::new(
-                        self.leader_node_actor_address.clone(),
-                        self.tcp_stream_actor_address.clone(),
+                        self.actor_addresses.leader_node().clone(),
+                        self.actor_addresses.tcp_stream().clone(),
                         take(&mut self.packet_reader),
                         local_address,
                     )
@@ -107,10 +108,9 @@ impl LeaderNodeConnectionActor {
         tcp_stream: TcpStream,
     ) -> Addr<Self> {
         Self::create(move |context| Self {
-            leader_node_actor_address,
-            tcp_stream_actor_address: TcpStreamActor::new(
-                context.address().recipient(),
-                tcp_stream,
+            actor_addresses: LeaderNodeConnectionActorAddresses::new(
+                leader_node_actor_address,
+                TcpStreamActor::new(context.address().recipient(), tcp_stream),
             ),
             packet_reader: PacketReader::default(),
         })
