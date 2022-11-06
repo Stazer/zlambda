@@ -1,6 +1,7 @@
 use crate::cluster::{
     AcknowledgeLogEntryActorMessage, ConnectionId, CreateFollowerActorMessage, LeaderNodeActor,
-    LogEntry, NodeId, NodeRegisterResponsePacketSuccessData, Packet, PacketReader, ReplicateLogEntryActorMessage,
+    LogEntry, NodeId, NodeRegisterResponsePacketSuccessData, Packet, PacketReader,
+    ReplicateLogEntryActorMessage,
 };
 use crate::common::{
     StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,

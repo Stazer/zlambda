@@ -4,7 +4,7 @@ use crate::cluster::{
 };
 use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecipientActorMessage};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::iter::once;
 use std::net::SocketAddr;
 use tracing::{error, trace};
@@ -123,8 +123,7 @@ impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
 
         for node_id in self
             .log_entries
-            .uncommitted
-            .get(&log_entry_id)
+            .get(log_entry_id)
             .expect("Log entry should be uncommitted")
             .remaining_acknowledging_nodes()
             .filter(|x| **x != self.node_id)
@@ -140,11 +139,10 @@ impl Handler<BeginLogEntryActorMessage> for LeaderNodeActor {
                 .expect("Sending ReplicateLogEntryActorMessage should be successful");
         }
 
-        match self.log_entries.acknowledge(log_entry_id, self.node_id) {
-            Some(log_entry_id) => {
-                trace!("Replicated {} on one node", log_entry_id);
-            }
-            None => {}
+        self.log_entries.acknowledge(log_entry_id, self.node_id);
+
+        if self.log_entries.get(log_entry_id).expect("Log entry should exist").is_committed() {
+            trace!("Replicated {} on one node", log_entry_id);
         }
     }
 }
@@ -158,23 +156,15 @@ impl Handler<AcknowledgeLogEntryActorMessage> for LeaderNodeActor {
         message: AcknowledgeLogEntryActorMessage,
         _context: &mut <Self as Actor>::Context,
     ) -> Self::Result {
-        if self.log_entries.is_uncommitted(message.log_entry_id()) {
-            match self
-                .log_entries
-                .acknowledge(message.log_entry_id(), message.node_id())
-            {
-                Some(log_entry_id) => {
-                    trace!("Replicated {} in cluster", log_entry_id);
-                }
-                None => {}
-            }
-        }
+        self.log_entries.acknowledge(message.log_entry_id(), message.node_id());
 
-        trace!(
-            "Acknowledged {} on node {}",
-            message.log_entry_id(),
-            message.node_id(),
-        );
+        if self.log_entries.get(message.log_entry_id()).expect("Log entry should exist").is_committed() {
+            trace!(
+                "Acknowledged {} on node {}",
+                message.log_entry_id(),
+                message.node_id(),
+            );
+        }
     }
 }
 

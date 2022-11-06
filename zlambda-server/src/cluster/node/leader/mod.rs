@@ -15,9 +15,7 @@ pub use message::*;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use crate::algorithm::next_key;
-use crate::cluster::{
-    ClientId, ConnectionId, LogEntry, LogEntryId, LogEntryType, NodeActor, NodeId, TermId,
-};
+use crate::cluster::{ClientId, ConnectionId, LogEntryId, LogEntryType, NodeActor, NodeId, TermId};
 use crate::common::{TcpListenerActor, TcpListenerActorAcceptMessage, UpdateRecipientActorMessage};
 use actix::dev::{MessageResponse, OneshotSender};
 use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Message};
@@ -31,25 +29,15 @@ use tracing::{error, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type CommittedLogEntry = LogEntry;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug)]
-pub struct UncommittedLogEntry {
+#[derive(Debug)]
+pub struct LogEntry {
     id: LogEntryId,
     r#type: LogEntryType,
     acknowledging_nodes: HashSet<NodeId>,
     acknowledged_nodes: HashSet<NodeId>,
 }
 
-impl From<UncommittedLogEntry> for CommittedLogEntry {
-    fn from(entry: UncommittedLogEntry) -> Self {
-        Self::new(entry.id, entry.r#type)
-    }
-}
-
-impl UncommittedLogEntry {
+impl LogEntry {
     pub fn new(
         id: LogEntryId,
         r#type: LogEntryType,
@@ -86,14 +74,14 @@ impl UncommittedLogEntry {
     }
 
     pub fn quorum_count(&self) -> usize {
-        self.acknowledging_nodes.len() / 2 + 1
+        self.acknowledging_nodes.len() / 2
     }
 
     pub fn acknowledge(&mut self, node_id: NodeId) {
         if !self.acknowledging_nodes.contains(&node_id) {
             panic!(
-                "log entry {} does not need to be acknowledged by node {}",
-                self.id, node_id,
+                "Log entry {} cannot be acknowledged by node {}",
+                self.id, node_id
             );
         }
 
@@ -104,11 +92,10 @@ impl UncommittedLogEntry {
             );
         }
 
-        self.acknowledging_nodes.remove(&node_id);
         self.acknowledged_nodes.insert(node_id);
     }
 
-    pub fn committable(&self) -> bool {
+    pub fn is_committed(&self) -> bool {
         self.remaining_acknowledging_nodes().count() <= self.quorum_count()
     }
 }
@@ -117,60 +104,60 @@ impl UncommittedLogEntry {
 
 #[derive(Debug, Default)]
 pub struct LeaderNodeActorLogEntries {
-    uncommitted: HashMap<LogEntryId, UncommittedLogEntry>,
-    committed: HashMap<LogEntryId, CommittedLogEntry>,
-    last_committed_id: LogEntryId,
+    log_entries: HashMap<LogEntryId, LogEntry>,
+    next_committing_log_entry_id: LogEntryId,
 }
 
 impl LeaderNodeActorLogEntries {
-    pub fn next_key(&self) -> LogEntryId {
-        next_key(self.uncommitted.keys().chain(self.committed.keys()))
+    fn next_committing_log_entry_id(&self) -> LogEntryId {
+        self.next_committing_log_entry_id
+    }
+}
+
+impl LeaderNodeActorLogEntries {
+    pub fn get(&self, id: LogEntryId) -> Option<&LogEntry> {
+        self.log_entries.get(&id)
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
+        if self.next_committing_log_entry_id == 0 {
+            None
+        } else {
+            Some(self.next_committing_log_entry_id - 1)
+        }
+    }
+
+    pub fn next_log_entry_id(&self) -> LogEntryId {
+        next_key(self.log_entries.keys())
     }
 
     pub fn begin(&mut self, r#type: LogEntryType, nodes: HashSet<NodeId>) -> LogEntryId {
-        let id = self.next_key();
+        let id = self.next_log_entry_id();
 
-        self.uncommitted.insert(
-            id,
-            UncommittedLogEntry::new(id, r#type, nodes, HashSet::default()),
-        );
+        self.log_entries
+            .insert(id, LogEntry::new(id, r#type, nodes, HashSet::default()));
 
         id
     }
 
-    pub fn is_uncommitted(&self, log_entry_id: LogEntryId) -> bool {
-        self.uncommitted.get(&log_entry_id).is_some()
-    }
-
-    pub fn acknowledge(&mut self, log_entry_id: LogEntryId, node_id: NodeId) -> Option<LogEntryId> {
-        let log_entry = self
-            .uncommitted
+    pub fn acknowledge(&mut self, log_entry_id: LogEntryId, node_id: NodeId) {
+        self.log_entries
             .get_mut(&log_entry_id)
-            .expect("Log entry should be existing as uncommitted");
+            .expect(&format!("Log entry with id {} should exist", log_entry_id))
+            .acknowledge(node_id);
 
-        log_entry.acknowledge(node_id);
+        loop {
+            let log_entry = match self.log_entries.get(&self.next_committing_log_entry_id) {
+                None => break,
+                Some(log_entry) => log_entry,
+            };
 
-        if log_entry.committable() {
-            let _ = log_entry;
-
-            self.committed.insert(
-                log_entry_id,
-                self.uncommitted
-                    .remove(&log_entry_id)
-                    .expect("Log entry should exist")
-                    .into(),
-            );
-
-            self.last_committed_id = next_key(self.committed.keys());
-
-            Some(log_entry_id)
-        } else {
-            None
+            if log_entry.is_committed() {
+                self.next_committing_log_entry_id += 1;
+            } else {
+                break;
+            }
         }
-    }
-
-    pub fn last_committed_id(&self) -> LogEntryId {
-        self.last_committed_id
     }
 }
 
@@ -209,143 +196,126 @@ impl LeaderNodeActorActorAddresses {
 
 #[cfg(test)]
 mod test {
-    /*use super::*;
+    use super::*;
 
     #[test]
-    fn test_quorum_count_with_cluster_size_of_one() {
-        let entry = UncommittedLogEntry::new(
-            0,
-            LogEntryType::Add(2),
-            [0].into(),
-            [].into(),
-        );
-
-        assert_eq!(entry.quorum_count(), 1);
-    }
-
-    #[test]
-    fn test_quorum_count_with_cluster_size_of_two() {
-        let entry = UncommittedLogEntry::new(
-            0,
-            LogEntryType::Add(2),
-            [0, 1].into(),
-            [].into(),
-        );
-
-        assert_eq!(entry.quorum_count(), 2);
-    }
-
-    #[test]
-    fn test_quorum_count_with_cluster_size_of_three() {
-        let entry = UncommittedLogEntry::new(
-            0,
-            LogEntryType::Add(2),
-            [0, 1, 2].into(),
-            [].into(),
-        );
-
-        assert_eq!(entry.quorum_count(), 2);
-    }
-
-    #[test]
-    fn test_quorum_count_with_cluster_size_of_four() {
-        let entry = UncommittedLogEntry::new(
-            0,
-            LogEntryType::Add(2),
-            [0, 1, 2, 4].into(),
-            [].into(),
-        );
-
-        assert_eq!(entry.quorum_count(), 3);
-    }
-
-    #[test]
-    fn test_quorum_count_with_cluster_size_of_five() {
-        let entry = UncommittedLogEntry::new(
-            0,
-            LogEntryType::Add(2),
-            [0, 1, 2, 4, 5].into(),
-            [].into(),
-        );
-
-        assert_eq!(entry.quorum_count(), 3);
-    }
-
-    #[test]
-    fn test_committable_with_no_acknowledged_nodes() {
-        let entry = UncommittedLogEntry::new(
-            0,
-            LogEntryType::Add(2),
-            [0, 1, 2, 4, 5].into(),
-            [].into(),
-        );
-
-        assert_eq!(entry.committable(), false);
-    }
-
-    #[test]
-    fn test_committable_with_one_acknowledged_nodes() {
-        let entry = UncommittedLogEntry::new(
-            0,
-            LogEntryType::Add(2),
-            [0, 1, 2, 4, 5].into(),
-            [0].into(),
-        );
-
-        assert_eq!(entry.committable(), false);
-    }
-
-    #[test]
-    fn test_committable_with_two_acknowledged_nodes() {
-        let entry = UncommittedLogEntry::new(
-            0,
-            LogEntryType::Add(2),
-            [0, 1, 2, 4, 5].into(),
-            [0, 1].into(),
-        );
-
-        assert_eq!(entry.committable(), false);
-    }
-
-    #[test]
-    fn test_committable_with_three_acknowledged_nodes() {
-        let entry = UncommittedLogEntry::new(
-            0,
-            LogEntryType::Add(2),
-            [0, 1, 2, 4, 5].into(),
-            [0, 1, 3].into(),
-        );
-
-        assert_eq!(entry.committable(), true);
-    }
-
-    #[test]
-    fn test_log_entry_id_order() {
+    fn is_log_entry_uncommitted() {
         let mut entries = LeaderNodeActorLogEntries::default();
-        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
-        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
-        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
-        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
+        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        assert_eq!(entries.get(first).unwrap().is_committed(), false);
+    }
 
-        assert_eq!(entries.begin(LogEntryType::Add(5), [0, 1, 2].into()), 4);
+    #[test]
+    fn is_log_entry_committed() {
+        let mut entries = LeaderNodeActorLogEntries::default();
+        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        entries.acknowledge(first, 0);
+        entries.acknowledge(first, 1);
+
+        assert_eq!(entries.get(first).unwrap().is_committed(), true);
     }
 
     #[test]
     #[should_panic]
-    fn test_faulty_double_acknowledgement() {
+    fn is_double_acknowledgement_failing() {
         let mut entries = LeaderNodeActorLogEntries::default();
-        let id = entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
-        entries.acknowledge(id, 0);
-        entries.acknowledge(id, 0);
+        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        entries.acknowledge(first, 0);
+        entries.acknowledge(first, 0);
     }
 
     #[test]
-    fn test_small_acknowledgement() {
+    #[should_panic]
+    fn is_acknowledging_not_existing_log_entry_failing() {
         let mut entries = LeaderNodeActorLogEntries::default();
-        entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
-        let id = entries.begin(LogEntryType::Add(5), [0, 1, 2].into());
-        entries.acknowledge(id, 0);
+        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        entries.acknowledge(first + 1, 1);
+    }
 
-        assert_eq!(entries.acknowledge(id, 1), Some(id));
-    }*/
+    #[test]
+    #[should_panic]
+    fn is_acknowledging_not_existing_node_failing() {
+        let mut entries = LeaderNodeActorLogEntries::default();
+        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        entries.acknowledge(first, 3);
+    }
+
+    #[test]
+    fn are_log_entry_ids_ascending() {
+        let mut entries = LeaderNodeActorLogEntries::default();
+        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        let second = entries.begin(LogEntryType::Add(2), [0, 1, 2, 3, 4].into());
+
+        assert_eq!(first + 1, second);
+    }
+
+    #[test]
+    fn is_last_committed_id_initially_none() {
+        let entries = LeaderNodeActorLogEntries::default();
+
+        assert_eq!(entries.last_committed_log_entry_id(), None);
+    }
+
+    #[test]
+    fn is_last_committed_valid_after_synchronous_acknowledgement() {
+        let mut entries = LeaderNodeActorLogEntries::default();
+        let first = entries.begin(LogEntryType::Add(2), [0, 1, 2].into());
+        let second = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        let third = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
+        entries.acknowledge(first, 0);
+        entries.acknowledge(first, 1);
+        entries.acknowledge(first, 2);
+        entries.acknowledge(second, 0);
+        entries.acknowledge(second, 1);
+        entries.acknowledge(second, 2);
+        entries.acknowledge(third, 0);
+        entries.acknowledge(third, 1);
+        entries.acknowledge(third, 2);
+
+        assert_eq!(entries.last_committed_log_entry_id(), Some(third));
+    }
+
+    #[test]
+    fn is_last_committed_valid_after_asynchronous_missing_acknowledgement() {
+        let mut entries = LeaderNodeActorLogEntries::default();
+        let first = entries.begin(LogEntryType::Add(2), [0, 1, 2].into());
+        let second = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        let third = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
+        let fourth = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
+        entries.acknowledge(first, 0);
+        entries.acknowledge(first, 1);
+        entries.acknowledge(first, 2);
+        entries.acknowledge(second, 0);
+        entries.acknowledge(second, 1);
+        entries.acknowledge(second, 2);
+        entries.acknowledge(third, 0);
+        entries.acknowledge(fourth, 0);
+        entries.acknowledge(fourth, 1);
+        entries.acknowledge(fourth, 2);
+
+        assert_eq!(entries.last_committed_log_entry_id(), Some(second));
+    }
+
+    #[test]
+    fn is_last_committed_valid_after_asynchronous_recovering_acknowledgement() {
+        let mut entries = LeaderNodeActorLogEntries::default();
+        let first = entries.begin(LogEntryType::Add(2), [0, 1, 2].into());
+        let second = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        let third = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
+        let fourth = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
+        entries.acknowledge(first, 0);
+        entries.acknowledge(first, 1);
+        entries.acknowledge(first, 2);
+        entries.acknowledge(second, 0);
+        entries.acknowledge(second, 1);
+        entries.acknowledge(second, 2);
+        entries.acknowledge(third, 0);
+        entries.acknowledge(fourth, 0);
+        entries.acknowledge(fourth, 1);
+        entries.acknowledge(fourth, 2);
+        entries.acknowledge(third, 1);
+        entries.acknowledge(third, 2);
+
+        assert_eq!(entries.last_committed_log_entry_id(), Some(fourth));
+    }
 }
