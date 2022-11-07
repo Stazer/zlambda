@@ -1,10 +1,7 @@
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::path::Path;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub trait Module {}
+use crate::{Module, MODULES_SYMBOL, ReadModulesError};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,36 +35,6 @@ impl From<libloading::Error> for LoadLibraryError {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub enum ReadModulesError {
-    LibloadingError(libloading::Error),
-}
-
-impl Debug for ReadModulesError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        match self {
-            Self::LibloadingError(error) => Debug::fmt(error, formatter),
-        }
-    }
-}
-
-impl Display for ReadModulesError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        match self {
-            Self::LibloadingError(error) => Display::fmt(error, formatter),
-        }
-    }
-}
-
-impl error::Error for ReadModulesError {}
-
-impl From<libloading::Error> for ReadModulesError {
-    fn from(error: libloading::Error) -> Self {
-        Self::LibloadingError(error)
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 pub struct Library {
     handle: libloading::Library,
 }
@@ -79,10 +46,18 @@ impl Library {
         })
     }
 
-    pub fn modules(&self) -> Result<Vec<Box<dyn Module>>, ReadModulesError> {
+    pub fn modules(&self) -> Result<Vec<*mut dyn Module>, ReadModulesError> {
         Ok(unsafe {
             self.handle
-                .get::<unsafe extern "C" fn() -> Vec<Box<dyn Module>>>(b"modules")?()
+                .get::<unsafe extern "C" fn() -> Vec<*mut dyn Module>>(MODULES_SYMBOL)?()
         })
+
+        /*Ok(unsafe {
+            self.handle
+                .get::<unsafe extern "C" fn() -> Vec<*mut dyn Module>>(MODULES_SYMBOL)?()
+                .into_iter()
+                .map(|x| Box::from_raw(x))
+                .collect()
+        })*/
     }
 }

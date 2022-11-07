@@ -1,7 +1,8 @@
 [workspace]
 members = [
-    "zlambda-common",
-    "zlambda-server",
-    "zlambda-client",
     "zlambda-cli",
+    "zlambda-client",
+    "zlambda-common",
+    "zlambda-process",
+    "zlambda-server",
 ]

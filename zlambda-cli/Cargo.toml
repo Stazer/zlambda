@@ -10,4 +10,5 @@ clap = { version = "4.0.0-rc.2", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = { version = "0", features = ["fmt"] }
 zlambda-client = { path = "../zlambda-client" }
+zlambda-common = { path = "../zlambda-common" }
 zlambda-server = { path = "../zlambda-server" }

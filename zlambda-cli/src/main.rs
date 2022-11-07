@@ -7,6 +7,8 @@ use std::error::Error;
 use tracing_subscriber::fmt::init;
 use zlambda_server::cluster::NodeActor;
 use zlambda_server::run::run_with_default_system_runner;
+use std::path::PathBuf;
+use zlambda_common::Library;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,6 +29,9 @@ enum MainCommand {
         leader_address: Option<String>,
     },
     Client,
+    Module {
+        path: PathBuf,
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,7 +52,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             })
             .expect("Cannot start manager");
         }
-        MainCommand::Client => {}
+        MainCommand::Client => {},
+        MainCommand::Module { path } => {
+            let modules = Library::load(&path)?.modules()?;
+            println!("{:?}", modules);
+        }
     };
 
     Ok(())
