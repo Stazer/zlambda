@@ -1,7 +1,8 @@
 use crate::cluster::{
     AcknowledgeLogEntryActorMessage, CreateFollowerActorMessage, LeaderNodeActor,
     LeaderNodeFollowerActorAddresses, LogEntryId, LogEntryType, NodeId,
-    NodeRegisterResponsePacketSuccessData, Packet, PacketReader, ReplicateLogEntryActorMessage, SendLogEntryRequestActorMessage,
+    NodeRegisterResponsePacketSuccessData, Packet, PacketReader, ReplicateLogEntryActorMessage,
+    SendLogEntryRequestActorMessage,
 };
 use crate::common::{
     StopActorMessage, TcpStreamActor, TcpStreamActorReceiveMessage, TcpStreamActorSendMessage,
@@ -9,10 +10,10 @@ use crate::common::{
 };
 use actix::{Actor, Addr, AsyncContext, Context, Handler, Message};
 use futures::FutureExt;
-use std::net::SocketAddr;
-use tracing::error;
 use std::cmp::max;
 use std::mem::take;
+use std::net::SocketAddr;
+use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,7 +46,10 @@ impl Handler<ReplicateLogEntryActorMessage> for LeaderNodeFollowerActor {
         let (log_entry_id, log_entry_type, last_committed_log_entry_id) = message.into();
 
         self.log_entries_buffer.push((log_entry_id, log_entry_type));
-        self.last_committed_log_entry_id = max(last_committed_log_entry_id, self.last_committed_log_entry_id);
+        self.last_committed_log_entry_id = max(
+            last_committed_log_entry_id,
+            self.last_committed_log_entry_id,
+        );
 
         context.notify(SendLogEntryRequestActorMessage);
     }
@@ -54,6 +58,7 @@ impl Handler<ReplicateLogEntryActorMessage> for LeaderNodeFollowerActor {
 impl Handler<SendLogEntryRequestActorMessage> for LeaderNodeFollowerActor {
     type Result = <SendLogEntryRequestActorMessage as Message>::Result;
 
+    #[tracing::instrument]
     fn handle(
         &mut self,
         _message: SendLogEntryRequestActorMessage,
@@ -68,10 +73,12 @@ impl Handler<SendLogEntryRequestActorMessage> for LeaderNodeFollowerActor {
             log_entries: take(&mut self.log_entries_buffer),
             last_committed_log_entry_id: self.last_committed_log_entry_id,
         })
-            .to_bytes()
-            .expect("Writing LogEntryRequest should succeed");
+        .to_bytes()
+        .expect("Writing LogEntryRequest should succeed");
 
-        tcp_stream.try_send(TcpStreamActorSendMessage::new(bytes)).expect("Sending LogEntryRequest should succeed");
+        tcp_stream
+            .try_send(TcpStreamActorSendMessage::new(bytes))
+            .expect("Sending LogEntryRequest should succeed");
     }
 }
 
