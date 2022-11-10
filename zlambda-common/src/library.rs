@@ -46,18 +46,10 @@ impl Library {
         })
     }
 
-    pub fn modules(&self) -> Result<Vec<*mut dyn Module>, ReadModulesError> {
+    pub fn modules<'a>(&'a self) -> Result<Vec<Box<dyn Module + 'a>>, ReadModulesError> {
         Ok(unsafe {
             self.handle
-                .get::<unsafe extern "C" fn() -> Vec<*mut dyn Module>>(MODULES_SYMBOL)?()
+                .get::<unsafe extern "C" fn() -> Vec<Box<dyn Module>>>(MODULES_SYMBOL)?()
         })
-
-        /*Ok(unsafe {
-            self.handle
-                .get::<unsafe extern "C" fn() -> Vec<*mut dyn Module>>(MODULES_SYMBOL)?()
-                .into_iter()
-                .map(|x| Box::from_raw(x))
-                .collect()
-        })*/
     }
 }

@@ -54,7 +54,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         MainCommand::Client => {},
         MainCommand::Module { path } => {
-            let modules = Library::load(&path)?.modules()?;
+            let library = Library::load(&path)?;
+            let modules = library.modules()?;
             println!("{:?}", modules);
         }
     };

@@ -12,7 +12,8 @@ impl Module for ModuleImpl {
 }
 
 #[no_mangle]
-pub extern "C" fn modules() -> Vec<*const dyn Module> {
-    let module = Box::new(ModuleImpl {});
-    vec!(Box::into_raw(module))
+pub extern "C" fn modules() -> Vec<Box<dyn Module>> {
+    vec!(
+        Box::new(ModuleImpl{})
+    )
 }
