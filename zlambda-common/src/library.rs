@@ -1,7 +1,7 @@
+use crate::module::{Module, ReadModulesError, MODULES_SYMBOL};
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::path::Path;
-use crate::{Module, MODULES_SYMBOL, ReadModulesError};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,7 +49,8 @@ impl Library {
     pub fn modules<'a>(&'a self) -> Result<Vec<Box<dyn Module + 'a>>, ReadModulesError> {
         Ok(unsafe {
             self.handle
-                .get::<unsafe extern "C" fn() -> Vec<Box<dyn Module>>>(MODULES_SYMBOL)?()
+                .get::<unsafe extern "C" fn() -> Vec<Box<dyn Module>>>(MODULES_SYMBOL)?(
+            )
         })
     }
 }

@@ -1,0 +1,28 @@
+mod dispatch;
+mod error;
+mod manager;
+mod specification;
+mod symbol;
+mod version;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub use dispatch::*;
+pub use error::*;
+pub use manager::*;
+pub use specification::*;
+pub use symbol::*;
+pub use version::*;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub use async_trait::async_trait;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[async_trait]
+pub trait Module: Send + Sync {
+    fn specification(&self) -> ModuleSpecification;
+
+    async fn on_dispatch(&self, event: DispatchEvent) {}
+}

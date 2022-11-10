@@ -4,11 +4,11 @@
 
 use clap::{Parser, Subcommand};
 use std::error::Error;
+use std::path::PathBuf;
 use tracing_subscriber::fmt::init;
+use zlambda_common::Library;
 use zlambda_server::cluster::NodeActor;
 use zlambda_server::run::run_with_default_system_runner;
-use std::path::PathBuf;
-use zlambda_common::Library;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,11 +52,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             })
             .expect("Cannot start manager");
         }
-        MainCommand::Client => {},
+        MainCommand::Client => {}
         MainCommand::Module { path } => {
             let library = Library::load(&path)?;
             let modules = library.modules()?;
-            println!("{:?}", modules);
+            let spec = modules
+                .iter()
+                .map(|x| x.specification())
+                .collect::<Vec<_>>();
+            println!("{:?}", spec);
         }
     };
 
