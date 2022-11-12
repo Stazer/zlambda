@@ -1,18 +1,16 @@
 [package]
 name = "zlambda-server"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix = { version = "0" }
 async-trait = { version = "0" }
 bytes = { version = "1" }
-either = "*"
 futures = { version = "0" }
 postcard = { version = "1", features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream  = { version = "0", features = ["net"] }
 tokio-util = { version = "0", features = ["full"] }
-zlambda-common = { path = "../zlambda-common" }
 tracing = { version = "0" }
+zlambda-common = { path = "../zlambda-common" }

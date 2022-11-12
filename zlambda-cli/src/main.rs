@@ -7,8 +7,8 @@ use std::error::Error;
 use std::path::PathBuf;
 use tracing_subscriber::fmt::init;
 use zlambda_common::Library;
-use zlambda_server::cluster::NodeActor;
-use zlambda_server::run::run_with_default_system_runner;
+use zlambda_server::cluster::node::ClusterNodeActor;
+use zlambda_server::runtime::Runtime;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -46,11 +46,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         } => {
             init();
 
-            run_with_default_system_runner(async move || {
-                NodeActor::new(listener_address, leader_address).await?;
+            let runtime = Runtime::new()?;
+
+            runtime.block_on(async move {
+                let sender = match ClusterNodeActor::new(listener_address, leader_address).await {
+                    Ok(sender) => sender,
+                    Err(error) => return Err(error),
+                };
+
+                sender.closed().await;
+
                 Ok(())
-            })
-            .expect("Cannot start manager");
+            })?;
+
+            let _ = runtime.enter();
         }
         MainCommand::Client => {}
         MainCommand::Module { path } => {

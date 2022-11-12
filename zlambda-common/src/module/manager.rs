@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use std::path::Path;
-use std::collections::HashMap;
-use crate::module::{Module, ModuleVersion};
 use crate::library::Library;
+use crate::module::{Module, ModuleVersion};
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,10 +14,7 @@ pub struct ModuleManager {
 }
 
 impl ModuleManager {
-    pub async fn load(&self, path: &Path) {
-    }
+    pub async fn load(&self, path: &Path) {}
 
-    pub async fn dispatch(&self, name: &String, version: &Option<ModuleVersion>) {
-
-    }
+    pub async fn dispatch(&self, name: &String, version: &Option<ModuleVersion>) {}
 }
