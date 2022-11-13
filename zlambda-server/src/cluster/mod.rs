@@ -3,10 +3,13 @@ pub mod node;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use bytes::Bytes;
+use node::ClusterNodeId;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::net::SocketAddr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,7 +20,12 @@ pub type TermId = u64;
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ClusterMessage {
     RegisterRequest,
-    RegisterResponse,
+    RegisterResponse {
+        cluster_node_id: ClusterNodeId,
+        cluster_leader_node_id: ClusterNodeId,
+        cluster_node_addresses: HashMap<ClusterNodeId, SocketAddr>,
+        term_id: TermId,
+    },
     AppendEntriesRequest,
     AppendEntriesResponse,
     RequestVoteRequest,

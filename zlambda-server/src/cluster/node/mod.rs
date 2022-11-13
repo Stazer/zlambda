@@ -8,10 +8,10 @@ use crate::tcp::{TcpListenerActor, TcpStreamActor};
 use candidate::ClusterCandidateNodeMessage;
 use follower::{ClusterFollowerNodeActor, ClusterFollowerNodeMessage};
 use leader::{ClusterLeaderNodeActor, ClusterLeaderNodeMessage};
+use std::error::Error;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::{select, spawn};
-use std::error::Error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,7 +83,8 @@ impl ClusterNodeActor {
                         tcp_listener_result_receiver,
                         tcp_stream_message_sender,
                         tcp_stream_result_receiver,
-                    ).await?
+                    )
+                    .await?,
                 )
             }
         };

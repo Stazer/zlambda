@@ -1,8 +1,10 @@
+use crate::cluster::node::leader::ClusterLeaderNodeMessage;
 use crate::cluster::{ClusterMessage, ClusterMessageReader};
 use crate::tcp::TcpStreamMessage;
 use bytes::Bytes;
 use std::io;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 use tokio::{select, spawn};
 use tracing::error;
 
@@ -15,14 +17,15 @@ pub enum ClusterLeaderNodeConnectionMessage {}
 
 #[derive(Debug)]
 struct ClusterLeaderNodeConnectionActorSender {
-    tcp_stream_message: Sender<TcpStreamMessage>,
+    cluster_leader_node_message: mpsc::Sender<ClusterLeaderNodeMessage>,
+    tcp_stream_message: mpsc::Sender<TcpStreamMessage>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 struct ClusterLeaderNodeConnectionActorReceiver {
-    tcp_stream_result: Receiver<Result<Bytes, io::Error>>,
+    tcp_stream_result: mpsc::Receiver<Result<Bytes, io::Error>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,13 +39,15 @@ pub struct ClusterLeaderNodeConnectionActor {
 
 impl ClusterLeaderNodeConnectionActor {
     pub fn new(
-        tcp_stream_result_receiver: Receiver<Result<Bytes, io::Error>>,
-        tcp_stream_message_sender: Sender<TcpStreamMessage>,
+        tcp_stream_result_receiver: mpsc::Receiver<Result<Bytes, io::Error>>,
+        tcp_stream_message_sender: mpsc::Sender<TcpStreamMessage>,
+        cluster_leader_node_message_sender: mpsc::Sender<ClusterLeaderNodeMessage>,
     ) {
         spawn(async move {
             (Self {
                 sender: ClusterLeaderNodeConnectionActorSender {
                     tcp_stream_message: tcp_stream_message_sender,
+                    cluster_leader_node_message: cluster_leader_node_message_sender,
                 },
                 receiver: ClusterLeaderNodeConnectionActorReceiver {
                     tcp_stream_result: tcp_stream_result_receiver,
@@ -81,8 +86,37 @@ impl ClusterLeaderNodeConnectionActor {
 
                         match message {
                             ClusterMessage::RegisterRequest => {
-                                let message = match (ClusterMessage::RegisterResponse {}).to_bytes() {
-                                    Ok(message) => message,
+                                let (sender, receiver) = oneshot::channel();
+
+                                let result = self.sender.cluster_leader_node_message.send(
+                                    ClusterLeaderNodeMessage::RegisterClusterNode {
+                                        sender,
+                                        socket_address: todo!(),
+                                    },
+                                ).await;
+
+                                if let Err(error) = result {
+                                    error!("{}", error);
+                                    break 'select;
+                                }
+
+                                let (cluster_node_id, cluster_leader_node_id, cluster_node_addresses, term_id) = match receiver.await {
+                                    Err(error) => {
+                                        error!("{}", error);
+                                        break 'select;
+                                    },
+                                    Ok(data) => data,
+                                };
+
+                                let message = ClusterMessage::RegisterResponse {
+                                    cluster_node_id,
+                                    cluster_leader_node_id,
+                                    cluster_node_addresses,
+                                    term_id,
+                                };
+
+                                let bytes = match message.to_bytes() {
+                                    Ok(bytes) => bytes,
                                     Err(error) => {
                                         error!("{}", error);
                                         break 'select
@@ -90,9 +124,7 @@ impl ClusterLeaderNodeConnectionActor {
                                 };
 
                                 let result = self.sender.tcp_stream_message.send(
-                                    TcpStreamMessage::SendBytes(
-                                        message
-                                    ),
+                                    TcpStreamMessage::SendBytes(bytes),
                                 ).await;
 
                                 if let Err(error) = result {
