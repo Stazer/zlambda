@@ -1,16 +1,16 @@
-pub mod candidate;
-pub mod follower;
+//pub mod candidate;
+//pub mod follower;
 pub mod leader;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use crate::tcp::{TcpListenerActor, TcpStreamActor};
-use candidate::ClusterCandidateNodeMessage;
-use follower::{ClusterFollowerNodeActor, ClusterFollowerNodeMessage};
-use leader::{ClusterLeaderNodeActor, ClusterLeaderNodeMessage};
+//use candidate::ClusterCandidateNodeMessage;
+//use follower::{ClusterFollowerNodeActor, ClusterFollowerNodeMessage};
+use leader::{ClusterLeaderNodeActor, ClusterLeaderNodeIncomingSender};
 use std::error::Error;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc;
 use tokio::{select, spawn};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,93 +20,83 @@ pub type ClusterNodeId = u64;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum ClusterNodeMessage {
-    UpdateType(ClusterNodeType),
+pub enum ClusterNodeIncomingMessage {
+    Update(ClusterNodeActor),
+}
+
+pub type ClusterNodeIncomingSender = mpsc::Sender<ClusterNodeIncomingMessage>;
+pub type ClusterNodeIncomingReceiver = mpsc::Receiver<ClusterNodeIncomingMessage>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub fn cluster_node_incoming_channel() -> (ClusterNodeIncomingSender, ClusterNodeIncomingReceiver) {
+    mpsc::channel(16)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum ClusterNodeType {
-    Leader(Sender<ClusterLeaderNodeMessage>),
-    Follower(Sender<ClusterFollowerNodeMessage>),
-    Candidate(Sender<ClusterCandidateNodeMessage>),
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-struct ClusterNodeActorReceiver {
-    cluster_node_message: Receiver<ClusterNodeMessage>,
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct ClusterNodeActor {
-    receiver: ClusterNodeActorReceiver,
-    r#type: ClusterNodeType,
+pub enum ClusterNodeActor {
+    Leader {
+        cluster_leader_node_incoming_sender: ClusterLeaderNodeIncomingSender,
+        cluster_node_incoming_receiver: ClusterNodeIncomingReceiver,
+    },
 }
 
 impl ClusterNodeActor {
     pub async fn new<S, T>(
         listener_address: S,
         registration_address: Option<T>,
-    ) -> Result<Sender<ClusterNodeMessage>, Box<dyn Error>>
+    ) -> Result<ClusterNodeIncomingSender, Box<dyn Error>>
     where
         S: ToSocketAddrs,
         T: ToSocketAddrs,
     {
-        let (cluster_node_message_sender, cluster_node_message_receiver) = channel(16);
+        let (cluster_node_incoming_sender, cluster_node_incoming_receiver) =
+            cluster_node_incoming_channel();
 
-        let (tcp_listener_result_sender, tcp_listener_result_receiver) = channel(16);
-        let tcp_listener_message_sender = TcpListenerActor::new(
-            tcp_listener_result_sender,
-            TcpListener::bind(listener_address).await?,
-        );
-
-        let r#type = match registration_address {
-            None => ClusterNodeType::Leader(ClusterLeaderNodeActor::new(
-                tcp_listener_message_sender,
-                tcp_listener_result_receiver,
-            )),
-            Some(registration_address) => {
-                let (tcp_stream_result_sender, tcp_stream_result_receiver) = channel(16);
-                let tcp_stream_message_sender = TcpStreamActor::new(
-                    tcp_stream_result_sender,
-                    TcpStream::connect(registration_address).await?,
-                );
-
-                ClusterNodeType::Follower(
-                    ClusterFollowerNodeActor::new(
-                        tcp_listener_message_sender,
-                        tcp_listener_result_receiver,
-                        tcp_stream_message_sender,
-                        tcp_stream_result_receiver,
-                    )
-                    .await?,
+        let mut instance = match registration_address {
+            None => Self::Leader {
+                cluster_leader_node_incoming_sender: ClusterLeaderNodeActor::new(
+                    listener_address,
+                    cluster_node_incoming_sender.clone(),
                 )
+                .await?,
+                cluster_node_incoming_receiver,
+            },
+            Some(registration_address) => {
+                todo!()
             }
         };
 
         spawn(async move {
-            (Self {
-                receiver: ClusterNodeActorReceiver {
-                    cluster_node_message: cluster_node_message_receiver,
-                },
-                r#type,
-            })
-            .main()
-            .await;
+            instance.main().await;
         });
 
-        Ok(cluster_node_message_sender)
+        Ok(cluster_node_incoming_sender)
     }
 
     async fn main(&mut self) {
         loop {
+            match self {
+                Self::Leader {
+                    cluster_node_incoming_receiver,
+                    ..
+                } => {
+                    select!(
+                        message = cluster_node_incoming_receiver.recv() => {
+                            let message = match message {
+                                None => {
+                                    break
+                                },
+                                Some(message) => message,
+                            };
+                        }
+                    )
+                }
+            }
             /*select!(
-                message = self.receiver.cluster_node_message.recv() => {
+                message = self.cluster_node_incoming_receiver.recv() => {
                     let message = match message {
                         None => {
                             break
@@ -115,8 +105,8 @@ impl ClusterNodeActor {
                     };
 
                     match message {
-                        ClusterNodeMessage::UpdateType(r#type) => {
-                            self.r#type = r#type;
+                        ClusterNodeIncomingMessage::UpdateSenderType(sender_type) => {
+                            self.sender_type = sender_type;
                         }
                     };
                 }

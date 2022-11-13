@@ -1,4 +1,4 @@
-use crate::cluster::node::leader::ClusterLeaderNodeMessage;
+use crate::cluster::node::leader::ClusterLeaderNodeIncomingMessage;
 use crate::cluster::{ClusterMessage, ClusterMessageReader};
 use crate::tcp::TcpStreamMessage;
 use bytes::Bytes;
@@ -17,7 +17,7 @@ pub enum ClusterLeaderNodeConnectionMessage {}
 
 #[derive(Debug)]
 struct ClusterLeaderNodeConnectionActorSender {
-    cluster_leader_node_message: mpsc::Sender<ClusterLeaderNodeMessage>,
+    cluster_leader_node_message: mpsc::Sender<ClusterLeaderNodeIncomingMessage>,
     tcp_stream_message: mpsc::Sender<TcpStreamMessage>,
 }
 
@@ -41,7 +41,7 @@ impl ClusterLeaderNodeConnectionActor {
     pub fn new(
         tcp_stream_result_receiver: mpsc::Receiver<Result<Bytes, io::Error>>,
         tcp_stream_message_sender: mpsc::Sender<TcpStreamMessage>,
-        cluster_leader_node_message_sender: mpsc::Sender<ClusterLeaderNodeMessage>,
+        cluster_leader_node_message_sender: mpsc::Sender<ClusterLeaderNodeIncomingMessage>,
     ) {
         spawn(async move {
             (Self {
@@ -89,7 +89,7 @@ impl ClusterLeaderNodeConnectionActor {
                                 let (sender, receiver) = oneshot::channel();
 
                                 let result = self.sender.cluster_leader_node_message.send(
-                                    ClusterLeaderNodeMessage::RegisterClusterNode {
+                                    ClusterLeaderNodeIncomingMessage::RegisterClusterNode {
                                         sender,
                                         socket_address: todo!(),
                                     },

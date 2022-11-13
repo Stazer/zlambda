@@ -3,25 +3,27 @@ pub mod connection;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use crate::algorithm::next_key;
-use crate::cluster::node::ClusterNodeId;
+use crate::cluster::node::{ClusterNodeId, ClusterNodeIncomingSender};
 use crate::cluster::TermId;
-use crate::tcp::{TcpListenerMessage, TcpStreamActor};
+use crate::tcp::{
+    TcpListenerActor, TcpListenerIncomingSender, TcpListenerOutgoingReceiver, TcpStreamActor,
+};
 use connection::{ClusterLeaderNodeConnectionActor, ClusterLeaderNodeConnectionMessage};
 use std::collections::HashMap;
+use std::error::Error;
 use std::io;
 use std::net::SocketAddr;
-use tokio::net::TcpStream;
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::select;
 use tokio::spawn;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
-
 use tracing::{error, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum ClusterLeaderNodeMessage {
+pub enum ClusterLeaderNodeIncomingMessage {
     RegisterClusterNode {
         socket_address: SocketAddr,
         sender: oneshot::Sender<(
@@ -35,18 +37,16 @@ pub enum ClusterLeaderNodeMessage {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
-struct ClusterLeaderNodeActorSender {
-    _tcp_listener_message: mpsc::Sender<TcpListenerMessage>,
-    cluster_leader_node_message: mpsc::Sender<ClusterLeaderNodeMessage>,
-}
+pub type ClusterLeaderNodeIncomingSender = mpsc::Sender<ClusterLeaderNodeIncomingMessage>;
+pub type ClusterLeaderNodeIncomingReceiver = mpsc::Receiver<ClusterLeaderNodeIncomingMessage>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
-struct ClusterLeaderNodeActorReceiver {
-    cluster_leader_node_message: mpsc::Receiver<ClusterLeaderNodeMessage>,
-    tcp_listener_result: mpsc::Receiver<Result<(TcpStream, SocketAddr), io::Error>>,
+pub fn cluster_leader_node_incoming_channel() -> (
+    ClusterLeaderNodeIncomingSender,
+    ClusterLeaderNodeIncomingReceiver,
+) {
+    mpsc::channel(16)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,45 +57,44 @@ pub struct ClusterLeaderNodeActor {
     term_id: TermId,
     cluster_node_addresses: HashMap<ClusterNodeId, SocketAddr>,
 
-    sender: ClusterLeaderNodeActorSender,
-    receiver: ClusterLeaderNodeActorReceiver,
+    tcp_listener_incoming_sender: TcpListenerIncomingSender,
+    tcp_listener_outgoing_receiver: TcpListenerOutgoingReceiver,
+    cluster_leader_node_incoming_sender: ClusterLeaderNodeIncomingSender,
+    cluster_node_incoming_sender: ClusterNodeIncomingSender,
 }
 
 impl ClusterLeaderNodeActor {
-    pub fn new(
-        tcp_listener_message_sender: mpsc::Sender<TcpListenerMessage>,
-        tcp_listener_result_receiver: mpsc::Receiver<Result<(TcpStream, SocketAddr), io::Error>>,
-    ) -> mpsc::Sender<ClusterLeaderNodeMessage> {
-        let (cluster_leader_node_message_sender, cluster_leader_node_message_receiver) =
-            mpsc::channel(16);
+    pub async fn new<T>(address: T, cluster_node_incoming_sender: ClusterNodeIncomingSender) -> Result<ClusterLeaderNodeIncomingSender, Box<dyn Error>>
+    where
+        T: ToSocketAddrs,
+    {
+        let (tcp_listener_incoming_sender, tcp_listener_outgoing_receiver) =
+            TcpListenerActor::new(TcpListener::bind(address).await?);
 
-        let result = cluster_leader_node_message_sender.clone();
+        let (cluster_leader_node_incoming_sender, cluster_leader_node_incoming_receiver) =
+            cluster_leader_node_incoming_channel();
+
+        let mut instance = Self {
+            cluster_node_id: 0,
+            term_id: 0,
+            cluster_node_addresses: HashMap::default(),
+            tcp_listener_incoming_sender,
+            tcp_listener_outgoing_receiver,
+            cluster_leader_node_incoming_sender: cluster_leader_node_incoming_sender.clone(),
+            cluster_node_incoming_sender,
+        };
 
         spawn(async move {
-            (Self {
-                sender: ClusterLeaderNodeActorSender {
-                    _tcp_listener_message: tcp_listener_message_sender,
-                    cluster_leader_node_message: cluster_leader_node_message_sender.clone(),
-                },
-                receiver: ClusterLeaderNodeActorReceiver {
-                    cluster_leader_node_message: cluster_leader_node_message_receiver,
-                    tcp_listener_result: tcp_listener_result_receiver,
-                },
-                cluster_node_id: 0,
-                term_id: 0,
-                cluster_node_addresses: HashMap::default(),
-            })
-            .main()
-            .await;
+            instance.main().await;
         });
 
-        result
+        Ok(cluster_leader_node_incoming_sender)
     }
 
     async fn main(&mut self) {
         loop {
             select!(
-                message = self.receiver.cluster_leader_node_message.recv() => {
+                /*message = self.receiver.cluster_leader_node_message.recv() => {
                     let message = match message {
                         None => break,
                         Some(message) => message,
@@ -119,8 +118,8 @@ impl ClusterLeaderNodeActor {
                             };
                         }
                     };
-                },
-                result = self.receiver.tcp_listener_result.recv() => {
+                },*/
+                /*result = self.receiver.tcp_listener_result.recv() => {
                     let (stream, address) = match result {
                         None => break,
                         Some(Err(error)) => {
@@ -132,17 +131,17 @@ impl ClusterLeaderNodeActor {
 
                     trace!("Connection from {}", address);
 
-                    let (tcp_stream_result_sender, tcp_stream_result_receiver) = mpsc::channel(16);
+                    //let (tcp_stream_result_sender, tcp_stream_result_receiver) = mpsc::channel(16);
 
-                    ClusterLeaderNodeConnectionActor::new(
+                    /*ClusterLeaderNodeConnectionActor::new(
                         tcp_stream_result_receiver,
                         TcpStreamActor::new(
                             tcp_stream_result_sender,
                             stream,
                         ),
                         self.sender.cluster_leader_node_message.clone(),
-                    );
-                }
+                    );*/
+                }*/
             )
         }
     }

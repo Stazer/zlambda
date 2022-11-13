@@ -1,6 +1,6 @@
 use crate::cluster::node::ClusterNodeId;
 use crate::cluster::{ClusterMessage, ClusterMessageReader, TermId};
-use crate::tcp::{TcpListenerMessage, TcpStreamMessage};
+use crate::tcp::{TcpListenerIncomingSender, TcpStreamMessage};
 use bytes::Bytes;
 use std::error::Error;
 use std::io;
@@ -28,7 +28,7 @@ pub struct ClusterFollowerNodeActorReceiver {
 
 #[derive(Debug)]
 pub struct ClusterFollowerNodeActorSender {
-    tcp_listener_message: Sender<TcpListenerMessage>,
+    tcp_listener_message: TcpListenerIncomingMessageSender,
     tcp_stream_message: Sender<TcpStreamMessage>,
 }
 
@@ -47,7 +47,7 @@ pub struct ClusterFollowerNodeActor {
 
 impl ClusterFollowerNodeActor {
     pub async fn new(
-        tcp_listener_message_sender: Sender<TcpListenerMessage>,
+        tcp_listener_message_sender: TcpListenerIncomingMessageSender,
         tcp_listener_result_receiver: Receiver<Result<(TcpStream, SocketAddr), io::Error>>,
         tcp_stream_message_sender: Sender<TcpStreamMessage>,
         mut tcp_stream_result_receiver: Receiver<Result<Bytes, io::Error>>,
