@@ -7,7 +7,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use tracing_subscriber::fmt::init;
 use zlambda_common::Library;
-use zlambda_server::cluster::node::ClusterNodeActor;
+use zlambda_server::cluster::node::ClusterNode;
 use zlambda_server::runtime::Runtime;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,12 +49,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             let runtime = Runtime::new()?;
 
             runtime.block_on(async move {
-                let sender = match ClusterNodeActor::new(listener_address, leader_address).await {
+                let mut node = match ClusterNode::new(listener_address, leader_address).await {
                     Ok(sender) => sender,
                     Err(error) => return Err(error),
                 };
 
-                sender.closed().await;
+                node.main().await;
 
                 Ok(())
             })?;

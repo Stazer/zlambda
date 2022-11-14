@@ -9,7 +9,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::io;
 use std::net::SocketAddr;
+use tokio::io::AsyncWriteExt;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio_stream::StreamExt;
+use tokio_util::io::ReaderStream;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,13 +22,58 @@ pub type TermId = u64;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub enum ClusterMessageError {
+    UnexpectedEnd,
+    PostcardError(postcard::Error),
+    IoError(io::Error),
+}
+
+impl Debug for ClusterMessageError {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
+            Self::PostcardError(error) => Debug::fmt(error, formatter),
+            Self::IoError(error) => Debug::fmt(error, formatter),
+        }
+    }
+}
+
+impl Display for ClusterMessageError {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
+            Self::PostcardError(error) => Display::fmt(error, formatter),
+            Self::IoError(error) => Display::fmt(error, formatter),
+        }
+    }
+}
+
+impl error::Error for ClusterMessageError {}
+
+impl From<postcard::Error> for ClusterMessageError {
+    fn from(error: postcard::Error) -> Self {
+        match error {
+            postcard::Error::DeserializeUnexpectedEnd => Self::UnexpectedEnd,
+            e => Self::PostcardError(e),
+        }
+    }
+}
+
+impl From<io::Error> for ClusterMessageError {
+    fn from(error: io::Error) -> Self {
+        Self::IoError(error)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ClusterMessage {
-    RegisterRequest,
+    RegisterRequest { address: SocketAddr },
     RegisterResponse {
-        cluster_node_id: ClusterNodeId,
-        cluster_leader_node_id: ClusterNodeId,
-        cluster_node_addresses: HashMap<ClusterNodeId, SocketAddr>,
+        node_id: ClusterNodeId,
+        leader_node_id: ClusterNodeId,
+        node_addresses: HashMap<ClusterNodeId, SocketAddr>,
         term_id: TermId,
     },
     AppendEntriesRequest,
@@ -33,107 +83,92 @@ pub enum ClusterMessage {
 }
 
 impl ClusterMessage {
-    pub fn from_vec(bytes: &Vec<u8>) -> Result<(usize, Self), ReadClusterMessageError> {
+    pub fn from_vec(bytes: &Vec<u8>) -> Result<(usize, Self), ClusterMessageError> {
         let (packet, remaining) = take_from_bytes::<Self>(bytes)?;
         Ok((bytes.len() - remaining.len(), packet))
     }
 
-    pub fn to_vec(&self) -> Result<Vec<u8>, WriteClusterMessageError> {
+    pub fn to_vec(&self) -> Result<Vec<u8>, ClusterMessageError> {
         Ok(to_allocvec(&self)?)
     }
 
-    pub fn to_bytes(&self) -> Result<Bytes, WriteClusterMessageError> {
+    pub fn to_bytes(&self) -> Result<Bytes, ClusterMessageError> {
         Ok(Bytes::from(self.to_vec()?))
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub enum ReadClusterMessageError {
-    UnexpectedEnd,
-    PostcardError(postcard::Error),
-}
-
-impl Debug for ReadClusterMessageError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        match self {
-            Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
-            Self::PostcardError(error) => Debug::fmt(error, formatter),
-        }
-    }
-}
-
-impl Display for ReadClusterMessageError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        match self {
-            Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
-            Self::PostcardError(error) => Display::fmt(error, formatter),
-        }
-    }
-}
-
-impl error::Error for ReadClusterMessageError {}
-
-impl From<postcard::Error> for ReadClusterMessageError {
-    fn from(error: postcard::Error) -> Self {
-        match error {
-            postcard::Error::DeserializeUnexpectedEnd => Self::UnexpectedEnd,
-            e => Self::PostcardError(e),
-        }
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub enum WriteClusterMessageError {
-    PostcardError(postcard::Error),
-}
-
-impl Debug for WriteClusterMessageError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        match self {
-            Self::PostcardError(error) => Debug::fmt(error, formatter),
-        }
-    }
-}
-
-impl Display for WriteClusterMessageError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        match self {
-            Self::PostcardError(error) => Display::fmt(error, formatter),
-        }
-    }
-}
-
-impl error::Error for WriteClusterMessageError {}
-
-impl From<postcard::Error> for WriteClusterMessageError {
-    fn from(error: postcard::Error) -> Self {
-        Self::PostcardError(error)
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #[derive(Clone, Debug, Default)]
-pub struct ClusterMessageReader {
+pub struct ClusterMessageBufferReader {
     buffer: Vec<u8>,
 }
 
-impl ClusterMessageReader {
+impl ClusterMessageBufferReader {
     pub fn push(&mut self, bytes: Bytes) {
         self.buffer.extend(bytes);
     }
 
-    pub fn next(&mut self) -> Result<Option<ClusterMessage>, ReadClusterMessageError> {
+    pub fn next(&mut self) -> Result<Option<ClusterMessage>, ClusterMessageError> {
         let (read, message) = match ClusterMessage::from_vec(&self.buffer) {
             Ok((read, message)) => (read, message),
-            Err(ReadClusterMessageError::UnexpectedEnd) => return Ok(None),
+            Err(ClusterMessageError::UnexpectedEnd) => return Ok(None),
             Err(error) => return Err(error),
         };
 
         self.buffer.drain(0..read);
 
         Ok(Some(message))
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ClusterMessageStreamReader {
+    buffer: ClusterMessageBufferReader,
+    reader: ReaderStream<OwnedReadHalf>,
+}
+
+impl ClusterMessageStreamReader {
+    pub fn new(reader: OwnedReadHalf) -> Self {
+        Self {
+            buffer: ClusterMessageBufferReader::default(),
+            reader: ReaderStream::new(reader),
+        }
+    }
+
+    pub async fn read(&mut self) -> Result<Option<ClusterMessage>, ClusterMessageError> {
+        match self.buffer.next()? {
+            Some(item) => Ok(Some(item)),
+            None => {
+                let bytes = match self.reader.next().await {
+                    None => return Ok(None),
+                    Some(Err(error)) => return Err(error.into()),
+                    Some(Ok(bytes)) => bytes,
+                };
+
+                self.buffer.push(bytes);
+
+                self.buffer.next()
+            }
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ClusterMessageStreamWriter {
+    writer: OwnedWriteHalf,
+}
+
+impl ClusterMessageStreamWriter {
+    pub fn new(writer: OwnedWriteHalf) -> Self {
+        Self { writer }
+    }
+
+    pub async fn write(&mut self, message: &ClusterMessage) -> Result<(), ClusterMessageError> {
+        Ok(self.writer.write(&message.to_bytes()?).await.map(|_| ())?)
     }
 }
