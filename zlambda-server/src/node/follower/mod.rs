@@ -9,14 +9,8 @@ pub struct FollowerNode {
 }
 
 impl FollowerNode {
-    pub fn new(
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
-    ) -> Self {
-        Self {
-            reader,
-            writer,
-        }
+    pub fn new(reader: MessageStreamReader, writer: MessageStreamWriter) -> Self {
+        Self { reader, writer }
     }
 
     pub fn reader_mut(&mut self) -> &mut MessageStreamReader {

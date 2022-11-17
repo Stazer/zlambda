@@ -1,11 +1,11 @@
-use crate::node::leader::LeaderNode;
 use crate::node::leader::follower::LeaderNodeFollower;
+use crate::node::leader::LeaderNode;
 use crate::node::message::{
     ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
     MessageStreamWriter,
 };
 use crate::node::Node;
-use crate::read_write::ReadWriteSender;
+use crate::read_write::{read_write_channel, ReadWriteSender};
 use tokio::{select, spawn};
 use tracing::error;
 
@@ -41,7 +41,9 @@ impl LeaderNodeConnection {
         leader_node_read_sender: ReadWriteSender<LeaderNode>,
     ) {
         spawn(async move {
-            Self::new(reader, writer, node_read_sender, leader_node_read_sender).main().await;
+            Self::new(reader, writer, node_read_sender, leader_node_read_sender)
+                .main()
+                .await;
         });
     }
 
@@ -60,10 +62,10 @@ impl LeaderNodeConnection {
                     match message {
                         None => continue,
                         Some(Message::Cluster(ClusterMessage::RegisterRequest { address })) => {
-
+                            let (sender, receiver) = read_write_channel();
 
                             let function = move |node: &mut Node| {
-                                (node.register_follower(address), node.leader_id, node.term, node.addresses.clone())
+                                (node.register_follower(address, sender), node.leader_id, node.term, node.addresses.clone())
                             };
 
                             let (id, leader_id, term, addresses) = match self.node_read_sender.send(function).await {
@@ -82,6 +84,7 @@ impl LeaderNodeConnection {
 
                             LeaderNodeFollower::spawn(
                                 id,
+                                receiver,
                                 self.reader,
                                 self.writer,
                                 self.node_read_sender,

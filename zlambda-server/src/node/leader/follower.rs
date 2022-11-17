@@ -1,10 +1,7 @@
 use crate::node::leader::LeaderNode;
+use crate::node::message::{MessageStreamReader, MessageStreamWriter};
 use crate::node::{Node, NodeId};
-use crate::read_write::ReadWriteSender;
-use crate::node::message::{
-    MessageStreamReader,
-    MessageStreamWriter,
-};
+use crate::read_write::{ReadWriteReceiver, ReadWriteSender};
 use tokio::{select, spawn};
 use tracing::error;
 
@@ -13,6 +10,7 @@ use tracing::error;
 #[derive(Debug)]
 pub struct LeaderNodeFollower {
     id: NodeId,
+    receiver: ReadWriteReceiver<LeaderNodeFollower>,
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
     node_read_sender: ReadWriteSender<Node>,
@@ -20,22 +18,43 @@ pub struct LeaderNodeFollower {
 }
 
 impl LeaderNodeFollower {
-    fn new(id: NodeId, reader: MessageStreamReader, writer: MessageStreamWriter,
+    fn new(
+        id: NodeId,
+        receiver: ReadWriteReceiver<LeaderNodeFollower>,
+        reader: MessageStreamReader,
+        writer: MessageStreamWriter,
         node_read_sender: ReadWriteSender<Node>,
         leader_node_read_sender: ReadWriteSender<LeaderNode>,
     ) -> Self {
-        Self { id, reader, writer,
+        Self {
+            id,
+            receiver,
+            reader,
+            writer,
             node_read_sender,
             leader_node_read_sender,
         }
     }
 
-    pub fn spawn(id: NodeId, reader: MessageStreamReader, writer: MessageStreamWriter,
+    pub fn spawn(
+        id: NodeId,
+        receiver: ReadWriteReceiver<LeaderNodeFollower>,
+        reader: MessageStreamReader,
+        writer: MessageStreamWriter,
         node_read_sender: ReadWriteSender<Node>,
         leader_node_read_sender: ReadWriteSender<LeaderNode>,
     ) {
         spawn(async move {
-            Self::new(id, reader, writer, node_read_sender, leader_node_read_sender).main().await;
+            Self::new(
+                id,
+                receiver,
+                reader,
+                writer,
+                node_read_sender,
+                leader_node_read_sender,
+            )
+            .main()
+            .await;
         });
     }
 
@@ -58,6 +77,16 @@ impl LeaderNodeFollower {
                             break
                         }
                     };
+                }
+                receive_result = self.receiver.recv() => {
+                    let function = match receive_result {
+                        None => {
+                            break
+                        }
+                        Some(function) => function,
+                    };
+
+                    function(&mut self);
                 }
             )
         }

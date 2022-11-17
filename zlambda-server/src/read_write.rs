@@ -66,7 +66,7 @@ where
 {
     pub async fn send<'a, F, R>(&self, reader: F) -> Result<R, ReadWriteError<ReadWriteMessage<T>>>
     where
-        F: Fn(&mut T) -> R + Send + 'a + 'static,
+        F: FnOnce(&mut T) -> R + Send + 'a + 'static,
         R: Send + Debug + 'static,
     {
         let (sender, receiver) = oneshot::channel::<R>();

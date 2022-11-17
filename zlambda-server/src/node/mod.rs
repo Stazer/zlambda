@@ -1,12 +1,14 @@
-pub mod leader;
 pub mod follower;
+pub mod leader;
 pub mod message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use crate::read_write::{read_write_channel, ReadWriteReceiver, ReadWriteSender};
-use leader::connection::LeaderNodeConnection;
 use crate::algorithm::next_key;
+use crate::read_write::{read_write_channel, ReadWriteReceiver, ReadWriteSender};
+use follower::FollowerNode;
+use leader::connection::LeaderNodeConnection;
+use leader::follower::LeaderNodeFollower;
 use leader::LeaderNode;
 use message::{
     ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
@@ -17,7 +19,6 @@ use std::error::Error;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::{select, spawn};
-use follower::FollowerNode;
 use tracing::{error, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -215,11 +216,21 @@ impl Node {
         }
     }
 
-    fn register_follower(&mut self, address: SocketAddr) -> NodeId {
-        assert!(matches!(self.r#type, NodeType::Leader(_)));
+    fn register_follower(
+        &mut self,
+        address: SocketAddr,
+        sender: ReadWriteSender<LeaderNodeFollower>,
+    ) -> NodeId {
+        let leader = match &mut self.r#type {
+            NodeType::Leader(ref mut leader) => leader,
+            _ => {
+                panic!("Node type must be leader");
+            }
+        };
 
         let id = next_key(self.addresses.keys());
         self.addresses.insert(id, address);
+        leader.follower_senders_mut().insert(id, sender);
 
         id
     }
