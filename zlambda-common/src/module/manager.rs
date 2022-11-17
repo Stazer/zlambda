@@ -14,7 +14,7 @@ pub struct ModuleManager {
 }
 
 impl ModuleManager {
-    pub async fn load(&self, path: &Path) {}
+    pub async fn load(&self, _path: &Path) {}
 
-    pub async fn dispatch(&self, name: &String, version: &Option<ModuleVersion>) {}
+    pub async fn dispatch(&self, _name: &String, _version: &Option<ModuleVersion>) {}
 }

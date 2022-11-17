@@ -16,7 +16,7 @@ impl Module for ModuleImplementation {
         )
     }
 
-    async fn on_dispatch(&self, event: DispatchEvent) {}
+    async fn on_dispatch(&self, _event: DispatchEvent) {}
 }
 
 #[no_mangle]

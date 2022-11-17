@@ -1,4 +1,5 @@
 pub mod leader;
+pub mod follower;
 pub mod message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,6 +17,7 @@ use std::error::Error;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::{select, spawn};
+use follower::FollowerNode;
 use tracing::{error, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,10 +33,7 @@ pub type Term = u64;
 #[derive(Debug)]
 pub enum NodeType {
     Leader(LeaderNode),
-    Follower {
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
-    },
+    Follower(FollowerNode),
     Candidate {},
 }
 
@@ -126,7 +125,7 @@ impl Node {
             leader_id,
             term,
             tcp_listener,
-            NodeType::Follower { reader, writer },
+            NodeType::Follower(FollowerNode::new(reader, writer)),
             addresses,
         ))
     }
@@ -205,10 +204,9 @@ impl Node {
                         }
                     )
                 }
-                NodeType::Follower { reader, .. } => {
+                NodeType::Follower(follower) => {
                     select!(
-                        read_result = reader.read() => {
-
+                        _read_result = follower.reader_mut().read() => {
                         }
                     )
                 }

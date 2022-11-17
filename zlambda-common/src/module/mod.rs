@@ -24,5 +24,5 @@ pub use async_trait::async_trait;
 pub trait Module: Send + Sync {
     fn specification(&self) -> ModuleSpecification;
 
-    async fn on_dispatch(&self, event: DispatchEvent) {}
+    async fn on_dispatch(&self, _event: DispatchEvent) {}
 }

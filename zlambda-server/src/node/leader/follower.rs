@@ -1,8 +1,8 @@
 use crate::node::leader::LeaderNode;
-use crate::node::Node;
+use crate::node::{Node, NodeId};
 use crate::read_write::ReadWriteSender;
 use crate::node::message::{
-    ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
+    MessageStreamReader,
     MessageStreamWriter,
 };
 use tokio::{select, spawn};
@@ -12,6 +12,7 @@ use tracing::error;
 
 #[derive(Debug)]
 pub struct LeaderNodeFollower {
+    id: NodeId,
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
     node_read_sender: ReadWriteSender<Node>,
@@ -19,29 +20,26 @@ pub struct LeaderNodeFollower {
 }
 
 impl LeaderNodeFollower {
-    fn new(reader: MessageStreamReader, writer: MessageStreamWriter,
+    fn new(id: NodeId, reader: MessageStreamReader, writer: MessageStreamWriter,
         node_read_sender: ReadWriteSender<Node>,
         leader_node_read_sender: ReadWriteSender<LeaderNode>,
     ) -> Self {
-        Self { reader, writer,
+        Self { id, reader, writer,
             node_read_sender,
             leader_node_read_sender,
         }
     }
 
-    pub fn spawn(reader: MessageStreamReader, writer: MessageStreamWriter,
+    pub fn spawn(id: NodeId, reader: MessageStreamReader, writer: MessageStreamWriter,
         node_read_sender: ReadWriteSender<Node>,
         leader_node_read_sender: ReadWriteSender<LeaderNode>,
     ) {
         spawn(async move {
-            let mut follower =
-                Self::new(reader, writer, node_read_sender, leader_node_read_sender);
-
-            follower.main().await;
+            Self::new(id, reader, writer, node_read_sender, leader_node_read_sender).main().await;
         });
     }
 
-    async fn main(&mut self) {
+    async fn main(mut self) {
         loop {
             select!(
                 read_result = self.reader.read() => {

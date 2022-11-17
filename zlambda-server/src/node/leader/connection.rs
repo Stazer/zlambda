@@ -41,10 +41,7 @@ impl LeaderNodeConnection {
         leader_node_read_sender: ReadWriteSender<LeaderNode>,
     ) {
         spawn(async move {
-            let mut connection =
-                Self::new(reader, writer, node_read_sender, leader_node_read_sender);
-
-            connection.main().await;
+            Self::new(reader, writer, node_read_sender, leader_node_read_sender).main().await;
         });
     }
 
@@ -63,6 +60,8 @@ impl LeaderNodeConnection {
                     match message {
                         None => continue,
                         Some(Message::Cluster(ClusterMessage::RegisterRequest { address })) => {
+
+
                             let function = move |node: &mut Node| {
                                 (node.register_follower(address), node.leader_id, node.term, node.addresses.clone())
                             };
@@ -82,6 +81,7 @@ impl LeaderNodeConnection {
                             ))).await;
 
                             LeaderNodeFollower::spawn(
+                                id,
                                 self.reader,
                                 self.writer,
                                 self.node_read_sender,
