@@ -1,5 +1,5 @@
-use crate::node::leader::LeaderNode;
-use crate::node::message::{MessageStreamReader, MessageStreamWriter};
+use crate::log::LogEntryData;
+use crate::node::message::{ClusterMessage, Message, MessageStreamReader, MessageStreamWriter};
 use crate::node::{Node, NodeId};
 use crate::read_write::{ReadWriteReceiver, ReadWriteSender};
 use tokio::{select, spawn};
@@ -13,8 +13,7 @@ pub struct LeaderNodeFollower {
     receiver: ReadWriteReceiver<LeaderNodeFollower>,
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    node_read_sender: ReadWriteSender<Node>,
-    leader_node_read_sender: ReadWriteSender<LeaderNode>,
+    node_sender: ReadWriteSender<Node>,
 }
 
 impl LeaderNodeFollower {
@@ -23,16 +22,14 @@ impl LeaderNodeFollower {
         receiver: ReadWriteReceiver<LeaderNodeFollower>,
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        node_read_sender: ReadWriteSender<Node>,
-        leader_node_read_sender: ReadWriteSender<LeaderNode>,
+        node_sender: ReadWriteSender<Node>,
     ) -> Self {
         Self {
             id,
             receiver,
             reader,
             writer,
-            node_read_sender,
-            leader_node_read_sender,
+            node_sender,
         }
     }
 
@@ -41,20 +38,12 @@ impl LeaderNodeFollower {
         receiver: ReadWriteReceiver<LeaderNodeFollower>,
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        node_read_sender: ReadWriteSender<Node>,
-        leader_node_read_sender: ReadWriteSender<LeaderNode>,
+        node_sender: ReadWriteSender<Node>,
     ) {
         spawn(async move {
-            Self::new(
-                id,
-                receiver,
-                reader,
-                writer,
-                node_read_sender,
-                leader_node_read_sender,
-            )
-            .main()
-            .await;
+            Self::new(id, receiver, reader, writer, node_sender)
+                .main()
+                .await;
         });
     }
 
@@ -63,7 +52,8 @@ impl LeaderNodeFollower {
             select!(
                 read_result = self.reader.read() => {
                     let message = match read_result {
-                        Ok(message) => message,
+                        Ok(None) => break,
+                        Ok(Some(message)) => message,
                         Err(error) => {
                             error!("{}", error);
                             break
@@ -71,9 +61,22 @@ impl LeaderNodeFollower {
                     };
 
                     match message {
-                        None => continue,
-                        Some(message) => {
-                            error!("Unhandled message {:?}", message);
+                        Message::Cluster(ClusterMessage::AppendEntriesResponse { log_entry_ids }) => {
+                            let result = self.node_sender.send({
+                                let id = self.id;
+
+                                move |node| {
+                                    node.acknowledge(log_entry_ids, id);
+                                }
+                            }).await;
+
+                            if let Err(error) = result {
+                                error!("{}", error);
+                                break
+                            }
+                        }
+                        message => {
+                            error!("Unexpected message {:?}", message);
                             break
                         }
                     };
@@ -91,4 +94,6 @@ impl LeaderNodeFollower {
             )
         }
     }
+
+    pub async fn replicate(&mut self, log_entry_data: LogEntryData) {}
 }

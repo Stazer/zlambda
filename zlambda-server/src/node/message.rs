@@ -1,3 +1,4 @@
+use crate::log::{LogEntryData, LogEntryId};
 use crate::node::{NodeId, Term};
 use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
@@ -76,10 +77,17 @@ pub enum ClusterMessageRegisterResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum ClusterMessage {
-    RegisterRequest { address: SocketAddr },
+    RegisterRequest {
+        address: SocketAddr,
+    },
     RegisterResponse(ClusterMessageRegisterResponse),
-    AppendEntriesRequest,
-    AppendEntriesResponse,
+    AppendEntriesRequest {
+        term: Term,
+        log_entry_data: Vec<LogEntryData>,
+    },
+    AppendEntriesResponse {
+        log_entry_ids: Vec<LogEntryId>,
+    },
     RequestVoteRequest,
     RequestVoteResponse,
 }

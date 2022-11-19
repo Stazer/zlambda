@@ -1,5 +1,4 @@
 use crate::node::leader::follower::LeaderNodeFollower;
-use crate::node::leader::LeaderNode;
 use crate::node::message::{
     ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
     MessageStreamWriter,
@@ -15,35 +14,29 @@ use tracing::error;
 pub struct LeaderNodeConnection {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    node_read_sender: ReadWriteSender<Node>,
-    leader_node_read_sender: ReadWriteSender<LeaderNode>,
+    node_sender: ReadWriteSender<Node>,
 }
 
 impl LeaderNodeConnection {
     fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        node_read_sender: ReadWriteSender<Node>,
-        leader_node_read_sender: ReadWriteSender<LeaderNode>,
+        node_sender: ReadWriteSender<Node>,
     ) -> Self {
         Self {
             reader,
             writer,
-            node_read_sender,
-            leader_node_read_sender,
+            node_sender,
         }
     }
 
     pub fn spawn(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        node_read_sender: ReadWriteSender<Node>,
-        leader_node_read_sender: ReadWriteSender<LeaderNode>,
+        node_sender: ReadWriteSender<Node>,
     ) {
         spawn(async move {
-            Self::new(reader, writer, node_read_sender, leader_node_read_sender)
-                .main()
-                .await;
+            Self::new(reader, writer, node_sender).main().await;
         });
     }
 
@@ -68,7 +61,7 @@ impl LeaderNodeConnection {
                                 (node.register_follower(address, sender), node.leader_id, node.term, node.addresses.clone())
                             };
 
-                            let (id, leader_id, term, addresses) = match self.node_read_sender.send(function).await {
+                            let (id, leader_id, term, addresses) = match self.node_sender.send(function).await {
                                 Ok(values) => values,
                                 Err(error) => {
                                     error!("{}", error);
@@ -76,19 +69,23 @@ impl LeaderNodeConnection {
                                 }
                             };
 
-                            self.writer.write(&Message::Cluster(ClusterMessage::RegisterResponse(
+                            let result = self.writer.write(&Message::Cluster(ClusterMessage::RegisterResponse(
                                 ClusterMessageRegisterResponse::Ok {
                                     id, leader_id, term, addresses
                                 }
                             ))).await;
+
+                            if let Err(error) = result {
+                                error!("{}", error);
+                                break;
+                            }
 
                             LeaderNodeFollower::spawn(
                                 id,
                                 receiver,
                                 self.reader,
                                 self.writer,
-                                self.node_read_sender,
-                                self.leader_node_read_sender,
+                                self.node_sender,
                             );
 
                             break

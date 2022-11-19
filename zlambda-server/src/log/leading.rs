@@ -50,11 +50,19 @@ impl LeadingLogEntry {
 
     pub fn acknowledge(&mut self, node_id: NodeId) {
         if !self.acknowledging_nodes.contains(&node_id) {
-            panic!("Log entry {} cannot be acknowledged by node {}", self.data.id(), node_id);
+            panic!(
+                "Log entry {} cannot be acknowledged by node {}",
+                self.data.id(),
+                node_id
+            );
         }
 
         if self.acknowledged_nodes.contains(&node_id) {
-            panic!("Log entry {} already acknowledged by node {}", self.data.id(), node_id);
+            panic!(
+                "Log entry {} already acknowledged by node {}",
+                self.data.id(),
+                node_id
+            );
         }
 
         self.acknowledged_nodes.insert(node_id);
@@ -68,18 +76,18 @@ impl LeadingLogEntry {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Default)]
-pub struct LeadingActorLogEntries {
+pub struct LeadingLog {
     log_entries: HashMap<LogEntryId, LeadingLogEntry>,
     next_committing_log_entry_id: LogEntryId,
 }
 
-impl LeadingActorLogEntries {
+impl LeadingLog {
     fn next_log_entry_id(&self) -> LogEntryId {
         next_key(self.log_entries.keys())
     }
 }
 
-impl LeadingActorLogEntries {
+impl LeadingLog {
     pub fn get(&self, id: LogEntryId) -> Option<&LeadingLogEntry> {
         self.log_entries.get(&id)
     }
@@ -132,14 +140,14 @@ mod test {
 
     #[test]
     fn is_log_entry_uncommitted() {
-        let mut entries = LeadingActorLogEntries::default();
+        let mut entries = LeadingLog::default();
         let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
         assert_eq!(entries.get(first).unwrap().is_committed(), false);
     }
 
     #[test]
     fn is_log_entry_committed() {
-        let mut entries = LeadingActorLogEntries::default();
+        let mut entries = LeadingLog::default();
         let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
         entries.acknowledge(first, 0);
         entries.acknowledge(first, 1);
@@ -150,7 +158,7 @@ mod test {
     #[test]
     #[should_panic]
     fn is_double_acknowledgement_failing() {
-        let mut entries = LeadingActorLogEntries::default();
+        let mut entries = LeadingLog::default();
         let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
         entries.acknowledge(first, 0);
         entries.acknowledge(first, 0);
@@ -159,7 +167,7 @@ mod test {
     #[test]
     #[should_panic]
     fn is_acknowledging_not_existing_log_entry_failing() {
-        let mut entries = LeadingActorLogEntries::default();
+        let mut entries = LeadingLog::default();
         let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
         entries.acknowledge(first + 1, 1);
     }
@@ -167,14 +175,14 @@ mod test {
     #[test]
     #[should_panic]
     fn is_acknowledging_not_existing_node_failing() {
-        let mut entries = LeadingActorLogEntries::default();
+        let mut entries = LeadingLog::default();
         let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
         entries.acknowledge(first, 3);
     }
 
     #[test]
     fn are_log_entry_ids_ascending() {
-        let mut entries = LeadingActorLogEntries::default();
+        let mut entries = LeadingLog::default();
         let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
         let second = entries.begin(LogEntryType::Add(2), [0, 1, 2, 3, 4].into());
 
@@ -183,14 +191,14 @@ mod test {
 
     #[test]
     fn is_last_committed_id_initially_none() {
-        let entries = LeadingActorLogEntries::default();
+        let entries = LeadingLog::default();
 
         assert_eq!(entries.last_committed_log_entry_id(), None);
     }
 
     #[test]
     fn is_last_committed_valid_after_synchronous_acknowledgement() {
-        let mut entries = LeadingActorLogEntries::default();
+        let mut entries = LeadingLog::default();
         let first = entries.begin(LogEntryType::Add(2), [0, 1, 2].into());
         let second = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
         let third = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
@@ -209,7 +217,7 @@ mod test {
 
     #[test]
     fn is_last_committed_valid_after_asynchronous_missing_acknowledgement() {
-        let mut entries = LeadingActorLogEntries::default();
+        let mut entries = LeadingLog::default();
         let first = entries.begin(LogEntryType::Add(2), [0, 1, 2].into());
         let second = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
         let third = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
@@ -230,7 +238,7 @@ mod test {
 
     #[test]
     fn is_last_committed_valid_after_asynchronous_recovering_acknowledgement() {
-        let mut entries = LeadingActorLogEntries::default();
+        let mut entries = LeadingLog::default();
         let first = entries.begin(LogEntryType::Add(2), [0, 1, 2].into());
         let second = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
         let third = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());

@@ -2,6 +2,7 @@ use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,6 +46,9 @@ impl<T> From<oneshot::error::RecvError> for ReadWriteError<T> {
     }
 }
 
+use std::future::Future;
+use futures::future::BoxFuture;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type ReadWriteMessage<T> = Box<dyn FnOnce(&mut T) + Send>;
@@ -67,18 +71,45 @@ where
     pub async fn send<'a, F, R>(&self, reader: F) -> Result<R, ReadWriteError<ReadWriteMessage<T>>>
     where
         F: FnOnce(&mut T) -> R + Send + 'a + 'static,
-        R: Send + Debug + 'static,
+        R: Send + 'static,
     {
         let (sender, receiver) = oneshot::channel::<R>();
 
         self.0
             .send(Box::new(move |x| {
-                sender.send(reader(x)).expect("Cannot send value");
+                if sender.send(reader(x)).is_err() {
+                    error!("Cannot send value");
+                }
             }))
             .await?;
 
         receiver.await.map_err(ReadWriteError::from)
     }
+
+    pub async fn send_async<'a, F, R, S>(&self, reader: F) -> Result<R, ReadWriteError<ReadWriteMessage<T>>>
+    where
+        F: FnOnce(&'a mut T) -> S + Send + 'a + 'static,
+        R: Send + 'static,
+        S: Future<Output = R>,
+        T: Sync + Send,
+    {
+        let (sender, receiver) = oneshot::channel::<R>();
+
+        /*self.0
+            .send(Box::new(move |x| {
+                tokio::spawn(async move {
+                    reader(x).await;
+                });
+
+                /*if sender.send(reader(x)).is_err() {
+                    error!("Cannot send value");
+                }*/
+            }))
+            .await?;*/
+
+        receiver.await.map_err(ReadWriteError::from)
+    }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
