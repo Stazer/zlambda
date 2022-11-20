@@ -4,10 +4,11 @@ use tracing::trace;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Default)]
-pub struct State {}
+pub struct State {
+}
 
 impl State {
-    pub fn apply(&mut self, log_entry_type: ClientLogEntryType) {
-        trace!("Applying {:?}", &log_entry_type);
+    pub fn apply(&mut self, client_log_entry_type: ClientLogEntryType) {
+        trace!("Applying {:?}", &client_log_entry_type);
     }
 }

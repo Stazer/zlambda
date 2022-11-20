@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use zlambda_common::library::Library;
 use zlambda_server::node::Node;
 use zlambda_common::runtime::Runtime;
+use zlambda_client::Client;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,7 +28,9 @@ enum MainCommand {
         listener_address: String,
         leader_address: Option<String>,
     },
-    Client,
+    Client {
+        address: String,
+    },
     Module {
         path: PathBuf,
     },
@@ -57,10 +60,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 Ok(())
             })?;
-
-            let _ = runtime.enter();
         }
-        MainCommand::Client => {}
+        MainCommand::Client { address } => {
+            let runtime = Runtime::new()?;
+
+            runtime.block_on(async move {
+                let client = Client::new(address).await;
+            });
+        }
         MainCommand::Module { path } => {
             let library = Library::load(&path)?;
             let modules = library.modules()?;
