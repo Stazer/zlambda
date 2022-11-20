@@ -99,6 +99,19 @@ pub enum ClusterMessage {
 pub enum ClientMessage {
     RegisterRequest,
     RegisterResponse,
+
+    InitializeRequest,
+    InitializeResponse {
+        id: u64
+    },
+    Chunk {
+        id: u64,
+        bytes: Vec<u8>,
+    },
+    LoadRequest {
+        id: u64,
+    },
+
     DispatchRequest,
     DispatchResponse,
 }
