@@ -1,47 +1,58 @@
 use crate::log::LogEntryData;
+use crate::node::leader::LeaderNodeMessage;
 use crate::node::message::{ClusterMessage, Message, MessageStreamReader, MessageStreamWriter};
-use crate::node::{Node, NodeId};
-use crate::read_write::{ReadWriteReceiver, ReadWriteSender};
+use crate::node::{NodeId, Term};
+use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub enum LeaderNodeFollowerMessage {
+    Replicate {
+        term: Term,
+        log_entry_data: Vec<LogEntryData>,
+    },
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct LeaderNodeFollower {
     id: NodeId,
-    receiver: ReadWriteReceiver<LeaderNodeFollower>,
+    receiver: mpsc::Receiver<LeaderNodeFollowerMessage>,
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    node_sender: ReadWriteSender<Node>,
+    leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
 }
 
 impl LeaderNodeFollower {
     fn new(
         id: NodeId,
-        receiver: ReadWriteReceiver<LeaderNodeFollower>,
+        receiver: mpsc::Receiver<LeaderNodeFollowerMessage>,
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        node_sender: ReadWriteSender<Node>,
+        leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
     ) -> Self {
         Self {
             id,
             receiver,
             reader,
             writer,
-            node_sender,
+            leader_node_sender,
         }
     }
 
     pub fn spawn(
         id: NodeId,
-        receiver: ReadWriteReceiver<LeaderNodeFollower>,
+        receiver: mpsc::Receiver<LeaderNodeFollowerMessage>,
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        node_sender: ReadWriteSender<Node>,
+        leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
     ) {
         spawn(async move {
-            Self::new(id, receiver, reader, writer, node_sender)
+            Self::new(id, receiver, reader, writer, leader_node_sender)
                 .main()
                 .await;
         });
@@ -62,12 +73,9 @@ impl LeaderNodeFollower {
 
                     match message {
                         Message::Cluster(ClusterMessage::AppendEntriesResponse { log_entry_ids }) => {
-                            let result = self.node_sender.send({
-                                let id = self.id;
-
-                                move |node| {
-                                    node.acknowledge(log_entry_ids, id);
-                                }
+                            let result = self.leader_node_sender.send(LeaderNodeMessage::Acknowledge {
+                                node_id: self.id,
+                                log_entry_ids,
                             }).await;
 
                             if let Err(error) = result {
@@ -82,18 +90,33 @@ impl LeaderNodeFollower {
                     };
                 }
                 receive_result = self.receiver.recv() => {
-                    let function = match receive_result {
+                    let message = match receive_result {
                         None => {
                             break
                         }
-                        Some(function) => function,
+                        Some(message) => message,
                     };
 
-                    function(&mut self);
+                    match message {
+                        LeaderNodeFollowerMessage::Replicate { term, log_entry_data } => self.replicate(term, log_entry_data).await,
+                    }
                 }
             )
         }
     }
 
-    pub async fn replicate(&mut self, log_entry_data: LogEntryData) {}
+    async fn replicate(&mut self, term: Term, log_entry_data: Vec<LogEntryData>) {
+        let result = self
+            .writer
+            .write(&Message::Cluster(ClusterMessage::AppendEntriesRequest {
+                term,
+                log_entry_data,
+            }))
+            .await;
+
+        if let Err(error) = result {
+            error!("{}", error);
+            return;
+        }
+    }
 }

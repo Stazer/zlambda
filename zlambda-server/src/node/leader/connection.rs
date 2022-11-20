@@ -1,10 +1,10 @@
 use crate::node::leader::follower::LeaderNodeFollower;
+use crate::node::leader::LeaderNodeMessage;
 use crate::node::message::{
     ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
     MessageStreamWriter,
 };
-use crate::node::Node;
-use crate::read_write::{read_write_channel, ReadWriteSender};
+use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 
@@ -14,29 +14,29 @@ use tracing::error;
 pub struct LeaderNodeConnection {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    node_sender: ReadWriteSender<Node>,
+    leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
 }
 
 impl LeaderNodeConnection {
     fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        node_sender: ReadWriteSender<Node>,
+        leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
     ) -> Self {
         Self {
             reader,
             writer,
-            node_sender,
+            leader_node_sender,
         }
     }
 
     pub fn spawn(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        node_sender: ReadWriteSender<Node>,
+        leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
     ) {
         spawn(async move {
-            Self::new(reader, writer, node_sender).main().await;
+            Self::new(reader, writer, leader_node_sender).main().await;
         });
     }
 
@@ -55,18 +55,26 @@ impl LeaderNodeConnection {
                     match message {
                         None => continue,
                         Some(Message::Cluster(ClusterMessage::RegisterRequest { address })) => {
-                            let (sender, receiver) = read_write_channel();
+                            let (follower_sender, follower_receiver) = mpsc::channel(16);
+                            let (result_sender, result_receiver) = oneshot::channel();
 
-                            let function = move |node: &mut Node| {
-                                (node.register_follower(address, sender), node.leader_id, node.term, node.addresses.clone())
-                            };
+                            let result = self.leader_node_sender.send(LeaderNodeMessage::Register {
+                                address,
+                                follower_sender,
+                                result_sender,
+                            }).await;
 
-                            let (id, leader_id, term, addresses) = match self.node_sender.send(function).await {
-                                Ok(values) => values,
+                            if let Err(error) = result {
+                                error!("{}", error);
+                                break
+                            }
+
+                            let (id, leader_id, term, addresses) = match result_receiver.await {
                                 Err(error) => {
                                     error!("{}", error);
                                     break
-                                }
+                                },
+                                Ok(values) => values,
                             };
 
                             let result = self.writer.write(&Message::Cluster(ClusterMessage::RegisterResponse(
@@ -82,10 +90,10 @@ impl LeaderNodeConnection {
 
                             LeaderNodeFollower::spawn(
                                 id,
-                                receiver,
+                                follower_receiver,
                                 self.reader,
                                 self.writer,
-                                self.node_sender,
+                                self.leader_node_sender,
                             );
 
                             break

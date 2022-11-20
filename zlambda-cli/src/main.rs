@@ -5,7 +5,6 @@
 use clap::{Parser, Subcommand};
 use std::error::Error;
 use std::path::PathBuf;
-use tracing_subscriber::fmt::init;
 use zlambda_common::Library;
 use zlambda_server::node::Node;
 use zlambda_server::runtime::Runtime;
@@ -44,11 +43,20 @@ fn main() -> Result<(), Box<dyn Error>> {
             listener_address,
             leader_address,
         } => {
-            init();
+            tracing_subscriber::fmt::init();
 
             let runtime = Runtime::new()?;
 
-            runtime.block_on(Node::spawn(listener_address, leader_address))?;
+            runtime.block_on(async move {
+                let node = match Node::new(listener_address, leader_address).await {
+                    Err(error) => return Err(error),
+                    Ok(node) => node,
+                };
+
+                node.run().await;
+
+                Ok(())
+            })?;
 
             let _ = runtime.enter();
         }

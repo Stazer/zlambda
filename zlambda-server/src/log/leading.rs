@@ -130,6 +130,17 @@ impl LeadingLog {
             }
         }
     }
+
+    pub fn is_applicable(&self, id: LogEntryId) -> bool {
+        self.log_entries
+            .get(&id)
+            .map(|log_entry| log_entry.is_committed())
+            .unwrap_or(false)
+            && self
+                .last_committed_log_entry_id()
+                .map(|log_entry_id| log_entry_id >= id)
+                .unwrap_or(false)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
