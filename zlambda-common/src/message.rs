@@ -1,5 +1,5 @@
 use crate::log::{LogEntryData, LogEntryId};
-use crate::node::{NodeId};
+use crate::node::NodeId;
 use crate::term::Term;
 use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};

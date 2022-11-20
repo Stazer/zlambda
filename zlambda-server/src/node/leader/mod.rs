@@ -6,11 +6,6 @@ pub mod follower;
 
 use crate::algorithm::next_key;
 use crate::log::leading::LeadingLog;
-use zlambda_common::log::{ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType};
-use zlambda_common::message::{
-    MessageStreamReader, MessageStreamWriter};
-use zlambda_common::node::{NodeId};
-use zlambda_common::term::{Term};
 use crate::state::State;
 use connection::LeaderNodeConnection;
 use follower::LeaderNodeFollowerMessage;
@@ -21,6 +16,10 @@ use tokio::net::TcpListener;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, trace};
+use zlambda_common::log::{ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType};
+use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
+use zlambda_common::node::NodeId;
+use zlambda_common::term::Term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

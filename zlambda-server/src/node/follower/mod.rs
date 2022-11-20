@@ -1,11 +1,4 @@
 use crate::log::following::FollowingLog;
-use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
-use zlambda_common::message::{
-    ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
-    MessageStreamWriter,
-};
-use zlambda_common::node::{NodeId};
-use zlambda_common::term::{Term};
 use crate::state::State;
 use std::collections::HashMap;
 use std::error::Error;
@@ -13,6 +6,13 @@ use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::select;
 use tracing::{error, trace};
+use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
+use zlambda_common::message::{
+    ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
+    MessageStreamWriter,
+};
+use zlambda_common::node::NodeId;
+use zlambda_common::term::Term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,7 +1,7 @@
-use zlambda_common::message::{MessageStreamReader, MessageStreamWriter, Message, ClientMessage};
-use tokio::net::ToSocketAddrs;
 use std::error::Error;
 use tokio::net::TcpStream;
+use tokio::net::ToSocketAddrs;
+use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,17 +21,16 @@ impl Client {
             MessageStreamWriter::new(writer),
         );
 
-        writer.write(&Message::Client(ClientMessage::RegisterRequest)).await?;
+        writer
+            .write(&Message::Client(ClientMessage::RegisterRequest))
+            .await?;
 
         match reader.read().await {
-            Ok(Some(Message::Client(ClientMessage::RegisterResponse))) => {},
+            Ok(Some(Message::Client(ClientMessage::RegisterResponse))) => {}
             Err(error) => return Err(error.into()),
             _ => return Err("Expected response".into()),
         };
 
-        Ok(Self {
-            reader,
-            writer,
-        })
+        Ok(Self { reader, writer })
     }
 }

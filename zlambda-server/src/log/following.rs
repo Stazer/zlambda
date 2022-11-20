@@ -1,7 +1,7 @@
-use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
-use zlambda_common::node::NodeId;
 use std::cmp::max;
 use std::collections::HashMap;
+use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
+use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
