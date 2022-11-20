@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use zlambda_client::Client;
 use zlambda_common::library::Library;
 use zlambda_common::runtime::Runtime;
-use zlambda_server::node::Node;
+use zlambda_server::Server;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -51,12 +51,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             let runtime = Runtime::new()?;
 
             runtime.block_on(async move {
-                let node = match Node::new(listener_address, leader_address).await {
+                let server = match Server::new(listener_address, leader_address).await {
                     Err(error) => return Err(error),
-                    Ok(node) => node,
+                    Ok(server) => server,
                 };
 
-                node.run().await;
+                server.run().await;
 
                 Ok(())
             })?;
@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let runtime = Runtime::new()?;
 
             runtime.block_on(async move {
-                let client = Client::new(address).await;
+                let _client = Client::new(address).await;
             });
         }
         MainCommand::Module { path } => {

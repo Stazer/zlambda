@@ -1,7 +1,6 @@
 use std::cmp::max;
 use std::collections::HashMap;
-use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
-use zlambda_common::node::NodeId;
+use zlambda_common::log::{LogEntryData, LogEntryId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -39,6 +38,4 @@ impl FollowingLog {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
-mod test {
-    use super::*;
-}
+mod test {}

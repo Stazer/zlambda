@@ -1,15 +1,15 @@
-use crate::node::leader::client::LeaderNodeClient;
-use crate::node::leader::follower::LeaderNodeFollower;
-use crate::node::leader::LeaderNodeMessage;
+use crate::leader::client::LeaderNodeClient;
+use crate::leader::follower::LeaderNodeFollower;
+use crate::leader::LeaderNodeMessage;
+use zlambda_common::message::{
+    ClientMessage, ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
+    MessageStreamWriter,
+};
 use std::error::Error;
 use std::net::SocketAddr;
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
-use zlambda_common::message::{
-    ClientMessage, ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
-    MessageStreamWriter,
-};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

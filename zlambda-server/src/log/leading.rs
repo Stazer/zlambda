@@ -147,19 +147,27 @@ impl LeadingLog {
 
 #[cfg(test)]
 mod test {
+    use zlambda_common::log::{ClientLogEntryType, LogEntryType};
+
     use super::*;
 
     #[test]
     fn is_log_entry_uncommitted() {
         let mut entries = LeadingLog::default();
-        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        let first = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
         assert_eq!(entries.get(first).unwrap().is_committed(), false);
     }
 
     #[test]
     fn is_log_entry_committed() {
         let mut entries = LeadingLog::default();
-        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        let first = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
         entries.acknowledge(first, 0);
         entries.acknowledge(first, 1);
 
@@ -170,7 +178,10 @@ mod test {
     #[should_panic]
     fn is_double_acknowledgement_failing() {
         let mut entries = LeadingLog::default();
-        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        let first = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
         entries.acknowledge(first, 0);
         entries.acknowledge(first, 0);
     }
@@ -179,7 +190,10 @@ mod test {
     #[should_panic]
     fn is_acknowledging_not_existing_log_entry_failing() {
         let mut entries = LeadingLog::default();
-        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        let first = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
         entries.acknowledge(first + 1, 1);
     }
 
@@ -187,15 +201,24 @@ mod test {
     #[should_panic]
     fn is_acknowledging_not_existing_node_failing() {
         let mut entries = LeadingLog::default();
-        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
+        let first = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
         entries.acknowledge(first, 3);
     }
 
     #[test]
     fn are_log_entry_ids_ascending() {
         let mut entries = LeadingLog::default();
-        let first = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
-        let second = entries.begin(LogEntryType::Add(2), [0, 1, 2, 3, 4].into());
+        let first = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
+        let second = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2, 3, 4].into(),
+        );
 
         assert_eq!(first + 1, second);
     }
@@ -210,9 +233,18 @@ mod test {
     #[test]
     fn is_last_committed_valid_after_synchronous_acknowledgement() {
         let mut entries = LeadingLog::default();
-        let first = entries.begin(LogEntryType::Add(2), [0, 1, 2].into());
-        let second = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
-        let third = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
+        let first = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
+        let second = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
+        let third = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
         entries.acknowledge(first, 0);
         entries.acknowledge(first, 1);
         entries.acknowledge(first, 2);
@@ -229,10 +261,22 @@ mod test {
     #[test]
     fn is_last_committed_valid_after_asynchronous_missing_acknowledgement() {
         let mut entries = LeadingLog::default();
-        let first = entries.begin(LogEntryType::Add(2), [0, 1, 2].into());
-        let second = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
-        let third = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
-        let fourth = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
+        let first = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
+        let second = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
+        let third = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
+        let fourth = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
         entries.acknowledge(first, 0);
         entries.acknowledge(first, 1);
         entries.acknowledge(first, 2);
@@ -250,10 +294,22 @@ mod test {
     #[test]
     fn is_last_committed_valid_after_asynchronous_recovering_acknowledgement() {
         let mut entries = LeadingLog::default();
-        let first = entries.begin(LogEntryType::Add(2), [0, 1, 2].into());
-        let second = entries.begin(LogEntryType::Add(4), [0, 1, 2].into());
-        let third = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
-        let fourth = entries.begin(LogEntryType::Add(10), [0, 1, 2].into());
+        let first = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
+        let second = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
+        let third = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
+        let fourth = entries.begin(
+            LogEntryType::Client(ClientLogEntryType::InitializeModule),
+            [0, 1, 2].into(),
+        );
         entries.acknowledge(first, 0);
         entries.acknowledge(first, 1);
         entries.acknowledge(first, 2);

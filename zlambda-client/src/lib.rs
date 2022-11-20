@@ -2,6 +2,7 @@ use std::error::Error;
 use tokio::net::TcpStream;
 use tokio::net::ToSocketAddrs;
 use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
+use std::path::Path;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,5 +33,17 @@ impl Client {
         };
 
         Ok(Self { reader, writer })
+    }
+
+    pub async fn load_module(&mut self, _path: &Path) -> Result<(), Box<dyn Error>> {
+        /*let id = self.writer.write(&Message::Client(ClientMessage::)).await {
+
+        };*/
+
+        Ok(())
+    }
+
+    pub async fn dispatch(&mut self) -> Result<(), Box<dyn Error>> {
+        Ok(())
     }
 }

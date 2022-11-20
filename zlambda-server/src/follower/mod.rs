@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::select;
 use tracing::{error, trace};
-use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
+use zlambda_common::log::LogEntryData;
 use zlambda_common::message::{
     ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
     MessageStreamWriter,
@@ -107,7 +107,7 @@ impl FollowerNode {
         }
     }
 
-    async fn append_entries(&mut self, term: Term, log_entry_data: Vec<LogEntryData>) {
+    async fn append_entries(&mut self, _term: Term, log_entry_data: Vec<LogEntryData>) {
         let log_entry_ids = log_entry_data
             .iter()
             .map(|log_entry_data| log_entry_data.id())
