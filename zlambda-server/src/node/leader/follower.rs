@@ -28,7 +28,7 @@ pub struct LeaderNodeFollower {
 }
 
 impl LeaderNodeFollower {
-    fn new(
+    pub fn new(
         id: NodeId,
         receiver: mpsc::Receiver<LeaderNodeFollowerMessage>,
         reader: MessageStreamReader,
@@ -44,21 +44,7 @@ impl LeaderNodeFollower {
         }
     }
 
-    pub fn spawn(
-        id: NodeId,
-        receiver: mpsc::Receiver<LeaderNodeFollowerMessage>,
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
-        leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
-    ) {
-        spawn(async move {
-            Self::new(id, receiver, reader, writer, leader_node_sender)
-                .main()
-                .await;
-        });
-    }
-
-    async fn main(mut self) {
+    pub async fn run(mut self) {
         loop {
             select!(
                 read_result = self.reader.read() => {

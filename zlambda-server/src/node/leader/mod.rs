@@ -1,15 +1,16 @@
+pub mod client;
 pub mod connection;
 pub mod follower;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use connection::LeaderNodeConnection;
 use crate::algorithm::next_key;
 use crate::log::leading::LeadingLog;
-use crate::log::{LogEntryData, LogEntryId, LogEntryType, ClusterLogEntryType};
+use crate::log::{ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType};
 use crate::node::message::{MessageStreamReader, MessageStreamWriter};
 use crate::node::{NodeId, Term};
 use crate::state::State;
+use connection::LeaderNodeConnection;
 use follower::LeaderNodeFollowerMessage;
 use std::collections::HashMap;
 use std::error::Error;
@@ -132,7 +133,10 @@ impl LeaderNode {
         let id = next_key(self.addresses.keys());
         self.addresses.insert(id, address);
 
-        self.replicate(LogEntryType::Cluster(ClusterLogEntryType::Addresses(self.addresses.clone()))).await;
+        self.replicate(LogEntryType::Cluster(ClusterLogEntryType::Addresses(
+            self.addresses.clone(),
+        )))
+        .await;
 
         self.follower_senders.insert(id, follower_sender);
 
@@ -146,10 +150,7 @@ impl LeaderNode {
         }
     }
 
-    async fn replicate(
-        &mut self,
-        log_entry_type: LogEntryType,
-    ) -> LogEntryId {
+    async fn replicate(&mut self, log_entry_type: LogEntryType) -> LogEntryId {
         let id = self.log.begin(
             log_entry_type.clone(),
             self.addresses.keys().copied().collect(),
@@ -175,7 +176,11 @@ impl LeaderNode {
 
     fn acknowledge(&mut self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId) {
         for log_entry_id in log_entry_ids.into_iter() {
-            trace!("{} acknowledged by {}", log_entry_id, node_id);
+            trace!(
+                "Log entry {} acknowledged by node {}",
+                log_entry_id,
+                node_id
+            );
             self.log.acknowledge(log_entry_id, node_id);
 
             if let Some(log_entry) = self.log.get(log_entry_id) {
@@ -186,7 +191,7 @@ impl LeaderNode {
                         }
                         LogEntryType::Cluster(ClusterLogEntryType::Addresses(addresses)) => {
                             self.addresses = addresses.clone();
-                        },
+                        }
                     }
                 }
             }
