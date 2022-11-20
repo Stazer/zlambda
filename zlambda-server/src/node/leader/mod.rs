@@ -6,9 +6,11 @@ pub mod follower;
 
 use crate::algorithm::next_key;
 use crate::log::leading::LeadingLog;
-use crate::log::{ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType};
-use crate::node::message::{MessageStreamReader, MessageStreamWriter};
-use crate::node::{NodeId, Term};
+use zlambda_common::log::{ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType};
+use zlambda_common::message::{
+    MessageStreamReader, MessageStreamWriter};
+use zlambda_common::node::{NodeId};
+use zlambda_common::term::{Term};
 use crate::state::State;
 use connection::LeaderNodeConnection;
 use follower::LeaderNodeFollowerMessage;

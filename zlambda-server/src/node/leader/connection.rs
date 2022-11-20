@@ -1,7 +1,7 @@
 use crate::node::leader::client::LeaderNodeClient;
 use crate::node::leader::follower::LeaderNodeFollower;
 use crate::node::leader::LeaderNodeMessage;
-use crate::node::message::{
+use zlambda_common::message::{
     ClientMessage, ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
     MessageStreamWriter,
 };

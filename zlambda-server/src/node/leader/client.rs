@@ -1,5 +1,5 @@
 use crate::node::leader::LeaderNodeMessage;
-use crate::node::message::{MessageStreamReader, MessageStreamWriter};
+use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
 use tokio::select;
 use tokio::sync::mpsc;
 use tracing::error;

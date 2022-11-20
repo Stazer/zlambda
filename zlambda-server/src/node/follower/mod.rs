@@ -1,10 +1,11 @@
 use crate::log::following::FollowingLog;
-use crate::log::LogEntryData;
-use crate::node::message::{
+use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
+use zlambda_common::message::{
     ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
     MessageStreamWriter,
 };
-use crate::node::{NodeId, Term};
+use zlambda_common::node::{NodeId};
+use zlambda_common::term::{Term};
 use crate::state::State;
 use std::collections::HashMap;
 use std::error::Error;

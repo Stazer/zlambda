@@ -1,6 +1,6 @@
 use crate::algorithm::next_key;
-use crate::log::{LogEntryData, LogEntryId, LogEntryType};
-use crate::node::NodeId;
+use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
+use zlambda_common::node::NodeId;
 use std::collections::hash_map::RandomState;
 use std::collections::hash_set::Difference;
 use std::collections::{HashMap, HashSet};

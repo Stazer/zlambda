@@ -1,4 +1,4 @@
-use zlambda_common::{async_trait, DispatchEvent, Module, ModuleSpecification, ModuleVersion};
+/*use zlambda_common::{async_trait, DispatchEvent, Module, ModuleSpecification, ModuleVersion};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,4 +29,4 @@ pub extern "C" fn modules() -> Vec<Box<dyn Module>> {
             version: (2, 0, 0).into(),
         }),
     ]
-}
+}*/

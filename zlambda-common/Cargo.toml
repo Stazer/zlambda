@@ -8,3 +8,7 @@ async-trait = "0.1"
 libloading = "0.7"
 serde = { version = "1", features = ["derive"] }
 postcard = { version = "1", features = ["alloc"] }
+tokio-stream  = { version = "0", features = ["net"] }
+tokio-util = { version = "0", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+bytes = { version = "1" }

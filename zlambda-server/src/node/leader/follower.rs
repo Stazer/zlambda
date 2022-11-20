@@ -1,7 +1,8 @@
-use crate::log::LogEntryData;
+use zlambda_common::log::LogEntryData;
 use crate::node::leader::LeaderNodeMessage;
-use crate::node::message::{ClusterMessage, Message, MessageStreamReader, MessageStreamWriter};
-use crate::node::{NodeId, Term};
+use zlambda_common::message::{ClusterMessage, Message, MessageStreamReader, MessageStreamWriter};
+use zlambda_common::node::{NodeId};
+use zlambda_common::term::{Term};
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
