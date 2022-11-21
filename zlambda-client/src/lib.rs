@@ -1,8 +1,10 @@
 use std::error::Error;
 use std::path::Path;
-use tokio::net::TcpStream;
-use tokio::net::ToSocketAddrs;
+use tokio::net::{TcpStream, ToSocketAddrs};
+use tokio_util::io::ReaderStream;
+use tokio::fs::File;
 use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
+use tokio_stream::StreamExt;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,12 +37,37 @@ impl Client {
         Ok(Self { reader, writer })
     }
 
-    pub async fn load_module(&mut self, _path: &Path) -> Result<(), Box<dyn Error>> {
-        /*let id = self.writer.write(&Message::Client(ClientMessage::)).await {
+    pub async fn load_module(&mut self, path: &Path) -> Result<u64, Box<dyn Error>> {
+        let file = File::open(path).await?;
 
-        };*/
+        self.writer.write(&Message::Client(ClientMessage::InitializeRequest)).await?;
 
-        Ok(())
+        let id = match self.reader.read().await? {
+            None => return Err("Expected response".into()),
+            Some(Message::Client(ClientMessage::InitializeResponse { id })) => id,
+            Some(_) => return Err("Expected response".into()),
+        };
+
+        let mut stream = ReaderStream::new(file);
+
+        while let Some(bytes) = stream.next().await {
+            let bytes = bytes?.to_vec();
+
+            self.writer.write(&Message::Client(ClientMessage::AppendChunk {
+                id,
+                bytes,
+            })).await?;
+        }
+
+        self.writer.write(&Message::Client(ClientMessage::LoadRequest { id })).await?;
+
+        let id = match self.reader.read().await? {
+            None => return Err("Expected response".into()),
+            Some(Message::Client(ClientMessage::LoadResponse { id })) => id,
+            Some(_) => return Err("Expected response".into()),
+        };
+
+        Ok(id)
     }
 
     pub async fn dispatch(&mut self) -> Result<(), Box<dyn Error>> {

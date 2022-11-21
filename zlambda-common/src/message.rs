@@ -9,6 +9,7 @@ use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io;
 use std::net::SocketAddr;
+use crate::module::ModuleId;
 use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_stream::StreamExt;
@@ -102,8 +103,12 @@ pub enum ClientMessage {
 
     InitializeRequest,
     InitializeResponse { id: u64 },
-    Chunk { id: u64, bytes: Vec<u8> },
+    AppendChunk { id: u64, bytes: Vec<u8> },
     LoadRequest { id: u64 },
+    LoadResponse { id: u64 },
+
+    BeginModuleLoadingRequest,
+    BeginModuleLoadingResponse { id: ModuleId, },
 
     DispatchRequest,
     DispatchResponse,

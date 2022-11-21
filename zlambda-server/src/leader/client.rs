@@ -31,7 +31,11 @@ impl LeaderClient {
             select!(
                 read_result = self.reader.read() => {
                     let message = match read_result {
-                        Ok(message) => message,
+                        Ok(None) => {
+                            error!("Unhandled message");
+                            break
+                        }
+                        Ok(Some(message)) => message,
                         Err(error) => {
                             error!("{}", error);
                             break
@@ -39,12 +43,8 @@ impl LeaderClient {
                     };
 
                     match message {
-                        None => continue,
-                        Some(message) => {
-                            error!("Unhandled message {:?}", message);
-                            break
-                        }
-                    };
+                        Message::
+                    }
                 }
             )
         }
