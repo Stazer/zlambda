@@ -1,30 +1,30 @@
-use crate::leader::client::LeaderNodeClient;
-use crate::leader::follower::LeaderNodeFollower;
-use crate::leader::LeaderNodeMessage;
-use zlambda_common::message::{
-    ClientMessage, ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
-    MessageStreamWriter,
-};
+use crate::leader::client::LeaderClient;
+use crate::leader::follower::LeaderFollower;
+use crate::leader::LeaderMessage;
 use std::error::Error;
 use std::net::SocketAddr;
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
+use zlambda_common::message::{
+    ClientMessage, ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
+    MessageStreamWriter,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct LeaderNodeConnection {
+pub struct LeaderConnection {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
+    leader_node_sender: mpsc::Sender<LeaderMessage>,
 }
 
-impl LeaderNodeConnection {
+impl LeaderConnection {
     fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
+        leader_node_sender: mpsc::Sender<LeaderMessage>,
     ) -> Self {
         Self {
             reader,
@@ -36,7 +36,7 @@ impl LeaderNodeConnection {
     pub fn spawn(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
+        leader_node_sender: mpsc::Sender<LeaderMessage>,
     ) {
         spawn(async move {
             Self::new(reader, writer, leader_node_sender).main().await;
@@ -86,7 +86,7 @@ impl LeaderNodeConnection {
         let (result_sender, result_receiver) = oneshot::channel();
 
         self.leader_node_sender
-            .send(LeaderNodeMessage::Register {
+            .send(LeaderMessage::Register {
                 address,
                 follower_sender,
                 result_sender,
@@ -107,7 +107,7 @@ impl LeaderNodeConnection {
             .await?;
 
         spawn(async move {
-            LeaderNodeFollower::new(
+            LeaderFollower::new(
                 id,
                 follower_receiver,
                 self.reader,
@@ -127,7 +127,7 @@ impl LeaderNodeConnection {
             .await?;
 
         spawn(async move {
-            LeaderNodeClient::new(self.reader, self.writer, self.leader_node_sender)
+            LeaderClient::new(self.reader, self.writer, self.leader_node_sender)
                 .run()
                 .await;
         });

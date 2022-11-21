@@ -1,5 +1,9 @@
-use crate::log::following::FollowingLog;
+pub mod log;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 use crate::state::State;
+use log::FollowerLog;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
@@ -17,10 +21,10 @@ use zlambda_common::term::Term;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct FollowerNode {
+pub struct Follower {
     id: NodeId,
     leader_id: NodeId,
-    log: FollowingLog,
+    log: FollowerLog,
     term: Term,
     tcp_listener: TcpListener,
     reader: MessageStreamReader,
@@ -29,7 +33,7 @@ pub struct FollowerNode {
     state: State,
 }
 
-impl FollowerNode {
+impl Follower {
     pub async fn new<T>(
         tcp_listener: TcpListener,
         registration_address: T,
@@ -76,7 +80,7 @@ impl FollowerNode {
             tcp_listener,
             reader,
             writer,
-            log: FollowingLog::default(),
+            log: FollowerLog::default(),
             addresses,
             state: State::default(),
         })

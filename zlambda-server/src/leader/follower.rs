@@ -1,16 +1,16 @@
-use zlambda_common::log::LogEntryData;
-use crate::leader::LeaderNodeMessage;
-use zlambda_common::message::{ClusterMessage, Message, MessageStreamReader, MessageStreamWriter};
-use zlambda_common::node::{NodeId};
-use zlambda_common::term::{Term};
+use crate::leader::LeaderMessage;
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
+use zlambda_common::log::LogEntryData;
+use zlambda_common::message::{ClusterMessage, Message, MessageStreamReader, MessageStreamWriter};
+use zlambda_common::node::NodeId;
+use zlambda_common::term::Term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum LeaderNodeFollowerMessage {
+pub enum LeaderFollowerMessage {
     Replicate {
         term: Term,
         log_entry_data: Vec<LogEntryData>,
@@ -20,21 +20,21 @@ pub enum LeaderNodeFollowerMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct LeaderNodeFollower {
+pub struct LeaderFollower {
     id: NodeId,
-    receiver: mpsc::Receiver<LeaderNodeFollowerMessage>,
+    receiver: mpsc::Receiver<LeaderFollowerMessage>,
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
+    leader_node_sender: mpsc::Sender<LeaderMessage>,
 }
 
-impl LeaderNodeFollower {
+impl LeaderFollower {
     pub fn new(
         id: NodeId,
-        receiver: mpsc::Receiver<LeaderNodeFollowerMessage>,
+        receiver: mpsc::Receiver<LeaderFollowerMessage>,
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
+        leader_node_sender: mpsc::Sender<LeaderMessage>,
     ) -> Self {
         Self {
             id,
@@ -60,7 +60,7 @@ impl LeaderNodeFollower {
 
                     match message {
                         Message::Cluster(ClusterMessage::AppendEntriesResponse { log_entry_ids }) => {
-                            let result = self.leader_node_sender.send(LeaderNodeMessage::Acknowledge {
+                            let result = self.leader_node_sender.send(LeaderMessage::Acknowledge {
                                 node_id: self.id,
                                 log_entry_ids,
                             }).await;
@@ -85,7 +85,7 @@ impl LeaderNodeFollower {
                     };
 
                     match message {
-                        LeaderNodeFollowerMessage::Replicate { term, log_entry_data } => self.replicate(term, log_entry_data).await,
+                        LeaderFollowerMessage::Replicate { term, log_entry_data } => self.replicate(term, log_entry_data).await,
                     }
                 }
             )

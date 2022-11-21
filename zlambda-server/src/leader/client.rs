@@ -1,23 +1,23 @@
-use crate::leader::LeaderNodeMessage;
-use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
+use crate::leader::LeaderMessage;
 use tokio::select;
 use tokio::sync::mpsc;
 use tracing::error;
+use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct LeaderNodeClient {
+pub struct LeaderClient {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
+    leader_node_sender: mpsc::Sender<LeaderMessage>,
 }
 
-impl LeaderNodeClient {
+impl LeaderClient {
     pub fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_node_sender: mpsc::Sender<LeaderNodeMessage>,
+        leader_node_sender: mpsc::Sender<LeaderMessage>,
     ) -> Self {
         Self {
             reader,

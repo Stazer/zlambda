@@ -4,18 +4,18 @@ use zlambda_common::log::{LogEntryData, LogEntryId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type FollowingLogEntry = LogEntryData;
+pub type FollowerLogEntry = LogEntryData;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Default)]
-pub struct FollowingLog {
-    log_entries: HashMap<LogEntryId, FollowingLogEntry>,
+pub struct FollowerLog {
+    log_entries: HashMap<LogEntryId, FollowerLogEntry>,
     last_committed_log_entry_id: Option<LogEntryId>,
 }
 
-impl FollowingLog {
-    pub fn get(&self, id: LogEntryId) -> Option<&FollowingLogEntry> {
+impl FollowerLog {
+    pub fn get(&self, id: LogEntryId) -> Option<&FollowerLogEntry> {
         self.log_entries.get(&id)
     }
 

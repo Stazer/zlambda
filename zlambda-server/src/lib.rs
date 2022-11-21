@@ -3,17 +3,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub mod algorithm;
-pub mod log;
-pub mod state;
 pub mod candidate;
 pub mod follower;
 pub mod leader;
+pub mod state;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use crate::candidate::CandidateNode;
-use crate::follower::FollowerNode;
-use crate::leader::LeaderNode;
+use crate::candidate::Candidate;
+use crate::follower::Follower;
+use crate::leader::Leader;
 use std::error::Error;
 use tokio::net::{TcpListener, ToSocketAddrs};
 
@@ -21,9 +20,9 @@ use tokio::net::{TcpListener, ToSocketAddrs};
 
 #[derive(Debug)]
 pub enum NodeType {
-    Leader(LeaderNode),
-    Follower(FollowerNode),
-    Candidate(CandidateNode),
+    Leader(Leader),
+    Follower(Follower),
+    Candidate(Candidate),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,11 +45,11 @@ impl Server {
 
         let node = match registration_address {
             None => Self {
-                r#type: NodeType::Leader(LeaderNode::new(tcp_listener)?),
+                r#type: NodeType::Leader(Leader::new(tcp_listener)?),
             },
             Some(registration_address) => Self {
                 r#type: NodeType::Follower(
-                    FollowerNode::new(tcp_listener, registration_address).await?,
+                    Follower::new(tcp_listener, registration_address).await?,
                 ),
             },
         };

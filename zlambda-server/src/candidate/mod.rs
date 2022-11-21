@@ -1,7 +1,7 @@
 #[derive(Debug)]
-pub struct CandidateNode {}
+pub struct Candidate {}
 
-impl CandidateNode {
+impl Candidate {
     pub async fn run(&mut self) {
         loop {}
     }

@@ -1,14 +1,15 @@
 pub mod client;
 pub mod connection;
 pub mod follower;
+pub mod log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use crate::algorithm::next_key;
-use crate::log::leading::LeadingLog;
 use crate::state::State;
-use connection::LeaderNodeConnection;
-use follower::LeaderNodeFollowerMessage;
+use connection::LeaderConnection;
+use follower::LeaderFollowerMessage;
+use log::LeaderLog;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
@@ -24,14 +25,14 @@ use zlambda_common::term::Term;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum LeaderNodeMessage {
+pub enum LeaderMessage {
     Acknowledge {
         log_entry_ids: Vec<LogEntryId>,
         node_id: NodeId,
     },
     Register {
         address: SocketAddr,
-        follower_sender: mpsc::Sender<LeaderNodeFollowerMessage>,
+        follower_sender: mpsc::Sender<LeaderFollowerMessage>,
         result_sender: oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
     },
     Replicate {
@@ -43,19 +44,19 @@ pub enum LeaderNodeMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct LeaderNode {
+pub struct Leader {
     id: NodeId,
-    log: LeadingLog,
+    log: LeaderLog,
     term: Term,
     tcp_listener: TcpListener,
     addresses: HashMap<NodeId, SocketAddr>,
-    sender: mpsc::Sender<LeaderNodeMessage>,
-    receiver: mpsc::Receiver<LeaderNodeMessage>,
+    sender: mpsc::Sender<LeaderMessage>,
+    receiver: mpsc::Receiver<LeaderMessage>,
     state: State,
-    follower_senders: HashMap<NodeId, mpsc::Sender<LeaderNodeFollowerMessage>>,
+    follower_senders: HashMap<NodeId, mpsc::Sender<LeaderFollowerMessage>>,
 }
 
-impl LeaderNode {
+impl Leader {
     pub fn new(tcp_listener: TcpListener) -> Result<Self, Box<dyn Error>> {
         let (sender, receiver) = mpsc::channel(16);
 
@@ -63,7 +64,7 @@ impl LeaderNode {
 
         Ok(Self {
             id: 0,
-            log: LeadingLog::default(),
+            log: LeaderLog::default(),
             term: 0,
             tcp_listener,
             addresses: [(0, address)].into(),
@@ -90,7 +91,7 @@ impl LeaderNode {
 
                     let (reader, writer) = stream.into_split();
 
-                    LeaderNodeConnection::spawn(
+                    LeaderConnection::spawn(
                         MessageStreamReader::new(reader),
                         MessageStreamWriter::new(writer),
                         self.sender.clone(),
@@ -106,19 +107,19 @@ impl LeaderNode {
                     };
 
                     match message {
-                        LeaderNodeMessage::Register { address, follower_sender, result_sender  } => self.register(
+                        LeaderMessage::Register { address, follower_sender, result_sender  } => self.register(
                             address,
                             follower_sender,
                             result_sender,
                         ).await,
-                        LeaderNodeMessage::Replicate { log_entry_type, result_sender } => {
+                        LeaderMessage::Replicate { log_entry_type, result_sender } => {
                             let id = self.replicate(log_entry_type).await;
 
                             if result_sender.send(id).is_err() {
                                 error!("Cannot send result");
                             }
                         }
-                        LeaderNodeMessage::Acknowledge { log_entry_ids, node_id } => self.acknowledge(log_entry_ids, node_id),
+                        LeaderMessage::Acknowledge { log_entry_ids, node_id } => self.acknowledge(log_entry_ids, node_id),
                     }
                 }
             )
@@ -128,7 +129,7 @@ impl LeaderNode {
     async fn register(
         &mut self,
         address: SocketAddr,
-        follower_sender: mpsc::Sender<LeaderNodeFollowerMessage>,
+        follower_sender: mpsc::Sender<LeaderFollowerMessage>,
         result_sender: oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
     ) {
         let id = next_key(self.addresses.keys());
@@ -161,14 +162,14 @@ impl LeaderNode {
             let log_entry_data = LogEntryData::new(id, log_entry_type.clone());
 
             if follower_sender
-                .send(LeaderNodeFollowerMessage::Replicate {
+                .send(LeaderFollowerMessage::Replicate {
                     term: self.term,
                     log_entry_data: vec![log_entry_data],
                 })
                 .await
                 .is_err()
             {
-                error!("Cannot send LeaderNodeFollowerMessage");
+                error!("Cannot send LeaderFollowerMessage");
             }
         }
 
