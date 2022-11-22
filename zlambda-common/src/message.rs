@@ -101,14 +101,11 @@ pub enum ClientMessage {
     RegisterRequest,
     RegisterResponse,
 
-    InitializeRequest,
-    InitializeResponse { id: u64 },
-    AppendChunk { id: u64, bytes: Vec<u8> },
-    LoadRequest { id: u64 },
-    LoadResponse { id: u64 },
-
-    BeginModuleLoadingRequest,
-    BeginModuleLoadingResponse { id: ModuleId, },
+    InitializeModuleRequest,
+    InitializeModuleResponse { id: u64 },
+    AppendModuleChunk { id: u64, bytes: Vec<u8> },
+    LoadModuleRequest { id: u64 },
+    LoadModuleResponse { id: u64 },
 
     DispatchRequest,
     DispatchResponse,

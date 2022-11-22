@@ -41,10 +41,6 @@ impl LeaderClient {
                             break
                         }
                     };
-
-                    match message {
-                        Message::
-                    }
                 }
             )
         }

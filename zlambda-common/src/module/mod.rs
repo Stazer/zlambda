@@ -1,28 +1,26 @@
 mod dispatch;
 mod error;
 mod manager;
-mod specification;
 mod symbol;
-mod version;
+mod id;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub use dispatch::*;
 pub use error::*;
 pub use manager::*;
-pub use specification::*;
 pub use symbol::*;
-pub use version::*;
+pub use id::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub use async_trait::async_trait;
+use async_trait::async_trait;
+use clap::Command;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[async_trait]
 pub trait Module: Send + Sync {
-    fn specification(&self) -> ModuleSpecification;
-
+    async fn command(&self) -> Command;
     async fn on_dispatch(&self, _event: DispatchEvent) {}
 }

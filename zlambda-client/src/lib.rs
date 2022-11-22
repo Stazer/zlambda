@@ -40,11 +40,11 @@ impl Client {
     pub async fn load_module(&mut self, path: &Path) -> Result<u64, Box<dyn Error>> {
         let file = File::open(path).await?;
 
-        self.writer.write(&Message::Client(ClientMessage::InitializeRequest)).await?;
+        self.writer.write(&Message::Client(ClientMessage::InitializeModuleRequest)).await?;
 
         let id = match self.reader.read().await? {
             None => return Err("Expected response".into()),
-            Some(Message::Client(ClientMessage::InitializeResponse { id })) => id,
+            Some(Message::Client(ClientMessage::InitializeModuleResponse { id })) => id,
             Some(_) => return Err("Expected response".into()),
         };
 
@@ -53,17 +53,17 @@ impl Client {
         while let Some(bytes) = stream.next().await {
             let bytes = bytes?.to_vec();
 
-            self.writer.write(&Message::Client(ClientMessage::AppendChunk {
+            self.writer.write(&Message::Client(ClientMessage::AppendModuleChunk {
                 id,
                 bytes,
             })).await?;
         }
 
-        self.writer.write(&Message::Client(ClientMessage::LoadRequest { id })).await?;
+        self.writer.write(&Message::Client(ClientMessage::LoadModuleRequest { id })).await?;
 
         let id = match self.reader.read().await? {
             None => return Err("Expected response".into()),
-            Some(Message::Client(ClientMessage::LoadResponse { id })) => id,
+            Some(Message::Client(ClientMessage::LoadModuleResponse { id })) => id,
             Some(_) => return Err("Expected response".into()),
         };
 

@@ -2,7 +2,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Command, Subcommand, FromArgMatches, ArgMatches};
 use std::error::Error;
 use std::path::PathBuf;
 use zlambda_client::Client;
@@ -29,11 +29,54 @@ enum MainCommand {
         leader_address: Option<String>,
     },
     Client {
+        #[clap(default_value = "0.0.0.0:8000")]
         address: String,
+        #[clap(subcommand)]
+        command: ClientCommand,
     },
     Module {
         path: PathBuf,
+        #[clap(subcommand)]
+        command: ModuleCommand,
     },
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Subcommand)]
+enum ClientCommand {
+    Load,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct ModuleCommand {
+
+}
+
+impl FromArgMatches for ModuleCommand {
+    fn from_arg_matches(matches: &ArgMatches) -> Result<Self, clap::Error> {
+        Self {}
+    }
+
+    fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), clap::Error> {
+        Ok(())
+    }
+}
+
+impl Subcommand for ModuleCommand {
+    fn augment_subcommands(command: Command) -> Command {
+        command
+    }
+
+    fn augment_subcommands_for_update(command: Command) -> Command {
+        command
+    }
+
+    fn has_subcommand(name: &str) -> bool {
+        false
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,21 +104,27 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Ok(())
             })?;
         }
-        MainCommand::Client { address } => {
+        MainCommand::Client { address, command } => {
             let runtime = Runtime::new()?;
 
             runtime.block_on(async move {
-                let _client = Client::new(address).await;
-            });
+                let client = match Client::new(address).await {
+                    Err(error) => return Err(error),
+                    Ok(client) => client,
+                };
+
+                match command {
+                    Load => {
+                    }
+                };
+
+                Ok(())
+
+            })?;
         }
-        MainCommand::Module { path } => {
-            let library = Library::load(&path)?;
-            let modules = library.modules()?;
-            let spec = modules
-                .iter()
-                .map(|x| x.specification())
-                .collect::<Vec<_>>();
-            println!("{:?}", spec);
+        MainCommand::Module { .. } => {
+            /*let library = Library::load(&path)?;
+            let modules = library.modules()?;*/
         }
     };
 
