@@ -1,4 +1,4 @@
-use crate::module::{Module, ReadModulesError, MODULES_SYMBOL};
+use crate::module::{Module, ReadModulesError, MODULE_SYMBOL};
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::path::Path;
@@ -36,21 +36,21 @@ impl From<libloading::Error> for LoadLibraryError {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct Library {
-    handle: libloading::Library,
+    module: Box<dyn Module>,
+    library: libloading::Library,
 }
 
 impl Library {
     pub fn load(path: &Path) -> Result<Self, LoadLibraryError> {
-        Ok(Self {
-            handle: unsafe { libloading::Library::new(path)? },
-        })
+        let library = unsafe { libloading::Library::new(path)? };
+
+        let module =
+            unsafe { library.get::<unsafe extern "C" fn() -> Box<dyn Module>>(MODULE_SYMBOL)?() };
+
+        Ok(Self { module, library })
     }
 
-    pub fn modules<'a>(&'a self) -> Result<Vec<Box<dyn Module + 'a>>, ReadModulesError> {
-        Ok(unsafe {
-            self.handle
-                .get::<unsafe extern "C" fn() -> Vec<Box<dyn Module>>>(MODULES_SYMBOL)?(
-            )
-        })
+    pub fn module(&self) -> &dyn Module {
+        &*self.module
     }
 }

@@ -1,10 +1,10 @@
 use std::error::Error;
 use std::path::Path;
-use tokio::net::{TcpStream, ToSocketAddrs};
-use tokio_util::io::ReaderStream;
 use tokio::fs::File;
-use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
+use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio_stream::StreamExt;
+use tokio_util::io::ReaderStream;
+use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,7 +40,9 @@ impl Client {
     pub async fn load_module(&mut self, path: &Path) -> Result<u64, Box<dyn Error>> {
         let file = File::open(path).await?;
 
-        self.writer.write(&Message::Client(ClientMessage::InitializeModuleRequest)).await?;
+        self.writer
+            .write(&Message::Client(ClientMessage::InitializeModuleRequest))
+            .await?;
 
         let id = match self.reader.read().await? {
             None => return Err("Expected response".into()),
@@ -53,13 +55,17 @@ impl Client {
         while let Some(bytes) = stream.next().await {
             let bytes = bytes?.to_vec();
 
-            self.writer.write(&Message::Client(ClientMessage::AppendModuleChunk {
-                id,
-                bytes,
-            })).await?;
+            self.writer
+                .write(&Message::Client(ClientMessage::AppendModuleChunk {
+                    id,
+                    bytes,
+                }))
+                .await?;
         }
 
-        self.writer.write(&Message::Client(ClientMessage::LoadModuleRequest { id })).await?;
+        self.writer
+            .write(&Message::Client(ClientMessage::LoadModuleRequest { id }))
+            .await?;
 
         let id = match self.reader.read().await? {
             None => return Err("Expected response".into()),

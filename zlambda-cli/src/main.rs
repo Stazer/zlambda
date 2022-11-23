@@ -2,8 +2,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use clap::{Parser, Command, Subcommand, FromArgMatches, ArgMatches};
+use clap::{Parser, Subcommand};
 use std::error::Error;
+use std::iter::once;
 use std::path::PathBuf;
 use zlambda_client::Client;
 use zlambda_common::library::Library;
@@ -36,8 +37,7 @@ enum MainCommand {
     },
     Module {
         path: PathBuf,
-        #[clap(subcommand)]
-        command: ModuleCommand,
+        commands: Vec<String>,
     },
 }
 
@@ -50,39 +50,8 @@ enum ClientCommand {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
-struct ModuleCommand {
-
-}
-
-impl FromArgMatches for ModuleCommand {
-    fn from_arg_matches(matches: &ArgMatches) -> Result<Self, clap::Error> {
-        Self {}
-    }
-
-    fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), clap::Error> {
-        Ok(())
-    }
-}
-
-impl Subcommand for ModuleCommand {
-    fn augment_subcommands(command: Command) -> Command {
-        command
-    }
-
-    fn augment_subcommands_for_update(command: Command) -> Command {
-        command
-    }
-
-    fn has_subcommand(name: &str) -> bool {
-        false
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 fn main() -> Result<(), Box<dyn Error>> {
-    let arguments = MainArguments::parse();
+    let arguments = MainArguments::try_parse()?;
 
     match arguments.command {
         MainCommand::Server {
@@ -114,17 +83,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                 };
 
                 match command {
-                    Load => {
-                    }
+                    Load => {}
                 };
 
                 Ok(())
-
             })?;
         }
-        MainCommand::Module { .. } => {
-            /*let library = Library::load(&path)?;
-            let modules = library.modules()?;*/
+        MainCommand::Module { path, commands } => {
+            let library = Library::load(&path)?;
+            let runtime = Runtime::new()?;
+
+            let arguments = once(path.display().to_string())
+                .chain(commands.into_iter())
+                .collect::<Vec<_>>();
+
+            runtime.block_on(async move {
+                library.module().on_command(arguments).await;
+            });
         }
     };
 

@@ -1,1 +1,1 @@
-pub const MODULES_SYMBOL: &[u8] = b"modules";
+pub const MODULE_SYMBOL: &[u8] = b"module";

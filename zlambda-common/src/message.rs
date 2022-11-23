@@ -1,4 +1,5 @@
 use crate::log::{LogEntryData, LogEntryId};
+use crate::module::ModuleId;
 use crate::node::NodeId;
 use crate::term::Term;
 use bytes::Bytes;
@@ -9,7 +10,6 @@ use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io;
 use std::net::SocketAddr;
-use crate::module::ModuleId;
 use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_stream::StreamExt;

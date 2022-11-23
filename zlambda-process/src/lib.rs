@@ -1,32 +1,60 @@
-/*use zlambda_common::{async_trait, DispatchEvent, Module, ModuleSpecification, ModuleVersion};
+use clap::{Parser, Subcommand};
+use std::error::Error;
+use zlambda_common::async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use zlambda_common::module::{DispatchEvent, Module};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct ModuleImplementation {
-    version: ModuleVersion,
+#[derive(Debug, Deserialize, Serialize)]
+struct DispatchPayload {
+    program: String,
+    arguments: Vec<String>,
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct MainArguments {
+    #[clap(subcommand)]
+    command: MainCommand,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Subcommand)]
+enum MainCommand {
+    Dispatch {
+        program: String,
+        arguments: Vec<String>,
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct ModuleImplementation {}
 
 #[async_trait]
 impl Module for ModuleImplementation {
-    fn specification(&self) -> ModuleSpecification {
-        ModuleSpecification::new(
-            String::from("process"),
-            String::from("A module for running local processes"),
-            self.version.clone(),
-        )
+    async fn on_command(&self, arguments: Vec<String>) -> Result<(), Box<dyn Error>> {
+        let arguments = MainArguments::try_parse_from(arguments)?;
+
+        match arguments.command {
+            MainCommand::Dispatch { program, arguments } => {
+
+            }
+        }
+
+        Ok(())
     }
 
-    async fn on_dispatch(&self, _event: DispatchEvent) {}
+    async fn on_dispatch(&self, event: DispatchEvent) {
+
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn modules() -> Vec<Box<dyn Module>> {
-    vec![
-        Box::new(ModuleImplementation {
-            version: (1, 0, 0).into(),
-        }),
-        Box::new(ModuleImplementation {
-            version: (2, 0, 0).into(),
-        }),
-    ]
-}*/
+pub extern "C" fn module() -> Box<dyn Module> {
+    Box::new(ModuleImplementation {})
+}

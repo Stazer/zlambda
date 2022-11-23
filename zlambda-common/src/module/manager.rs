@@ -1,5 +1,5 @@
 use crate::library::Library;
-use crate::module::{Module};
+use crate::module::Module;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
