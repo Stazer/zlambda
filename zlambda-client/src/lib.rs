@@ -68,6 +68,8 @@ impl Client {
                 .await?;
         }
 
+        println!("LOAD");
+
         self.writer
             .write(&Message::Client(ClientMessage::LoadModuleRequest { id }))
             .await?;

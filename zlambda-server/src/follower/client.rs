@@ -10,19 +10,19 @@ use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, Messa
 pub struct FollowerClient {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    leader_sender: mpsc::Sender<FollowerMessage>,
+    follower_sender: mpsc::Sender<FollowerMessage>,
 }
 
 impl FollowerClient {
     pub fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_sender: mpsc::Sender<FollowerMessage>,
+        follower_sender: mpsc::Sender<FollowerMessage>,
     ) -> Self {
         Self {
             reader,
             writer,
-            leader_sender,
+            follower_sender,
         }
     }
 
@@ -42,15 +42,6 @@ impl FollowerClient {
                     };
 
                     match message {
-                        Message::Client(client_message) => {
-                            match client_message {
-                                ClientMessage::InitializeModuleRequest => self.initialize_module().await,
-                                message => {
-                                    error!("Unhandled message {:?}", message);
-                                    break;
-                                }
-                            }
-                        }
                         message => {
                             error!("Unhandled message {:?}", message);
                             break;
@@ -59,15 +50,5 @@ impl FollowerClient {
                 }
             )
         }
-    }
-
-    async fn initialize_module(&mut self) {
-        //let (result_sender, result_receiver) = oneshot::channel();
-
-        /*self.leader_sender
-            .send(FollowerMessage::InitializeModule { result_sender })
-            .await;
-
-        result_receiver.await;*/
     }
 }

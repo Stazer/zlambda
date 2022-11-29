@@ -25,7 +25,7 @@ pub struct LeaderFollower {
     receiver: mpsc::Receiver<LeaderFollowerMessage>,
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    leader_node_sender: mpsc::Sender<LeaderMessage>,
+    leader_sender: mpsc::Sender<LeaderMessage>,
 }
 
 impl LeaderFollower {
@@ -34,14 +34,14 @@ impl LeaderFollower {
         receiver: mpsc::Receiver<LeaderFollowerMessage>,
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_node_sender: mpsc::Sender<LeaderMessage>,
+        leader_sender: mpsc::Sender<LeaderMessage>,
     ) -> Self {
         Self {
             id,
             receiver,
             reader,
             writer,
-            leader_node_sender,
+            leader_sender,
         }
     }
 
@@ -60,7 +60,7 @@ impl LeaderFollower {
 
                     match message {
                         Message::Cluster(ClusterMessage::AppendEntriesResponse { log_entry_ids }) => {
-                            let result = self.leader_node_sender.send(LeaderMessage::Acknowledge {
+                            let result = self.leader_sender.send(LeaderMessage::Acknowledge {
                                 node_id: self.id,
                                 log_entry_ids,
                             }).await;

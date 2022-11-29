@@ -1,18 +1,18 @@
-pub mod log;
-pub mod connection;
 pub mod client;
+pub mod connection;
+pub mod log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use crate::state::State;
+use connection::FollowerConnection;
 use log::FollowerLog;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use connection::FollowerConnection;
-use tokio::sync::mpsc;
 use tokio::select;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{error, trace};
 use zlambda_common::log::LogEntryData;
 use zlambda_common::message::{
@@ -26,6 +26,7 @@ use zlambda_common::term::Term;
 
 #[derive(Debug)]
 pub enum FollowerMessage {
+    ReadLeaderAddress { sender: oneshot::Sender<SocketAddr> },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -143,7 +144,27 @@ impl Follower {
                     };
                 }
                 receive_result = self.receiver.recv() => {
+                    let message = match receive_result {
+                        None => continue,
+                        Some(message) => message,
+                    };
 
+                    match message {
+                        FollowerMessage::ReadLeaderAddress { sender } => {
+                            let address = match self.addresses.get(&self.leader_id) {
+                                Some(address) => address,
+                                None => {
+                                    error!("Cannot find address with node id {}", self.leader_id);
+                                    break
+                                }
+                            };
+
+                            if let Err(error) = sender.send(*address) {
+                                error!("{}", error);
+                                break
+                            }
+                        }
+                    };
                 }
             )
         }

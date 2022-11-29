@@ -17,29 +17,29 @@ use zlambda_common::message::{
 pub struct LeaderConnection {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    leader_node_sender: mpsc::Sender<LeaderMessage>,
+    leader_sender: mpsc::Sender<LeaderMessage>,
 }
 
 impl LeaderConnection {
     fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_node_sender: mpsc::Sender<LeaderMessage>,
+        leader_sender: mpsc::Sender<LeaderMessage>,
     ) -> Self {
         Self {
             reader,
             writer,
-            leader_node_sender,
+            leader_sender,
         }
     }
 
     pub fn spawn(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_node_sender: mpsc::Sender<LeaderMessage>,
+        leader_sender: mpsc::Sender<LeaderMessage>,
     ) {
         spawn(async move {
-            Self::new(reader, writer, leader_node_sender).main().await;
+            Self::new(reader, writer, leader_sender).main().await;
         });
     }
 
@@ -85,7 +85,7 @@ impl LeaderConnection {
         let (follower_sender, follower_receiver) = mpsc::channel(16);
         let (result_sender, result_receiver) = oneshot::channel();
 
-        self.leader_node_sender
+        self.leader_sender
             .send(LeaderMessage::Register {
                 address,
                 follower_sender,
@@ -112,7 +112,7 @@ impl LeaderConnection {
                 follower_receiver,
                 self.reader,
                 self.writer,
-                self.leader_node_sender,
+                self.leader_sender,
             )
             .run()
             .await;
@@ -127,7 +127,7 @@ impl LeaderConnection {
             .await?;
 
         spawn(async move {
-            LeaderClient::new(self.reader, self.writer, self.leader_node_sender)
+            LeaderClient::new(self.reader, self.writer, self.leader_sender)
                 .run()
                 .await;
         });

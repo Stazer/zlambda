@@ -14,13 +14,9 @@ pub use symbol::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+use libloading::Library;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::path::Path;
-/*use crate::event::{
-    CreateDispatchPayloadEvent, CreateDispatchPayloadEventResult, DispatchEvent,
-    DispatchEventResult,
-};*/
-use libloading::Library;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -61,6 +57,14 @@ pub struct Module {
 }
 
 impl Module {
+    fn new(id: ModuleId, event_listener: Box<dyn ModuleEventListener>, _library: Library) -> Self {
+        Self {
+            id,
+            event_listener,
+            _library,
+        }
+    }
+
     pub fn load(id: ModuleId, path: &Path) -> Result<Self, LoadModuleError> {
         let _library = unsafe { Library::new(path)? };
 
@@ -70,11 +74,7 @@ impl Module {
             )?()
         };
 
-        Ok(Self {
-            id,
-            event_listener,
-            _library,
-        })
+        Ok(Self::new(id, event_listener, _library))
     }
 
     pub fn event_listener(&self) -> &dyn ModuleEventListener {

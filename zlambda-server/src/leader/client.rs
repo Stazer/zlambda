@@ -3,6 +3,7 @@ use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
+use zlambda_common::module::ModuleId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,7 +33,7 @@ impl LeaderClient {
                 read_result = self.reader.read() => {
                     let message = match read_result {
                         Ok(None) => {
-                            break
+                            continue
                         }
                         Ok(Some(message)) => message,
                         Err(error) => {
@@ -45,6 +46,7 @@ impl LeaderClient {
                         Message::Client(client_message) => {
                             match client_message {
                                 ClientMessage::InitializeModuleRequest => self.initialize_module().await,
+                                ClientMessage::AppendModuleChunk { id, bytes } => self.append_chunk(id, bytes).await,
                                 message => {
                                     error!("Unhandled message {:?}", message);
                                     break;
@@ -64,10 +66,40 @@ impl LeaderClient {
     async fn initialize_module(&mut self) {
         let (result_sender, result_receiver) = oneshot::channel();
 
-        self.leader_sender
+        let result = self
+            .leader_sender
             .send(LeaderMessage::InitializeModule { result_sender })
             .await;
 
-        result_receiver.await;
+        if let Err(error) = result {
+            error!("{}", error);
+            return;
+        }
+
+        let id = match result_receiver.await {
+            Err(error) => {
+                error!("{}", error);
+                return;
+            }
+            Ok(id) => id,
+        };
+
+        let message = Message::Client(ClientMessage::InitializeModuleResponse { id });
+
+        if let Err(error) = self.writer.write(&message).await {
+            error!("{}", error);
+        }
+    }
+
+    async fn append_chunk(&mut self, id: ModuleId, chunk: Vec<u8>) {
+        let result = self
+            .leader_sender
+            .send(LeaderMessage::Append { id, chunk })
+            .await;
+
+        if let Err(error) = result {
+            error!("{}", error);
+            return;
+        }
     }
 }

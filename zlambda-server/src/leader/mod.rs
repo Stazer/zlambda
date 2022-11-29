@@ -23,7 +23,7 @@ use zlambda_common::log::{
     ClientLogEntryType, ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType,
 };
 use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
-use zlambda_common::module::ModuleId;
+use zlambda_common::module::{ModuleId, ModuleManager};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
 
@@ -47,6 +47,10 @@ pub enum LeaderMessage {
     InitializeModule {
         result_sender: oneshot::Sender<ModuleId>,
     },
+    Append {
+        id: ModuleId,
+        chunk: Vec<u8>,
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,9 +63,10 @@ pub struct Leader {
     addresses: HashMap<NodeId, SocketAddr>,
     sender: mpsc::Sender<LeaderMessage>,
     receiver: mpsc::Receiver<LeaderMessage>,
-    state: State,
+    module_manager: ModuleManager,
     follower_senders: HashMap<NodeId, mpsc::Sender<LeaderFollowerMessage>>,
-    on_apply_handler: HashMap<LogEntryId, Box<dyn FnOnce() -> BoxFuture<'static, ()>>>,
+    on_apply_initialize_module_handler:
+        HashMap<LogEntryId, Box<dyn FnOnce(ModuleId) -> BoxFuture<'static, ()>>>,
 }
 
 impl Leader {
@@ -78,9 +83,9 @@ impl Leader {
             addresses: [(0, address)].into(),
             sender,
             receiver,
-            state: State::default(),
+            module_manager: ModuleManager::default(),
             follower_senders: HashMap::default(),
-            on_apply_handler: HashMap::default(),
+            on_apply_initialize_module_handler: HashMap::default(),
         })
     }
 
@@ -130,6 +135,7 @@ impl Leader {
                         }
                         LeaderMessage::Acknowledge { log_entry_ids, node_id } => self.acknowledge(log_entry_ids, node_id).await,
                         LeaderMessage::InitializeModule { result_sender,}  => self.initialize_module(result_sender).await,
+                        LeaderMessage::Append { id, chunk } => self.append(id, chunk).await,
                     }
                 }
             )
@@ -200,17 +206,15 @@ impl Leader {
                 log_entry_id,
                 node_id
             );
+
             self.log.acknowledge(log_entry_id, node_id);
 
             if let Some(log_entry) = self.log.get(log_entry_id) {
                 if self.log.is_applicable(log_entry_id) {
                     match log_entry.data().r#type() {
                         LogEntryType::Client(client_log_entry_type) => {
-                            self.state.apply(client_log_entry_type.clone());
-
-                            if let Some(handler) = self.on_apply_handler.remove(&log_entry_id) {
-                                handler().await;
-                            }
+                            self.apply(log_entry_id, client_log_entry_type.clone())
+                                .await;
                         }
                         LogEntryType::Cluster(ClusterLogEntryType::Addresses(addresses)) => {
                             self.addresses = addresses.clone();
@@ -226,9 +230,57 @@ impl Leader {
             .replicate(LogEntryType::Client(ClientLogEntryType::InitializeModule))
             .await;
 
-        self.on_apply_handler
-            .insert(id, Box::new(|| { async move {} }.boxed()));
+        self.on_apply_initialize_module_handler.insert(
+            id,
+            Box::new(|module_id| {
+                {
+                    async move {
+                        if let Err(error) = result_sender.send(module_id) {
+                            error!("{}", error);
+                        }
+                    }
+                }
+                .boxed()
+            }),
+        );
     }
 
-    async fn append_module(&mut self, id: ModuleId, chunk: Vec<u8>) {}
+    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>) {
+        let id = self
+            .replicate(LogEntryType::Client(ClientLogEntryType::AppendModule(
+                id, chunk,
+            )))
+            .await;
+    }
+
+    async fn apply(&mut self, log_entry_id: LogEntryId, client_log_entry_type: ClientLogEntryType) {
+        trace!("Apply {}", log_entry_id);
+
+        match client_log_entry_type {
+            ClientLogEntryType::InitializeModule => {
+                let module_id = match self.module_manager.initialize() {
+                    Err(error) => {
+                        error!("{}", error);
+                        return;
+                    }
+                    Ok(module_id) => module_id,
+                };
+
+                if let Some(handler) = self
+                    .on_apply_initialize_module_handler
+                    .remove(&log_entry_id)
+                {
+                    handler(module_id).await;
+                }
+            }
+            ClientLogEntryType::AppendModule(id, chunk) => {
+                if let Err(error) = self.module_manager.append(id, &chunk).await {
+                    error!("{}", error);
+                }
+            }
+            r#type => {
+                error!("Unhandled type {:?}", r#type);
+            }
+        };
+    }
 }

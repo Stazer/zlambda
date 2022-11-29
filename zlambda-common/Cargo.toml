@@ -6,10 +6,10 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 bytes = { version = "1" }
-clap = { version = "4", features = ["derive"] }
 libloading = "0.7"
 postcard = { version = "1", features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream  = { version = "0", features = ["net"] }
 tokio-util = { version = "0", features = ["full"] }
+tempfile = { version = "3" }
