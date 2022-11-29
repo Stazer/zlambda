@@ -5,7 +5,6 @@ pub mod log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use crate::algorithm::next_key;
 use crate::state::State;
 use connection::LeaderConnection;
 use follower::LeaderFollowerMessage;
@@ -19,6 +18,7 @@ use tokio::net::TcpListener;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, trace};
+use zlambda_common::algorithm::next_key;
 use zlambda_common::log::{
     ClientLogEntryType, ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType,
 };

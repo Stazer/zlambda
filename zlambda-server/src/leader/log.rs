@@ -1,7 +1,7 @@
-use crate::algorithm::next_key;
 use std::collections::hash_map::RandomState;
 use std::collections::hash_set::Difference;
 use std::collections::{HashMap, HashSet};
+use zlambda_common::algorithm::next_key;
 use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
 use zlambda_common::node::NodeId;
 

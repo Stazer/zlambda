@@ -1,4 +1,6 @@
 pub mod log;
+pub mod connection;
+pub mod client;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -8,6 +10,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use connection::FollowerConnection;
+use tokio::sync::mpsc;
 use tokio::select;
 use tracing::{error, trace};
 use zlambda_common::log::LogEntryData;
@@ -21,6 +25,12 @@ use zlambda_common::term::Term;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub enum FollowerMessage {
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct Follower {
     id: NodeId,
     leader_id: NodeId,
@@ -29,6 +39,8 @@ pub struct Follower {
     tcp_listener: TcpListener,
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
+    sender: mpsc::Sender<FollowerMessage>,
+    receiver: mpsc::Receiver<FollowerMessage>,
     addresses: HashMap<NodeId, SocketAddr>,
     state: State,
 }
@@ -71,6 +83,8 @@ impl Follower {
             }
         };
 
+        let (sender, receiver) = mpsc::channel(16);
+
         trace!("Registered");
 
         Ok(Self {
@@ -82,6 +96,8 @@ impl Follower {
             writer,
             log: FollowerLog::default(),
             addresses,
+            sender,
+            receiver,
             state: State::default(),
         })
     }
@@ -89,6 +105,25 @@ impl Follower {
     pub async fn run(&mut self) {
         loop {
             select!(
+                accept_result = self.tcp_listener.accept() => {
+                    let (stream, address) = match accept_result {
+                        Err(error) => {
+                            error!("{}", error);
+                            break
+                        }
+                        Ok(values) => values,
+                    };
+
+                    trace!("Connection {} created", address);
+
+                    let (reader, writer) = stream.into_split();
+
+                    FollowerConnection::spawn(
+                        MessageStreamReader::new(reader),
+                        MessageStreamWriter::new(writer),
+                        self.sender.clone(),
+                    );
+                }
                 read_result = self.reader.read() => {
                     let message = match read_result {
                         Err(error) => {
@@ -106,6 +141,9 @@ impl Follower {
                             break
                         }
                     };
+                }
+                receive_result = self.receiver.recv() => {
+
                 }
             )
         }

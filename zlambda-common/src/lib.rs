@@ -1,3 +1,4 @@
+pub mod algorithm;
 pub mod async_trait;
 pub mod log;
 pub mod message;
