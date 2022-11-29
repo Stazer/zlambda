@@ -9,6 +9,8 @@ use crate::algorithm::next_key;
 use crate::state::State;
 use connection::LeaderConnection;
 use follower::LeaderFollowerMessage;
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use log::LeaderLog;
 use std::collections::HashMap;
 use std::error::Error;
@@ -17,8 +19,11 @@ use tokio::net::TcpListener;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, trace};
-use zlambda_common::log::{ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType};
+use zlambda_common::log::{
+    ClientLogEntryType, ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType,
+};
 use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
+use zlambda_common::module::ModuleId;
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
 
@@ -39,11 +44,13 @@ pub enum LeaderMessage {
         log_entry_type: LogEntryType,
         result_sender: oneshot::Sender<LogEntryId>,
     },
+    InitializeModule {
+        result_sender: oneshot::Sender<ModuleId>,
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
 pub struct Leader {
     id: NodeId,
     log: LeaderLog,
@@ -54,6 +61,7 @@ pub struct Leader {
     receiver: mpsc::Receiver<LeaderMessage>,
     state: State,
     follower_senders: HashMap<NodeId, mpsc::Sender<LeaderFollowerMessage>>,
+    on_apply_handler: HashMap<LogEntryId, Box<dyn FnOnce() -> BoxFuture<'static, ()>>>,
 }
 
 impl Leader {
@@ -72,6 +80,7 @@ impl Leader {
             receiver,
             state: State::default(),
             follower_senders: HashMap::default(),
+            on_apply_handler: HashMap::default(),
         })
     }
 
@@ -119,7 +128,8 @@ impl Leader {
                                 error!("Cannot send result");
                             }
                         }
-                        LeaderMessage::Acknowledge { log_entry_ids, node_id } => self.acknowledge(log_entry_ids, node_id),
+                        LeaderMessage::Acknowledge { log_entry_ids, node_id } => self.acknowledge(log_entry_ids, node_id).await,
+                        LeaderMessage::InitializeModule { result_sender,}  => self.initialize_module(result_sender).await,
                     }
                 }
             )
@@ -173,10 +183,17 @@ impl Leader {
             }
         }
 
+        self.sender
+            .send(LeaderMessage::Acknowledge {
+                log_entry_ids: vec![id],
+                node_id: self.id,
+            })
+            .await;
+
         id
     }
 
-    fn acknowledge(&mut self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId) {
+    async fn acknowledge(&mut self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId) {
         for log_entry_id in log_entry_ids.into_iter() {
             trace!(
                 "Log entry {} acknowledged by node {}",
@@ -190,6 +207,10 @@ impl Leader {
                     match log_entry.data().r#type() {
                         LogEntryType::Client(client_log_entry_type) => {
                             self.state.apply(client_log_entry_type.clone());
+
+                            if let Some(handler) = self.on_apply_handler.remove(&log_entry_id) {
+                                handler().await;
+                            }
                         }
                         LogEntryType::Cluster(ClusterLogEntryType::Addresses(addresses)) => {
                             self.addresses = addresses.clone();
@@ -199,4 +220,15 @@ impl Leader {
             }
         }
     }
+
+    async fn initialize_module(&mut self, result_sender: oneshot::Sender<ModuleId>) {
+        let id = self
+            .replicate(LogEntryType::Client(ClientLogEntryType::InitializeModule))
+            .await;
+
+        self.on_apply_handler
+            .insert(id, Box::new(|| { async move {} }.boxed()));
+    }
+
+    async fn append_module(&mut self, id: ModuleId, chunk: Vec<u8>) {}
 }

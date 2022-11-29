@@ -7,7 +7,7 @@ use std::error::Error;
 use std::iter::once;
 use std::path::PathBuf;
 use zlambda_client::Client;
-use zlambda_common::library::Library;
+use zlambda_common::module::{CreateDispatchPayloadEvent, Module, ModuleId};
 use zlambda_common::runtime::Runtime;
 use zlambda_server::Server;
 
@@ -35,7 +35,17 @@ enum MainCommand {
         #[clap(subcommand)]
         command: ClientCommand,
     },
-    Module {
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Subcommand)]
+enum ClientCommand {
+    Load {
+        path: PathBuf,
+    },
+    Dispatch {
+        id: ModuleId,
         path: PathBuf,
         commands: Vec<String>,
     },
@@ -43,15 +53,8 @@ enum MainCommand {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Subcommand)]
-enum ClientCommand {
-    Load,
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 fn main() -> Result<(), Box<dyn Error>> {
-    let arguments = MainArguments::try_parse()?;
+    let arguments = MainArguments::parse();
 
     match arguments.command {
         MainCommand::Server {
@@ -77,29 +80,35 @@ fn main() -> Result<(), Box<dyn Error>> {
             let runtime = Runtime::new()?;
 
             runtime.block_on(async move {
-                let client = match Client::new(address).await {
+                let mut client = match Client::new(address).await {
                     Err(error) => return Err(error),
                     Ok(client) => client,
                 };
 
                 match command {
-                    Load => {}
+                    ClientCommand::Load { path } => {
+                        client.load_module(&path).await?;
+                    }
+                    ClientCommand::Dispatch { id, path, commands } => {
+                        let arguments = once(path.display().to_string())
+                            .chain(commands.into_iter())
+                            .collect::<Vec<_>>();
+
+                        let module = Module::load(0, &path)?;
+
+                        let result = module
+                            .event_listener()
+                            .on_create_dispatch_payload(CreateDispatchPayloadEvent::new(arguments))
+                            .await;
+
+                        let (payload,) = result.into();
+
+                        client.dispatch(id, payload).await?;
+                    }
                 };
 
                 Ok(())
             })?;
-        }
-        MainCommand::Module { path, commands } => {
-            let library = Library::load(&path)?;
-            let runtime = Runtime::new()?;
-
-            let arguments = once(path.display().to_string())
-                .chain(commands.into_iter())
-                .collect::<Vec<_>>();
-
-            runtime.block_on(async move {
-                library.module().on_command(arguments).await;
-            });
         }
     };
 

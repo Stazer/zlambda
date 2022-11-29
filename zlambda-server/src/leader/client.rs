@@ -1,8 +1,8 @@
 use crate::leader::LeaderMessage;
 use tokio::select;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tracing::error;
-use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
+use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -10,19 +10,19 @@ use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
 pub struct LeaderClient {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    leader_node_sender: mpsc::Sender<LeaderMessage>,
+    leader_sender: mpsc::Sender<LeaderMessage>,
 }
 
 impl LeaderClient {
     pub fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_node_sender: mpsc::Sender<LeaderMessage>,
+        leader_sender: mpsc::Sender<LeaderMessage>,
     ) -> Self {
         Self {
             reader,
             writer,
-            leader_node_sender,
+            leader_sender,
         }
     }
 
@@ -32,7 +32,6 @@ impl LeaderClient {
                 read_result = self.reader.read() => {
                     let message = match read_result {
                         Ok(None) => {
-                            error!("Unhandled message");
                             break
                         }
                         Ok(Some(message)) => message,
@@ -41,8 +40,34 @@ impl LeaderClient {
                             break
                         }
                     };
+
+                    match message {
+                        Message::Client(client_message) => {
+                            match client_message {
+                                ClientMessage::InitializeModuleRequest => self.initialize_module().await,
+                                message => {
+                                    error!("Unhandled message {:?}", message);
+                                    break;
+                                }
+                            }
+                        }
+                        message => {
+                            error!("Unhandled message {:?}", message);
+                            break;
+                        }
+                    }
                 }
             )
         }
+    }
+
+    async fn initialize_module(&mut self) {
+        let (result_sender, result_receiver) = oneshot::channel();
+
+        self.leader_sender
+            .send(LeaderMessage::InitializeModule { result_sender })
+            .await;
+
+        result_receiver.await;
     }
 }

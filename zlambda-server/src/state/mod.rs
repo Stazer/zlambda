@@ -4,7 +4,9 @@ use zlambda_common::log::ClientLogEntryType;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Default)]
-pub struct State {}
+pub struct State {
+    //modules: HashMap<ModuleId, M>
+}
 
 impl State {
     pub fn apply(&mut self, client_log_entry_type: ClientLogEntryType) {

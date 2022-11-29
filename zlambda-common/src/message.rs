@@ -4,6 +4,7 @@ use crate::node::NodeId;
 use crate::term::Term;
 use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error;
@@ -63,6 +64,27 @@ impl From<io::Error> for MessageError {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ClientMessageDispatchPayload(Vec<u8>);
+
+impl ClientMessageDispatchPayload {
+    pub fn new<T>(payload: &T) -> Result<Self, MessageError>
+    where
+        T: Serialize,
+    {
+        Ok(Self(to_allocvec(&payload)?))
+    }
+
+    pub fn to_inner<T>(self) -> Result<T, MessageError>
+    where
+        T: DeserializeOwned,
+    {
+        Ok(take_from_bytes::<T>(&self.0)?.0)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum ClusterMessageRegisterResponse {
     Ok {
         id: NodeId,
@@ -102,12 +124,24 @@ pub enum ClientMessage {
     RegisterResponse,
 
     InitializeModuleRequest,
-    InitializeModuleResponse { id: u64 },
-    AppendModuleChunk { id: u64, bytes: Vec<u8> },
-    LoadModuleRequest { id: u64 },
-    LoadModuleResponse { id: u64 },
+    InitializeModuleResponse {
+        id: u64,
+    },
+    AppendModuleChunk {
+        id: u64,
+        bytes: Vec<u8>,
+    },
+    LoadModuleRequest {
+        id: u64,
+    },
+    LoadModuleResponse {
+        id: u64,
+    },
 
-    DispatchRequest,
+    DispatchRequest {
+        id: ModuleId,
+        payload: ClientMessageDispatchPayload,
+    },
     DispatchResponse,
 }
 

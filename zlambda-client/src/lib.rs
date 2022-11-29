@@ -4,7 +4,10 @@ use tokio::fs::File;
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
-use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
+use zlambda_common::message::{
+    ClientMessage, ClientMessageDispatchPayload, Message, MessageStreamReader, MessageStreamWriter,
+};
+use zlambda_common::module::ModuleId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,6 +53,8 @@ impl Client {
             Some(_) => return Err("Expected response".into()),
         };
 
+        println!("OK LETS SEND");
+
         let mut stream = ReaderStream::new(file);
 
         while let Some(bytes) = stream.next().await {
@@ -76,7 +81,11 @@ impl Client {
         Ok(id)
     }
 
-    pub async fn dispatch(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn dispatch(
+        &mut self,
+        _id: ModuleId,
+        _payload: ClientMessageDispatchPayload,
+    ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 }
