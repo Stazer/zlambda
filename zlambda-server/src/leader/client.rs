@@ -37,7 +37,7 @@ impl LeaderClient {
                         }
                         Ok(Some(message)) => message,
                         Err(error) => {
-                            error!("{}", error);
+                            error!("{:?}", error);
                             break
                         }
                     };
@@ -92,14 +92,21 @@ impl LeaderClient {
     }
 
     async fn append_chunk(&mut self, id: ModuleId, chunk: Vec<u8>) {
+        let (sender, receiver) = oneshot::channel();
+
         let result = self
             .leader_sender
-            .send(LeaderMessage::Append { id, chunk })
+            .send(LeaderMessage::Append {
+                id,
+                chunk,
+                sender: Some(sender),
+            })
             .await;
+
+        receiver.await;
 
         if let Err(error) = result {
             error!("{}", error);
-            return;
         }
     }
 }

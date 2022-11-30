@@ -240,6 +240,10 @@ impl MessageStreamWriter {
     }
 
     pub async fn write(&mut self, message: &Message) -> Result<(), MessageError> {
-        Ok(self.writer.write(&message.to_bytes()?).await.map(|_| ())?)
+        Ok(self
+            .writer
+            .write_all(&message.to_bytes()?)
+            .await
+            .map(|_| ())?)
     }
 }

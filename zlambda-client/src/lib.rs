@@ -55,15 +55,19 @@ impl Client {
 
         println!("OK LETS SEND");
 
-        let mut stream = ReaderStream::new(file);
+        let mut stream = ReaderStream::with_capacity(file, 4096 * 4);
 
         while let Some(bytes) = stream.next().await {
-            let bytes = bytes?.to_vec();
+            let bytes = bytes?;
+
+            if bytes.is_empty() {
+                break;
+            }
 
             self.writer
                 .write(&Message::Client(ClientMessage::AppendModuleChunk {
                     id,
-                    bytes,
+                    bytes: bytes.to_vec(),
                 }))
                 .await?;
         }

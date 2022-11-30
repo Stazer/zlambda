@@ -50,6 +50,7 @@ pub enum LeaderMessage {
     Append {
         id: ModuleId,
         chunk: Vec<u8>,
+        sender: Option<oneshot::Sender<()>>,
     },
 }
 
@@ -135,7 +136,7 @@ impl Leader {
                         }
                         LeaderMessage::Acknowledge { log_entry_ids, node_id } => self.acknowledge(log_entry_ids, node_id).await,
                         LeaderMessage::InitializeModule { result_sender,}  => self.initialize_module(result_sender).await,
-                        LeaderMessage::Append { id, chunk } => self.append(id, chunk).await,
+                        LeaderMessage::Append { id, chunk, sender } => self.append(id, chunk, sender).await,
                     }
                 }
             )
@@ -245,12 +246,18 @@ impl Leader {
         );
     }
 
-    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>) {
+    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>, sender: Option<oneshot::Sender<()>>) {
         let id = self
             .replicate(LogEntryType::Client(ClientLogEntryType::AppendModule(
                 id, chunk,
             )))
             .await;
+
+        if let Some(sender) = sender {
+            if sender.send(()).is_err() {
+                error!("Error sending append module");
+            }
+        }
     }
 
     async fn apply(&mut self, log_entry_id: LogEntryId, client_log_entry_type: ClientLogEntryType) {
