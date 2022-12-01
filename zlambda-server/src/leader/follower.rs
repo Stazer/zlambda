@@ -1,6 +1,6 @@
 use crate::leader::LeaderMessage;
 use tokio::select;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 use zlambda_common::log::LogEntryData;
 use zlambda_common::message::{ClusterMessage, Message, MessageStreamReader, MessageStreamWriter};
@@ -14,6 +14,7 @@ pub enum LeaderFollowerMessage {
     Replicate {
         term: Term,
         log_entry_data: Vec<LogEntryData>,
+        sender: oneshot::Sender<()>,
     },
 }
 
@@ -50,7 +51,9 @@ impl LeaderFollower {
             select!(
                 read_result = self.reader.read() => {
                     let message = match read_result {
-                        Ok(None) => break,
+                        Ok(None) => {
+                            continue
+                        }
                         Ok(Some(message)) => message,
                         Err(error) => {
                             error!("{}", error);
@@ -79,20 +82,21 @@ impl LeaderFollower {
                 receive_result = self.receiver.recv() => {
                     let message = match receive_result {
                         None => {
+                            error!("Receiver closed");
                             break
                         }
                         Some(message) => message,
                     };
 
                     match message {
-                        LeaderFollowerMessage::Replicate { term, log_entry_data } => self.replicate(term, log_entry_data).await,
+                        LeaderFollowerMessage::Replicate { term, log_entry_data, sender } => self.replicate(term, log_entry_data, sender).await,
                     }
                 }
             )
         }
     }
 
-    async fn replicate(&mut self, term: Term, log_entry_data: Vec<LogEntryData>) {
+    async fn replicate(&mut self, term: Term, log_entry_data: Vec<LogEntryData>, sender: oneshot::Sender<()>) {
         let result = self
             .writer
             .write(&Message::Cluster(ClusterMessage::AppendEntriesRequest {
@@ -103,7 +107,10 @@ impl LeaderFollower {
 
         if let Err(error) = result {
             error!("{}", error);
-            return;
+        }
+
+        if sender.send(()).is_err() {
+            error!("Cannot send LeaderFollowerMessage::Replicate response");
         }
     }
 }

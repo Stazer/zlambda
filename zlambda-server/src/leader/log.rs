@@ -111,11 +111,15 @@ impl LeaderLog {
         id
     }
 
-    pub fn acknowledge(&mut self, log_entry_id: LogEntryId, node_id: NodeId) {
-        self.log_entries
+    pub fn acknowledge(&mut self, log_entry_id: LogEntryId, node_id: NodeId) -> Vec<LogEntryId> {
+        let log_entry = self
+            .log_entries
             .get_mut(&log_entry_id)
-            .expect(&format!("Log entry with id {} should exist", log_entry_id))
-            .acknowledge(node_id);
+            .expect(&format!("Log entry with id {} should exist", log_entry_id));
+
+        log_entry.acknowledge(node_id);
+
+        let mut committed_log_entry_ids = Vec::default();
 
         loop {
             let log_entry = match self.log_entries.get(&self.next_committing_log_entry_id) {
@@ -124,11 +128,15 @@ impl LeaderLog {
             };
 
             if log_entry.is_committed() {
+                committed_log_entry_ids.push(self.next_committing_log_entry_id);
+
                 self.next_committing_log_entry_id += 1;
             } else {
                 break;
             }
         }
+
+        committed_log_entry_ids
     }
 
     pub fn is_applicable(&self, id: LogEntryId) -> bool {

@@ -178,15 +178,22 @@ impl Leader {
         for follower_sender in self.follower_senders.values() {
             let log_entry_data = LogEntryData::new(id, log_entry_type.clone());
 
-            if follower_sender
+            let (sender, receiver) = oneshot::channel();
+
+            if let Err(error) = follower_sender
                 .send(LeaderFollowerMessage::Replicate {
                     term: self.term,
                     log_entry_data: vec![log_entry_data],
+                    sender,
                 })
                 .await
-                .is_err()
             {
-                error!("Cannot send LeaderFollowerMessage");
+                error!("Cannot send LeaderFollowerMessage::Replicate {}", error);
+                continue;
+            }
+
+            if let Err(error) = receiver.await {
+                error!("Cannot receive LeaderFollowerMessage::Replicate {}", error);
             }
         }
 
@@ -208,13 +215,11 @@ impl Leader {
                 node_id
             );
 
-            self.log.acknowledge(log_entry_id, node_id);
-
-            if let Some(log_entry) = self.log.get(log_entry_id) {
-                if self.log.is_applicable(log_entry_id) {
+            for committed_log_entry_id in self.log.acknowledge(log_entry_id, node_id) {
+                if let Some(log_entry) = self.log.get(committed_log_entry_id) {
                     match log_entry.data().r#type() {
                         LogEntryType::Client(client_log_entry_type) => {
-                            self.apply(log_entry_id, client_log_entry_type.clone())
+                            self.apply(committed_log_entry_id, client_log_entry_type.clone())
                                 .await;
                         }
                         LogEntryType::Cluster(ClusterLogEntryType::Addresses(addresses)) => {
