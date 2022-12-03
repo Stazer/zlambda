@@ -38,7 +38,7 @@ impl ModuleManager {
         let file = File::from_std(tempfile.reopen()?);
 
         self.entries
-            .insert(id, ModuleManagerEntry::Loading(tempfile, file, path ));
+            .insert(id, ModuleManagerEntry::Loading(tempfile, file, path));
 
         Ok(id)
     }
@@ -59,7 +59,7 @@ impl ModuleManager {
         let (tempfile, file, path) = match self.entries.remove(&id) {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading (tempfile, file, path)) => (tempfile, file, path),
+            Some(ModuleManagerEntry::Loading(tempfile, file, path)) => (tempfile, file, path),
         };
 
         let module = Module::load(id, &path)?;
@@ -67,8 +67,7 @@ impl ModuleManager {
         drop(file);
         drop(tempfile);
 
-        self.entries
-            .insert(id, ModuleManagerEntry::Loaded(module));
+        self.entries.insert(id, ModuleManagerEntry::Loaded(module));
 
         Ok(())
     }
