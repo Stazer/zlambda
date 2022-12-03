@@ -18,9 +18,9 @@ pub enum ClusterLogEntryType {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum ClientLogEntryType {
-    InitializeModule,
-    AppendModule(u64, Vec<u8>),
-    LoadModule(u64),
+    Initialize,
+    Append(u64, Vec<u8>),
+    Load(u64),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

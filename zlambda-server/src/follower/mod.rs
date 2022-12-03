@@ -4,7 +4,6 @@ pub mod log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use crate::state::State;
 use connection::FollowerConnection;
 use log::FollowerLog;
 use std::collections::HashMap;
@@ -43,7 +42,6 @@ pub struct Follower {
     sender: mpsc::Sender<FollowerMessage>,
     receiver: mpsc::Receiver<FollowerMessage>,
     addresses: HashMap<NodeId, SocketAddr>,
-    state: State,
 }
 
 impl Follower {
@@ -99,7 +97,6 @@ impl Follower {
             addresses,
             sender,
             receiver,
-            state: State::default(),
         })
     }
 

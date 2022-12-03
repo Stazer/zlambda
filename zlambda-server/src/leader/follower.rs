@@ -11,11 +11,7 @@ use zlambda_common::term::Term;
 
 #[derive(Debug)]
 pub enum LeaderFollowerMessage {
-    Replicate {
-        term: Term,
-        log_entry_data: Vec<LogEntryData>,
-        sender: oneshot::Sender<()>,
-    },
+    Replicate(Term, Vec<LogEntryData>, oneshot::Sender<()>),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,7 +48,8 @@ impl LeaderFollower {
                 read_result = self.reader.read() => {
                     let message = match read_result {
                         Ok(None) => {
-                            continue
+                            todo!("Follower crashed");
+                            break
                         }
                         Ok(Some(message)) => message,
                         Err(error) => {
@@ -89,7 +86,7 @@ impl LeaderFollower {
                     };
 
                     match message {
-                        LeaderFollowerMessage::Replicate { term, log_entry_data, sender } => self.replicate(term, log_entry_data, sender).await,
+                        LeaderFollowerMessage::Replicate(term, log_entry_data, sender) => self.replicate(term, log_entry_data, sender).await,
                     }
                 }
             )

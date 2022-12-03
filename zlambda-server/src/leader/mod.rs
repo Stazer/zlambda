@@ -5,7 +5,6 @@ pub mod log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use crate::state::State;
 use connection::LeaderConnection;
 use follower::LeaderFollowerMessage;
 use futures::future::BoxFuture;
@@ -44,14 +43,9 @@ pub enum LeaderMessage {
         log_entry_type: LogEntryType,
         result_sender: oneshot::Sender<LogEntryId>,
     },
-    InitializeModule {
-        result_sender: oneshot::Sender<ModuleId>,
-    },
-    Append {
-        id: ModuleId,
-        chunk: Vec<u8>,
-        sender: Option<oneshot::Sender<()>>,
-    },
+    Initialize(oneshot::Sender<ModuleId>),
+    Append(ModuleId, Vec<u8>, oneshot::Sender<()>),
+    Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,6 +62,8 @@ pub struct Leader {
     follower_senders: HashMap<NodeId, mpsc::Sender<LeaderFollowerMessage>>,
     on_apply_initialize_module_handler:
         HashMap<LogEntryId, Box<dyn FnOnce(ModuleId) -> BoxFuture<'static, ()>>>,
+    on_load_handler:
+        HashMap<LogEntryId, Box<dyn FnOnce(Result<ModuleId, String>) -> BoxFuture<'static, ()>>>,
 }
 
 impl Leader {
@@ -87,6 +83,7 @@ impl Leader {
             module_manager: ModuleManager::default(),
             follower_senders: HashMap::default(),
             on_apply_initialize_module_handler: HashMap::default(),
+            on_load_handler: HashMap::default(),
         })
     }
 
@@ -135,8 +132,9 @@ impl Leader {
                             }
                         }
                         LeaderMessage::Acknowledge { log_entry_ids, node_id } => self.acknowledge(log_entry_ids, node_id).await,
-                        LeaderMessage::InitializeModule { result_sender,}  => self.initialize_module(result_sender).await,
-                        LeaderMessage::Append { id, chunk, sender } => self.append(id, chunk, sender).await,
+                        LeaderMessage::Initialize(sender)  => self.initialize(sender).await,
+                        LeaderMessage::Append(id, chunk, sender) => self.append(id, chunk, sender).await,
+                        LeaderMessage::Load(id, sender) => self.load(id, sender).await,
                     }
                 }
             )
@@ -181,11 +179,7 @@ impl Leader {
             let (sender, receiver) = oneshot::channel();
 
             if let Err(error) = follower_sender
-                .send(LeaderFollowerMessage::Replicate {
-                    term: self.term,
-                    log_entry_data: vec![log_entry_data],
-                    sender,
-                })
+                .send(LeaderFollowerMessage::Replicate(self.term, vec![log_entry_data], sender))
                 .await
             {
                 error!("Cannot send LeaderFollowerMessage::Replicate {}", error);
@@ -231,9 +225,9 @@ impl Leader {
         }
     }
 
-    async fn initialize_module(&mut self, result_sender: oneshot::Sender<ModuleId>) {
+    async fn initialize(&mut self, sender: oneshot::Sender<ModuleId>) {
         let id = self
-            .replicate(LogEntryType::Client(ClientLogEntryType::InitializeModule))
+            .replicate(LogEntryType::Client(ClientLogEntryType::Initialize))
             .await;
 
         self.on_apply_initialize_module_handler.insert(
@@ -241,7 +235,7 @@ impl Leader {
             Box::new(|module_id| {
                 {
                     async move {
-                        if let Err(error) = result_sender.send(module_id) {
+                        if let Err(error) = sender.send(module_id) {
                             error!("{}", error);
                         }
                     }
@@ -251,25 +245,23 @@ impl Leader {
         );
     }
 
-    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>, sender: Option<oneshot::Sender<()>>) {
+    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>, sender: oneshot::Sender<()>) {
         let id = self
-            .replicate(LogEntryType::Client(ClientLogEntryType::AppendModule(
+            .replicate(LogEntryType::Client(ClientLogEntryType::Append(
                 id, chunk,
             )))
             .await;
 
-        if let Some(sender) = sender {
             if sender.send(()).is_err() {
                 error!("Error sending append module");
             }
-        }
     }
 
     async fn apply(&mut self, log_entry_id: LogEntryId, client_log_entry_type: ClientLogEntryType) {
         trace!("Apply {}", log_entry_id);
 
         match client_log_entry_type {
-            ClientLogEntryType::InitializeModule => {
+            ClientLogEntryType::Initialize => {
                 let module_id = match self.module_manager.initialize() {
                     Err(error) => {
                         error!("{}", error);
@@ -285,14 +277,47 @@ impl Leader {
                     handler(module_id).await;
                 }
             }
-            ClientLogEntryType::AppendModule(id, chunk) => {
+            ClientLogEntryType::Append(id, chunk) => {
                 if let Err(error) = self.module_manager.append(id, &chunk).await {
                     error!("{}", error);
+                }
+            }
+            ClientLogEntryType::Load(id) => {
+                let result = match self.module_manager.load(id).await {
+                    Ok(()) => Ok(id),
+                    Err(error) => Err(error.to_string()),
+                };
+
+                if let Some(handler) = self
+                    .on_load_handler
+                    .remove(&log_entry_id)
+                {
+                    handler(result).await;
                 }
             }
             r#type => {
                 error!("Unhandled type {:?}", r#type);
             }
         };
+    }
+
+    async fn load(&mut self, id: ModuleId, sender: oneshot::Sender<Result<ModuleId, String>>) {
+        let id = self
+            .replicate(LogEntryType::Client(ClientLogEntryType::Load(id)))
+            .await;
+
+        self.on_load_handler.insert(
+            id,
+            Box::new(|result| {
+                {
+                    async move {
+                        if sender.send(result).is_err() {
+                            error!("Cannot send");
+                        }
+                    }
+                }
+                .boxed()
+            }),
+        );
     }
 }

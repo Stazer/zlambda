@@ -11,7 +11,7 @@ use tokio::io::AsyncWriteExt;
 
 enum ModuleManagerEntry {
     Loaded(Module),
-    Loading { file: File, path: PathBuf },
+    Loading(NamedTempFile, File, PathBuf),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,10 +34,11 @@ impl ModuleManager {
 
         let tempfile = NamedTempFile::new()?;
         let path = tempfile.path().into();
-        let file = File::from_std(tempfile.into_file());
+
+        let file = File::from_std(tempfile.reopen()?);
 
         self.entries
-            .insert(id, ModuleManagerEntry::Loading { file, path });
+            .insert(id, ModuleManagerEntry::Loading(tempfile, file, path ));
 
         Ok(id)
     }
@@ -46,7 +47,7 @@ impl ModuleManager {
         let file = match self.entries.get_mut(&id) {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading { file, .. }) => file,
+            Some(ModuleManagerEntry::Loading(_, file, _)) => file,
         };
 
         file.write_all(chunk).await?;
@@ -55,14 +56,19 @@ impl ModuleManager {
     }
 
     pub async fn load(&mut self, id: ModuleId) -> Result<(), Box<dyn Error>> {
-        let path = match self.entries.remove(&id) {
+        let (tempfile, file, path) = match self.entries.remove(&id) {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading { path, .. }) => path,
+            Some(ModuleManagerEntry::Loading (tempfile, file, path)) => (tempfile, file, path),
         };
 
+        let module = Module::load(id, &path)?;
+
+        drop(file);
+        drop(tempfile);
+
         self.entries
-            .insert(id, ModuleManagerEntry::Loaded(Module::load(id, &path)?));
+            .insert(id, ModuleManagerEntry::Loaded(module));
 
         Ok(())
     }

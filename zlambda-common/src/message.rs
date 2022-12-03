@@ -123,25 +123,13 @@ pub enum ClientMessage {
     RegisterRequest,
     RegisterResponse,
 
-    InitializeModuleRequest,
-    InitializeModuleResponse {
-        id: u64,
-    },
-    AppendModuleChunk {
-        id: u64,
-        bytes: Vec<u8>,
-    },
-    LoadModuleRequest {
-        id: u64,
-    },
-    LoadModuleResponse {
-        id: u64,
-    },
+    InitializeRequest,
+    InitializeResponse(ModuleId),
+    Append(ModuleId, Vec<u8>),
+    LoadRequest(ModuleId),
+    LoadResponse(Result<ModuleId, String>),
 
-    DispatchRequest {
-        id: ModuleId,
-        payload: ClientMessageDispatchPayload,
-    },
+    DispatchRequest(ModuleId, ClientMessageDispatchPayload),
     DispatchResponse,
 }
 
@@ -176,7 +164,7 @@ pub struct MessageBufferReader {
 }
 
 impl MessageBufferReader {
-    pub fn push(&mut self, bytes: Bytes) {
+    pub fn push(&mut self, bytes: &[u8]) {
         self.buffer.extend(bytes);
     }
 
@@ -210,18 +198,18 @@ impl MessageStreamReader {
     }
 
     pub async fn read(&mut self) -> Result<Option<Message>, MessageError> {
-        match self.buffer.next()? {
-            Some(item) => Ok(Some(item)),
-            None => {
-                let bytes = match self.reader.next().await {
-                    None => return Ok(None),
-                    Some(Err(error)) => return Err(error.into()),
-                    Some(Ok(bytes)) => bytes,
-                };
+        loop {
+            match self.buffer.next()? {
+                Some(item) => return Ok(Some(item)),
+                None => {
+                    let bytes = match self.reader.next().await {
+                        None => return Ok(None),
+                        Some(Err(error)) => return Err(error.into()),
+                        Some(Ok(bytes)) => bytes,
+                    };
 
-                self.buffer.push(bytes);
-
-                self.buffer.next()
+                    self.buffer.push(&bytes);
+                }
             }
         }
     }

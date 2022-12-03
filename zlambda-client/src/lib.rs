@@ -44,12 +44,12 @@ impl Client {
         let file = File::open(path).await?;
 
         self.writer
-            .write(&Message::Client(ClientMessage::InitializeModuleRequest))
+            .write(&Message::Client(ClientMessage::InitializeRequest))
             .await?;
 
         let id = match self.reader.read().await? {
             None => return Err("Expected response".into()),
-            Some(Message::Client(ClientMessage::InitializeModuleResponse { id })) => id,
+            Some(Message::Client(ClientMessage::InitializeResponse(id))) => id,
             Some(_) => return Err("Expected response".into()),
         };
 
@@ -65,22 +65,19 @@ impl Client {
             }
 
             self.writer
-                .write(&Message::Client(ClientMessage::AppendModuleChunk {
-                    id,
-                    bytes: bytes.to_vec(),
-                }))
+                .write(&Message::Client(ClientMessage::Append(id, bytes.to_vec())))
                 .await?;
         }
 
         println!("LOAD");
 
         self.writer
-            .write(&Message::Client(ClientMessage::LoadModuleRequest { id }))
+            .write(&Message::Client(ClientMessage::LoadRequest(id)))
             .await?;
 
         let id = match self.reader.read().await? {
             None => return Err("Expected response".into()),
-            Some(Message::Client(ClientMessage::LoadModuleResponse { id })) => id,
+            Some(Message::Client(ClientMessage::LoadResponse(result))) => result?,
             Some(_) => return Err("Expected response".into()),
         };
 
