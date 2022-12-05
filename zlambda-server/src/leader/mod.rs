@@ -21,7 +21,9 @@ use zlambda_common::algorithm::next_key;
 use zlambda_common::log::{
     ClientLogEntryType, ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType,
 };
-use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
+use zlambda_common::message::{
+    ClientMessageDispatchPayload, MessageStreamReader, MessageStreamWriter,
+};
 use zlambda_common::module::{ModuleId, ModuleManager};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
@@ -30,22 +32,17 @@ use zlambda_common::term::Term;
 
 #[derive(Debug)]
 pub enum LeaderMessage {
-    Acknowledge {
-        log_entry_ids: Vec<LogEntryId>,
-        node_id: NodeId,
-    },
-    Register {
-        address: SocketAddr,
-        follower_sender: mpsc::Sender<LeaderFollowerMessage>,
-        result_sender: oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
-    },
-    Replicate {
-        log_entry_type: LogEntryType,
-        result_sender: oneshot::Sender<LogEntryId>,
-    },
+    Register(
+        SocketAddr,
+        mpsc::Sender<LeaderFollowerMessage>,
+        oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
+    ),
+    Acknowledge(Vec<LogEntryId>, NodeId),
+    Replicate(LogEntryType, oneshot::Sender<LogEntryId>),
     Initialize(oneshot::Sender<ModuleId>),
     Append(ModuleId, Vec<u8>, oneshot::Sender<()>),
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
+    Dispatch(ModuleId, ClientMessageDispatchPayload, oneshot::Sender<()>),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,22 +116,23 @@ impl Leader {
                     };
 
                     match message {
-                        LeaderMessage::Register { address, follower_sender, result_sender  } => self.register(
+                        LeaderMessage::Register(address, follower_sender, result_sender  ) => self.register(
                             address,
                             follower_sender,
                             result_sender,
                         ).await,
-                        LeaderMessage::Replicate { log_entry_type, result_sender } => {
+                        LeaderMessage::Replicate(log_entry_type, sender) => {
                             let id = self.replicate(log_entry_type).await;
 
-                            if result_sender.send(id).is_err() {
+                            if sender.send(id).is_err() {
                                 error!("Cannot send result");
                             }
                         }
-                        LeaderMessage::Acknowledge { log_entry_ids, node_id } => self.acknowledge(log_entry_ids, node_id).await,
+                        LeaderMessage::Acknowledge(log_entry_ids, node_id) => self.acknowledge(log_entry_ids, node_id).await,
                         LeaderMessage::Initialize(sender)  => self.initialize(sender).await,
                         LeaderMessage::Append(id, chunk, sender) => self.append(id, chunk, sender).await,
                         LeaderMessage::Load(id, sender) => self.load(id, sender).await,
+                        LeaderMessage::Dispatch(id, payload, sender) => self.dispatch(id, payload, sender).await,
                     }
                 }
             )
@@ -179,7 +177,11 @@ impl Leader {
             let (sender, receiver) = oneshot::channel();
 
             if let Err(error) = follower_sender
-                .send(LeaderFollowerMessage::Replicate(self.term, vec![log_entry_data], sender))
+                .send(LeaderFollowerMessage::Replicate(
+                    self.term,
+                    vec![log_entry_data],
+                    sender,
+                ))
                 .await
             {
                 error!("Cannot send LeaderFollowerMessage::Replicate {}", error);
@@ -192,10 +194,7 @@ impl Leader {
         }
 
         self.sender
-            .send(LeaderMessage::Acknowledge {
-                log_entry_ids: vec![id],
-                node_id: self.id,
-            })
+            .send(LeaderMessage::Acknowledge(vec![id], self.id))
             .await;
 
         id
@@ -247,14 +246,12 @@ impl Leader {
 
     async fn append(&mut self, id: ModuleId, chunk: Vec<u8>, sender: oneshot::Sender<()>) {
         let id = self
-            .replicate(LogEntryType::Client(ClientLogEntryType::Append(
-                id, chunk,
-            )))
+            .replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
             .await;
 
-            if sender.send(()).is_err() {
-                error!("Error sending append module");
-            }
+        if sender.send(()).is_err() {
+            error!("Error sending append module");
+        }
     }
 
     async fn apply(&mut self, log_entry_id: LogEntryId, client_log_entry_type: ClientLogEntryType) {
@@ -288,10 +285,7 @@ impl Leader {
                     Err(error) => Err(error.to_string()),
                 };
 
-                if let Some(handler) = self
-                    .on_load_handler
-                    .remove(&log_entry_id)
-                {
+                if let Some(handler) = self.on_load_handler.remove(&log_entry_id) {
                     handler(result).await;
                 }
             }
@@ -319,5 +313,13 @@ impl Leader {
                 .boxed()
             }),
         );
+    }
+
+    async fn dispatch(
+        &mut self,
+        id: ModuleId,
+        payload: ClientMessageDispatchPayload,
+        sender: oneshot::Sender<()>,
+    ) {
     }
 }

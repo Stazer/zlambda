@@ -53,8 +53,6 @@ impl Client {
             Some(_) => return Err("Expected response".into()),
         };
 
-        println!("OK LETS SEND");
-
         let mut stream = ReaderStream::with_capacity(file, 4096 * 4);
 
         while let Some(bytes) = stream.next().await {
@@ -68,8 +66,6 @@ impl Client {
                 .write(&Message::Client(ClientMessage::Append(id, bytes.to_vec())))
                 .await?;
         }
-
-        println!("LOAD");
 
         self.writer
             .write(&Message::Client(ClientMessage::LoadRequest(id)))
@@ -86,9 +82,19 @@ impl Client {
 
     pub async fn dispatch(
         &mut self,
-        _id: ModuleId,
-        _payload: ClientMessageDispatchPayload,
+        id: ModuleId,
+        payload: ClientMessageDispatchPayload,
     ) -> Result<(), Box<dyn Error>> {
+        self.writer
+            .write(&Message::Client(ClientMessage::DispatchRequest(id, payload)))
+            .await?;
+
+        let result = match self.reader.read().await? {
+            None => return Err("Expected response".into()),
+            Some(Message::Client(ClientMessage::DispatchResponse(result))) => result,
+            Some(_) => return Err("Expected response".into()),
+        };
+
         Ok(())
     }
 }

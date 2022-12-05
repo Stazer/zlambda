@@ -1,4 +1,5 @@
 use crate::leader::LeaderMessage;
+use std::error::Error;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
@@ -60,10 +61,10 @@ impl LeaderFollower {
 
                     match message {
                         Message::Cluster(ClusterMessage::AppendEntriesResponse { log_entry_ids }) => {
-                            let result = self.leader_sender.send(LeaderMessage::Acknowledge {
-                                node_id: self.id,
+                            let result = self.leader_sender.send(LeaderMessage::Acknowledge(
                                 log_entry_ids,
-                            }).await;
+                                self.id,
+                            )).await;
 
                             if let Err(error) = result {
                                 error!("{}", error);
@@ -86,28 +87,34 @@ impl LeaderFollower {
                     };
 
                     match message {
-                        LeaderFollowerMessage::Replicate(term, log_entry_data, sender) => self.replicate(term, log_entry_data, sender).await,
+                        LeaderFollowerMessage::Replicate(term, log_entry_data, sender) => self.replicate(
+                            term,
+                            log_entry_data,
+                            sender,
+                        ).await.expect(""),
                     }
                 }
             )
         }
     }
 
-    async fn replicate(&mut self, term: Term, log_entry_data: Vec<LogEntryData>, sender: oneshot::Sender<()>) {
-        let result = self
-            .writer
+    async fn replicate(
+        &mut self,
+        term: Term,
+        log_entry_data: Vec<LogEntryData>,
+        sender: oneshot::Sender<()>,
+    ) -> Result<(), Box<dyn Error>> {
+        self.writer
             .write(&Message::Cluster(ClusterMessage::AppendEntriesRequest {
                 term,
                 log_entry_data,
             }))
-            .await;
+            .await?;
 
-        if let Err(error) = result {
-            error!("{}", error);
-        }
+        sender
+            .send(())
+            .map_err(|_| Box::<dyn Error>::from("Cannot send message"))?;
 
-        if sender.send(()).is_err() {
-            error!("Cannot send LeaderFollowerMessage::Replicate response");
-        }
+        Ok(())
     }
 }

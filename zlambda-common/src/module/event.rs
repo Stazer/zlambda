@@ -4,17 +4,17 @@ use crate::message::ClientMessageDispatchPayload;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct CreateDispatchPayloadEvent {
+pub struct CreateDispatchPayloadModuleEvent {
     arguments: Vec<String>,
 }
 
-impl From<CreateDispatchPayloadEvent> for (Vec<String>,) {
-    fn from(event: CreateDispatchPayloadEvent) -> Self {
+impl From<CreateDispatchPayloadModuleEvent> for (Vec<String>,) {
+    fn from(event: CreateDispatchPayloadModuleEvent) -> Self {
         (event.arguments,)
     }
 }
 
-impl CreateDispatchPayloadEvent {
+impl CreateDispatchPayloadModuleEvent {
     pub fn new(arguments: Vec<String>) -> Self {
         Self { arguments }
     }
@@ -23,17 +23,17 @@ impl CreateDispatchPayloadEvent {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct CreateDispatchPayloadEventResult {
+pub struct CreateDispatchPayloadModuleEventResult {
     payload: ClientMessageDispatchPayload,
 }
 
-impl From<CreateDispatchPayloadEventResult> for (ClientMessageDispatchPayload,) {
-    fn from(result: CreateDispatchPayloadEventResult) -> Self {
+impl From<CreateDispatchPayloadModuleEventResult> for (ClientMessageDispatchPayload,) {
+    fn from(result: CreateDispatchPayloadModuleEventResult) -> Self {
         (result.payload,)
     }
 }
 
-impl CreateDispatchPayloadEventResult {
+impl CreateDispatchPayloadModuleEventResult {
     pub fn new(payload: ClientMessageDispatchPayload) -> Self {
         Self { payload }
     }
@@ -42,17 +42,17 @@ impl CreateDispatchPayloadEventResult {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct DispatchEvent {
+pub struct DispatchModuleEvent {
     payload: ClientMessageDispatchPayload,
 }
 
-impl From<DispatchEvent> for (ClientMessageDispatchPayload,) {
-    fn from(event: DispatchEvent) -> Self {
+impl From<DispatchModuleEvent> for (ClientMessageDispatchPayload,) {
+    fn from(event: DispatchModuleEvent) -> Self {
         (event.payload,)
     }
 }
 
-impl DispatchEvent {
+impl DispatchModuleEvent {
     pub fn new(payload: ClientMessageDispatchPayload) -> Self {
         Self { payload }
     }
@@ -61,7 +61,13 @@ impl DispatchEvent {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct DispatchEventResult {}
+pub struct DispatchModuleEventResult {}
+
+impl DispatchModuleEventResult {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,7 +75,7 @@ pub struct DispatchEventResult {}
 pub trait ModuleEventListener: Send + Sync {
     async fn on_create_dispatch_payload(
         &self,
-        _event: CreateDispatchPayloadEvent,
-    ) -> CreateDispatchPayloadEventResult;
-    async fn on_dispatch(&self, _event: DispatchEvent) -> DispatchEventResult;
+        _event: CreateDispatchPayloadModuleEvent,
+    ) -> CreateDispatchPayloadModuleEventResult;
+    async fn on_dispatch(&self, _event: DispatchModuleEvent) -> DispatchModuleEventResult;
 }

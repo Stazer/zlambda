@@ -130,7 +130,7 @@ pub enum ClientMessage {
     LoadResponse(Result<ModuleId, String>),
 
     DispatchRequest(ModuleId, ClientMessageDispatchPayload),
-    DispatchResponse,
+    DispatchResponse(),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

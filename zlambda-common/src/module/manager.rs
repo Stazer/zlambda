@@ -56,18 +56,16 @@ impl ModuleManager {
     }
 
     pub async fn load(&mut self, id: ModuleId) -> Result<(), Box<dyn Error>> {
-        let (tempfile, file, path) = match self.entries.remove(&id) {
+        let (tempfile, path) = match self.entries.remove(&id) {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading(tempfile, file, path)) => (tempfile, file, path),
+            Some(ModuleManagerEntry::Loading(tempfile, file, path)) => (tempfile, path),
         };
 
-        let module = Module::load(id, &path)?;
+        self.entries
+            .insert(id, ModuleManagerEntry::Loaded(Module::load(id, &path)?));
 
-        drop(file);
-        drop(tempfile);
-
-        self.entries.insert(id, ModuleManagerEntry::Loaded(module));
+        tempfile.close()?;
 
         Ok(())
     }

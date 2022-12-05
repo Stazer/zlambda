@@ -86,11 +86,11 @@ impl LeaderConnection {
         let (result_sender, result_receiver) = oneshot::channel();
 
         self.leader_sender
-            .send(LeaderMessage::Register {
+            .send(LeaderMessage::Register(
                 address,
                 follower_sender,
                 result_sender,
-            })
+            ))
             .await?;
 
         let (id, leader_id, term, addresses) = result_receiver.await?;

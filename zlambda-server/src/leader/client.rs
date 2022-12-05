@@ -1,8 +1,11 @@
 use crate::leader::LeaderMessage;
+use std::error::Error;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
-use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
+use zlambda_common::message::{
+    ClientMessage, ClientMessageDispatchPayload, Message, MessageStreamReader, MessageStreamWriter,
+};
 use zlambda_common::module::ModuleId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,9 +48,10 @@ impl LeaderClient {
                     match message {
                         Message::Client(client_message) => {
                             match client_message {
-                                ClientMessage::InitializeRequest => self.initialize().await,
-                                ClientMessage::Append(id, bytes) => self.append(id, bytes).await,
-                                ClientMessage::LoadRequest(id) => self.load(id).await,
+                                ClientMessage::InitializeRequest => self.initialize().await.expect(""),
+                                ClientMessage::Append(id, bytes) => self.append(id, bytes).await.expect(""),
+                                ClientMessage::LoadRequest(id) => self.load(id).await.expect(""),
+                                ClientMessage::DispatchRequest(id, payload) => self.dispatch(id, payload).await.expect(""),
                                 message => {
                                     error!("Unhandled message {:?}", message);
                                     break;
@@ -64,68 +68,63 @@ impl LeaderClient {
         }
     }
 
-    async fn initialize(&mut self) {
+    async fn initialize(&mut self) -> Result<(), Box<dyn Error>> {
         let (sender, receiver) = oneshot::channel();
 
-        let result = self
-            .leader_sender
+        self.leader_sender
             .send(LeaderMessage::Initialize(sender))
-            .await;
+            .await?;
 
-        if let Err(error) = result {
-            error!("{}", error);
-            return;
-        }
+        self.writer
+            .write(&Message::Client(ClientMessage::InitializeResponse(
+                receiver.await?,
+            )))
+            .await?;
 
-        let id = match receiver.await {
-            Err(error) => {
-                error!("{}", error);
-                return;
-            }
-            Ok(id) => id,
-        };
-
-        let message = Message::Client(ClientMessage::InitializeResponse(id));
-
-        if let Err(error) = self.writer.write(&message).await {
-            error!("{}", error);
-        }
+        Ok(())
     }
 
-    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>) {
+    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>) -> Result<(), Box<dyn Error>> {
         let (sender, receiver) = oneshot::channel();
 
-        let result = self
-            .leader_sender
+        self.leader_sender
             .send(LeaderMessage::Append(id, chunk, sender))
-            .await;
+            .await?;
 
-        receiver.await;
+        receiver.await?;
 
-        if let Err(error) = result {
-            error!("{}", error);
-        }
+        Ok(())
     }
 
-    async fn load(&mut self, id: ModuleId) {
+    async fn load(&mut self, id: ModuleId) -> Result<(), Box<dyn Error>> {
         let (sender, receiver) = oneshot::channel();
 
-        let result = self
-            .leader_sender
-            .send(LeaderMessage::Load(id, sender)).await;
+        self.leader_sender
+            .send(LeaderMessage::Load(id, sender))
+            .await?;
 
-        let result = match receiver.await {
-            Err(error) => {
-                error!("{}", error);
-                return;
-            }
-            Ok(result) => result
-        };
+        self.writer
+            .write(&Message::Client(ClientMessage::LoadResponse(
+                receiver.await?,
+            )))
+            .await?;
 
-        let message = Message::Client(ClientMessage::LoadResponse(result));
+        Ok(())
+    }
 
-        if let Err(error) = self.writer.write(&message).await {
-            error!("{}", error);
-        }
+    async fn dispatch(
+        &mut self,
+        id: ModuleId,
+        payload: ClientMessageDispatchPayload,
+    ) -> Result<(), Box<dyn Error>> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.leader_sender
+            .send(LeaderMessage::Dispatch(id, payload, sender))
+            .await?;
+
+        receiver.await?;
+
+        Ok(())
     }
 }

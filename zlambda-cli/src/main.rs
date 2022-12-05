@@ -7,7 +7,7 @@ use std::error::Error;
 use std::iter::once;
 use std::path::PathBuf;
 use zlambda_client::Client;
-use zlambda_common::module::{CreateDispatchPayloadEvent, Module, ModuleId};
+use zlambda_common::module::{CreateDispatchPayloadModuleEvent, Module, ModuleId};
 use zlambda_common::runtime::Runtime;
 use zlambda_server::Server;
 
@@ -87,7 +87,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 match command {
                     ClientCommand::Load { path } => {
-                        client.load_module(&path).await?;
+                        let id = client.load_module(&path).await?;
+
+                        println!("{}", id);
                     }
                     ClientCommand::Dispatch { id, path, commands } => {
                         let arguments = once(path.display().to_string())
@@ -98,7 +100,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                         let result = module
                             .event_listener()
-                            .on_create_dispatch_payload(CreateDispatchPayloadEvent::new(arguments))
+                            .on_create_dispatch_payload(CreateDispatchPayloadModuleEvent::new(
+                                arguments,
+                            ))
                             .await;
 
                         let (payload,) = result.into();
