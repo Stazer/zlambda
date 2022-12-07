@@ -2,8 +2,7 @@ use serde::{Deserialize, Serialize};
 use zlambda_common::async_trait::async_trait;
 use zlambda_common::module::ModuleEventListener;
 use zlambda_common::module::{
-    CreateDispatchPayloadModuleEvent, CreateDispatchPayloadModuleEventResult, DispatchModuleEvent,
-    DispatchModuleEventResult,
+    ExecuteModuleEventInput, ExecuteModuleEventOutput, RunModuleEventInput, RunModuleEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,17 +19,11 @@ pub struct EventListener {}
 
 #[async_trait]
 impl ModuleEventListener for EventListener {
-    async fn on_create_dispatch_payload(
-        &self,
-        _event: CreateDispatchPayloadModuleEvent,
-    ) -> CreateDispatchPayloadModuleEventResult {
+    async fn run(&self, event: RunModuleEventInput) -> RunModuleEventOutput {
         todo!()
     }
 
-    async fn on_dispatch(&self, event: DispatchModuleEvent) -> DispatchModuleEventResult {
-        //let (payload,) = event.into();
-        println!("{:?}", event);
-
+    async fn execute(&self, event: ExecuteModuleEventInput) -> ExecuteModuleEventOutput {
         todo!()
     }
 }

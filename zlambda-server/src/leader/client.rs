@@ -4,7 +4,8 @@ use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 use zlambda_common::message::{
-    ClientMessage, ClientMessageDispatchPayload, Message, MessageStreamReader, MessageStreamWriter,
+    ClientMessage, ClientMessageDispatchRequestPayload, Message, MessageStreamReader,
+    MessageStreamWriter,
 };
 use zlambda_common::module::ModuleId;
 
@@ -115,7 +116,7 @@ impl LeaderClient {
     async fn dispatch(
         &mut self,
         id: ModuleId,
-        payload: ClientMessageDispatchPayload,
+        payload: ClientMessageDispatchRequestPayload,
     ) -> Result<(), Box<dyn Error>> {
         let (sender, receiver) = oneshot::channel();
 

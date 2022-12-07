@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                         let module = Module::load(0, &path)?;
 
-                        let result = module
+                        /*let result = module
                             .event_listener()
                             .on_create_dispatch_payload(CreateDispatchPayloadModuleEvent::new(
                                 arguments,
@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                         let (payload,) = result.into();
 
-                        client.dispatch(id, payload).await?;
+                        client.dispatch(id, payload).await?;*/
                     }
                 };
 

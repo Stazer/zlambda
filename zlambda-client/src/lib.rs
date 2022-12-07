@@ -5,7 +5,8 @@ use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
 use zlambda_common::message::{
-    ClientMessage, ClientMessageDispatchPayload, Message, MessageStreamReader, MessageStreamWriter,
+    ClientMessage, ClientMessageDispatchRequestPayload, Message, MessageStreamReader,
+    MessageStreamWriter,
 };
 use zlambda_common::module::ModuleId;
 
@@ -83,15 +84,17 @@ impl Client {
     pub async fn dispatch(
         &mut self,
         id: ModuleId,
-        payload: ClientMessageDispatchPayload,
+        payload: ClientMessageDispatchRequestPayload,
     ) -> Result<(), Box<dyn Error>> {
         self.writer
-            .write(&Message::Client(ClientMessage::DispatchRequest(id, payload)))
+            .write(&Message::Client(ClientMessage::DispatchRequest(
+                id, payload,
+            )))
             .await?;
 
         let result = match self.reader.read().await? {
             None => return Err("Expected response".into()),
-            Some(Message::Client(ClientMessage::DispatchResponse(result))) => result,
+            //Some(Message::Client(ClientMessage::DispatchResponse(id, payload))) => result,
             Some(_) => return Err("Expected response".into()),
         };
 

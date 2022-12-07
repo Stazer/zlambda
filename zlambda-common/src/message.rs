@@ -64,9 +64,9 @@ impl From<io::Error> for MessageError {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ClientMessageDispatchPayload(Vec<u8>);
+pub struct DispatchMessagePayload(Vec<u8>);
 
-impl ClientMessageDispatchPayload {
+impl DispatchMessagePayload {
     pub fn new<T>(payload: &T) -> Result<Self, MessageError>
     where
         T: Serialize,
@@ -129,8 +129,8 @@ pub enum ClientMessage {
     LoadRequest(ModuleId),
     LoadResponse(Result<ModuleId, String>),
 
-    DispatchRequest(ModuleId, ClientMessageDispatchPayload),
-    DispatchResponse(),
+    DispatchRequest(ModuleId, Vec<u8>),
+    DispatchResponse(ModuleId, Vec<u8>),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

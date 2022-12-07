@@ -22,7 +22,8 @@ use zlambda_common::log::{
     ClientLogEntryType, ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType,
 };
 use zlambda_common::message::{
-    ClientMessageDispatchPayload, MessageStreamReader, MessageStreamWriter,
+    ClientMessageDispatchRequestPayload, ClientMessageDispatchResponsePayload, MessageStreamReader,
+    MessageStreamWriter,
 };
 use zlambda_common::module::{ModuleId, ModuleManager};
 use zlambda_common::node::NodeId;
@@ -42,7 +43,11 @@ pub enum LeaderMessage {
     Initialize(oneshot::Sender<ModuleId>),
     Append(ModuleId, Vec<u8>, oneshot::Sender<()>),
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
-    Dispatch(ModuleId, ClientMessageDispatchPayload, oneshot::Sender<()>),
+    Dispatch(
+        ModuleId,
+        ClientMessageDispatchRequestPayload,
+        oneshot::Sender<Result<ClientMessageDispatchResponsePayload, String>>,
+    ),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,7 +137,7 @@ impl Leader {
                         LeaderMessage::Initialize(sender)  => self.initialize(sender).await,
                         LeaderMessage::Append(id, chunk, sender) => self.append(id, chunk, sender).await,
                         LeaderMessage::Load(id, sender) => self.load(id, sender).await,
-                        LeaderMessage::Dispatch(id, payload, sender) => self.dispatch(id, payload, sender).await,
+                        LeaderMessage::Dispatch(id, payload, sender) => self.dispatch(id, payload, sender).await.expect(""),
                     }
                 }
             )
@@ -318,8 +323,17 @@ impl Leader {
     async fn dispatch(
         &mut self,
         id: ModuleId,
-        payload: ClientMessageDispatchPayload,
-        sender: oneshot::Sender<()>,
-    ) {
+        payload: ClientMessageDispatchRequestPayload,
+        sender: oneshot::Sender<Result<ClientMessageDispatchResponsePayload, String>>,
+    ) -> Result<(), Box<dyn Error>> {
+        let module = match self.module_manager.get(id) {
+            Some(module) => module,
+            None => return Err("".into()),
+        };
+
+        //let response = module.event_listener().on_dispatch(
+        //);
+
+        Ok(())
     }
 }
