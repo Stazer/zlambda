@@ -7,7 +7,7 @@ use std::error::Error;
 use std::iter::once;
 use std::path::PathBuf;
 use zlambda_client::Client;
-use zlambda_common::module::{ReadModuleEventInput, Module, ModuleEventDispatchPayload, ModuleId};
+use zlambda_common::module::{Module, ModuleEventDispatchPayload, ModuleId, ReadModuleEventInput};
 use zlambda_common::runtime::Runtime;
 use zlambda_server::Server;
 
@@ -98,9 +98,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                         let module = Module::load(0, &path)?;
 
-                        let (payload, ) = module.event_listener().read(
-                            ReadModuleEventInput::new(arguments)
-                        ).await?.into();
+                        let (payload,) = module
+                            .event_listener()
+                            .read(ReadModuleEventInput::new(arguments))
+                            .await?
+                            .into();
 
                         let payload = client.dispatch(id, payload).await?;
                     }

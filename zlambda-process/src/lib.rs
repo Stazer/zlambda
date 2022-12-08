@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 use zlambda_common::async_trait::async_trait;
-use zlambda_common::module::ModuleEventListener;
 use zlambda_common::module::{
     DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
-    ReadModuleEventError, ReadModuleEventInput, ReadModuleEventOutput, WriteModuleEventError,
-    WriteModuleEventInput, WriteModuleEventOutput,
+    ModuleEventDispatchPayload, ModuleEventListener, ReadModuleEventError, ReadModuleEventInput,
+    ReadModuleEventOutput, WriteModuleEventError, WriteModuleEventInput, WriteModuleEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +26,21 @@ impl ModuleEventListener for EventListener {
     ) -> Result<ReadModuleEventOutput, ReadModuleEventError> {
         let (arguments,) = event.into();
 
-        todo!()
+        let mut iterator = arguments.into_iter();
+
+        let program = match iterator.next() {
+            Some(program) => program,
+            None => return Err("Program should be given".into()),
+        };
+
+        let arguments = iterator.collect();
+
+        Ok(ReadModuleEventOutput::new(ModuleEventDispatchPayload::new(
+            &DispatchPayload {
+                program,
+                arguments,
+            },
+        )?))
     }
 
     async fn write(
@@ -41,7 +54,14 @@ impl ModuleEventListener for EventListener {
         &self,
         event: DispatchModuleEventInput,
     ) -> Result<DispatchModuleEventOutput, DispatchModuleEventError> {
-        todo!()
+        let (payload,) = event.into();
+        let dispatch_payload = payload.into_inner::<DispatchPayload>();
+
+        println!("{:?}", dispatch_payload);
+
+        Ok(DispatchModuleEventOutput::new(
+            ModuleEventDispatchPayload::default(),
+        ))
     }
 }
 

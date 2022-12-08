@@ -22,7 +22,9 @@ use zlambda_common::log::{
     ClientLogEntryType, ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType,
 };
 use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
-use zlambda_common::module::{ModuleEventDispatchPayload, ModuleId, ModuleManager};
+use zlambda_common::module::{
+    DispatchModuleEventInput, ModuleEventDispatchPayload, ModuleId, ModuleManager,
+};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
 
@@ -134,7 +136,7 @@ impl Leader {
                         LeaderMessage::Initialize(sender)  => self.initialize(sender).await,
                         LeaderMessage::Append(id, chunk, sender) => self.append(id, chunk, sender).await,
                         LeaderMessage::Load(id, sender) => self.load(id, sender).await,
-                        LeaderMessage::Dispatch(id, payload, sender) => self.dispatch(id, payload, sender).await.expect(""),
+                        LeaderMessage::Dispatch(id, payload, sender) => self.dispatch(id, payload, sender).await,
                     }
                 }
             )
@@ -322,15 +324,26 @@ impl Leader {
         id: ModuleId,
         payload: ModuleEventDispatchPayload,
         sender: oneshot::Sender<Result<ModuleEventDispatchPayload, String>>,
-    ) -> Result<(), Box<dyn Error>> {
+    ) {
         let module = match self.module_manager.get(id) {
             Some(module) => module,
-            None => return Err("".into()),
+            None => {
+                sender.send(Err("Module not found".into()));
+                return;
+            }
         };
 
-        //let response = module.event_listener().on_dispatch(
-        //);
+        let result = module
+            .event_listener()
+            .dispatch(DispatchModuleEventInput::new(payload))
+            .await
+            .map(|output| {
+                let (payload,) = output.into();
 
-        Ok(())
+                payload
+            })
+            .map_err(|e| e.to_string());
+
+        sender.send(result);
     }
 }

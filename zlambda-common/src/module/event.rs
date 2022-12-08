@@ -2,12 +2,57 @@ use crate::async_trait::async_trait;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::fmt::{self, Display, Formatter, Debug};
 use std::error;
+use std::fmt::{self, Debug, Display, Formatter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Deserialize, Serialize)]
+pub enum ModuleEventError {
+    PostcardError(postcard::Error),
+    Custom(Box<dyn error::Error>),
+}
+
+impl error::Error for ModuleEventError {}
+
+impl Debug for ModuleEventError {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Self::PostcardError(error) => Debug::fmt(error, formatter),
+            Self::Custom(error) => Debug::fmt(error, formatter),
+        }
+    }
+}
+
+impl Display for ModuleEventError {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Self::PostcardError(error) => Display::fmt(error, formatter),
+            Self::Custom(error) => Display::fmt(error, formatter),
+        }
+    }
+}
+
+impl From<postcard::Error> for ModuleEventError {
+    fn from(error: postcard::Error) -> Self {
+        Self::PostcardError(error)
+    }
+}
+
+impl From<Box<dyn error::Error>> for ModuleEventError {
+    fn from(error: Box<dyn error::Error>) -> Self {
+        Self::Custom(error)
+    }
+}
+
+impl From<&str> for ModuleEventError {
+    fn from(error: &str) -> Self {
+        Self::Custom(error.into())
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct ModuleEventDispatchPayload(Vec<u8>);
 
 impl From<Vec<u8>> for ModuleEventDispatchPayload {
@@ -45,6 +90,12 @@ pub struct DispatchModuleEventInput {
     payload: ModuleEventDispatchPayload,
 }
 
+impl From<DispatchModuleEventInput> for (ModuleEventDispatchPayload,) {
+    fn from(input: DispatchModuleEventInput) -> Self {
+        (input.payload,)
+    }
+}
+
 impl DispatchModuleEventInput {
     pub fn new(payload: ModuleEventDispatchPayload) -> Self {
         Self { payload }
@@ -58,6 +109,12 @@ pub struct DispatchModuleEventOutput {
     payload: ModuleEventDispatchPayload,
 }
 
+impl From<DispatchModuleEventOutput> for (ModuleEventDispatchPayload,) {
+    fn from(input: DispatchModuleEventOutput) -> Self {
+        (input.payload,)
+    }
+}
+
 impl DispatchModuleEventOutput {
     pub fn new(payload: ModuleEventDispatchPayload) -> Self {
         Self { payload }
@@ -66,21 +123,7 @@ impl DispatchModuleEventOutput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub enum DispatchModuleEventError {}
-
-impl error::Error for DispatchModuleEventError {}
-
-impl Debug for  DispatchModuleEventError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        Ok(())
-    }
-}
-
-impl Display for DispatchModuleEventError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        Ok(())
-    }
-}
+pub type DispatchModuleEventError = ModuleEventError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -122,26 +165,18 @@ impl ReadModuleEventOutput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub enum ReadModuleEventError {}
-
-impl error::Error for ReadModuleEventError {}
-
-impl Debug for  ReadModuleEventError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        Ok(())
-    }
-}
-
-impl Display for  ReadModuleEventError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        Ok(())
-    }
-}
+pub type ReadModuleEventError = ModuleEventError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct WriteModuleEventInput {
     payload: ModuleEventDispatchPayload,
+}
+
+impl From<WriteModuleEventInput> for (ModuleEventDispatchPayload,) {
+    fn from(input: WriteModuleEventInput) -> Self {
+        (input.payload,)
+    }
 }
 
 impl WriteModuleEventInput {
@@ -156,21 +191,7 @@ pub type WriteModuleEventOutput = ();
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub enum WriteModuleEventError {}
-
-impl error::Error for WriteModuleEventError {}
-
-impl Debug for  WriteModuleEventError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        Ok(())
-    }
-}
-
-impl Display for  WriteModuleEventError {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        Ok(())
-    }
-}
+pub type WriteModuleEventError = ModuleEventError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
