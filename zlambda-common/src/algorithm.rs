@@ -4,6 +4,7 @@ where
 {
     let mut keys = iterator.collect::<Vec<_>>();
     keys.sort_unstable();
+
     let mut id = 0;
 
     for key in keys {
@@ -11,7 +12,7 @@ where
             break;
         }
 
-        id = id + 1;
+        id += 1;
     }
 
     id

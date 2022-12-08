@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use zlambda_common::async_trait::async_trait;
 use zlambda_common::module::ModuleEventListener;
 use zlambda_common::module::{
-    ExecuteModuleEventInput, ExecuteModuleEventOutput, RunModuleEventInput, RunModuleEventOutput,
+    DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
+    ReadModuleEventError, ReadModuleEventInput, ReadModuleEventOutput, WriteModuleEventError,
+    WriteModuleEventInput, WriteModuleEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,11 +21,26 @@ pub struct EventListener {}
 
 #[async_trait]
 impl ModuleEventListener for EventListener {
-    async fn run(&self, event: RunModuleEventInput) -> RunModuleEventOutput {
+    async fn read(
+        &self,
+        event: ReadModuleEventInput,
+    ) -> Result<ReadModuleEventOutput, ReadModuleEventError> {
+        let (arguments,) = event.into();
+
         todo!()
     }
 
-    async fn execute(&self, event: ExecuteModuleEventInput) -> ExecuteModuleEventOutput {
+    async fn write(
+        &self,
+        event: WriteModuleEventInput,
+    ) -> Result<WriteModuleEventOutput, WriteModuleEventError> {
+        todo!()
+    }
+
+    async fn dispatch(
+        &self,
+        event: DispatchModuleEventInput,
+    ) -> Result<DispatchModuleEventOutput, DispatchModuleEventError> {
         todo!()
     }
 }

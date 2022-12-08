@@ -21,11 +21,8 @@ use zlambda_common::algorithm::next_key;
 use zlambda_common::log::{
     ClientLogEntryType, ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType,
 };
-use zlambda_common::message::{
-    ClientMessageDispatchRequestPayload, ClientMessageDispatchResponsePayload, MessageStreamReader,
-    MessageStreamWriter,
-};
-use zlambda_common::module::{ModuleId, ModuleManager};
+use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
+use zlambda_common::module::{ModuleEventDispatchPayload, ModuleId, ModuleManager};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
 
@@ -45,8 +42,8 @@ pub enum LeaderMessage {
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
     Dispatch(
         ModuleId,
-        ClientMessageDispatchRequestPayload,
-        oneshot::Sender<Result<ClientMessageDispatchResponsePayload, String>>,
+        ModuleEventDispatchPayload,
+        oneshot::Sender<Result<ModuleEventDispatchPayload, String>>,
     ),
 }
 
@@ -323,8 +320,8 @@ impl Leader {
     async fn dispatch(
         &mut self,
         id: ModuleId,
-        payload: ClientMessageDispatchRequestPayload,
-        sender: oneshot::Sender<Result<ClientMessageDispatchResponsePayload, String>>,
+        payload: ModuleEventDispatchPayload,
+        sender: oneshot::Sender<Result<ModuleEventDispatchPayload, String>>,
     ) -> Result<(), Box<dyn Error>> {
         let module = match self.module_manager.get(id) {
             Some(module) => module,

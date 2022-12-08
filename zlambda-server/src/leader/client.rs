@@ -3,11 +3,8 @@ use std::error::Error;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
-use zlambda_common::message::{
-    ClientMessage, ClientMessageDispatchRequestPayload, Message, MessageStreamReader,
-    MessageStreamWriter,
-};
-use zlambda_common::module::ModuleId;
+use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
+use zlambda_common::module::{ModuleEventDispatchPayload, ModuleId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -113,15 +110,11 @@ impl LeaderClient {
         Ok(())
     }
 
-    async fn dispatch(
-        &mut self,
-        id: ModuleId,
-        payload: ClientMessageDispatchRequestPayload,
-    ) -> Result<(), Box<dyn Error>> {
+    async fn dispatch(&mut self, id: ModuleId, payload: Vec<u8>) -> Result<(), Box<dyn Error>> {
         let (sender, receiver) = oneshot::channel();
 
         self.leader_sender
-            .send(LeaderMessage::Dispatch(id, payload, sender))
+            .send(LeaderMessage::Dispatch(id, payload.into(), sender))
             .await?;
 
         receiver.await?;
