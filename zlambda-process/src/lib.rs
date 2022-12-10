@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use zlambda_common::async_trait::async_trait;
 use zlambda_common::module::{
+    ModuleEventListener,
     DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
-    ModuleEventDispatchPayload, ModuleEventListener, ReadModuleEventError, ReadModuleEventInput,
-    ReadModuleEventOutput, WriteModuleEventError, WriteModuleEventInput, WriteModuleEventOutput,
 };
+use serde_json::from_slice;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,48 +20,15 @@ pub struct EventListener {}
 
 #[async_trait]
 impl ModuleEventListener for EventListener {
-    async fn read(
-        &self,
-        event: ReadModuleEventInput,
-    ) -> Result<ReadModuleEventOutput, ReadModuleEventError> {
-        let (arguments,) = event.into();
-
-        let mut iterator = arguments.into_iter();
-
-        let program = match iterator.next() {
-            Some(program) => program,
-            None => return Err("Program should be given".into()),
-        };
-
-        let arguments = iterator.collect();
-
-        Ok(ReadModuleEventOutput::new(ModuleEventDispatchPayload::new(
-            &DispatchPayload {
-                program,
-                arguments,
-            },
-        )?))
-    }
-
-    async fn write(
-        &self,
-        event: WriteModuleEventInput,
-    ) -> Result<WriteModuleEventOutput, WriteModuleEventError> {
-        todo!()
-    }
-
     async fn dispatch(
         &self,
         event: DispatchModuleEventInput,
     ) -> Result<DispatchModuleEventOutput, DispatchModuleEventError> {
         let (payload,) = event.into();
-        let dispatch_payload = payload.into_inner::<DispatchPayload>();
+        let payload = from_slice::<DispatchPayload>(&payload)
+            .map_err(|e| DispatchModuleEventError::from(Box::from(e)))?;
 
-        println!("{:?}", dispatch_payload);
-
-        Ok(DispatchModuleEventOutput::new(
-            ModuleEventDispatchPayload::default(),
-        ))
+        Ok(DispatchModuleEventOutput::new(Vec::new()))
     }
 }
 

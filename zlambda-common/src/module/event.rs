@@ -44,12 +44,6 @@ impl From<Box<dyn error::Error>> for ModuleEventError {
     }
 }
 
-impl From<&str> for ModuleEventError {
-    fn from(error: &str) -> Self {
-        Self::Custom(error.into())
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -87,17 +81,17 @@ impl ModuleEventDispatchPayload {
 
 #[derive(Debug)]
 pub struct DispatchModuleEventInput {
-    payload: ModuleEventDispatchPayload,
+    payload: Vec<u8>,
 }
 
-impl From<DispatchModuleEventInput> for (ModuleEventDispatchPayload,) {
+impl From<DispatchModuleEventInput> for (Vec<u8>,) {
     fn from(input: DispatchModuleEventInput) -> Self {
         (input.payload,)
     }
 }
 
 impl DispatchModuleEventInput {
-    pub fn new(payload: ModuleEventDispatchPayload) -> Self {
+    pub fn new(payload: Vec<u8>) -> Self {
         Self { payload }
     }
 }
@@ -106,17 +100,17 @@ impl DispatchModuleEventInput {
 
 #[derive(Debug)]
 pub struct DispatchModuleEventOutput {
-    payload: ModuleEventDispatchPayload,
+    payload: Vec<u8>,
 }
 
-impl From<DispatchModuleEventOutput> for (ModuleEventDispatchPayload,) {
-    fn from(input: DispatchModuleEventOutput) -> Self {
-        (input.payload,)
+impl From<DispatchModuleEventOutput> for (Vec<u8>,) {
+    fn from(output: DispatchModuleEventOutput) -> Self {
+        (output.payload,)
     }
 }
 
 impl DispatchModuleEventOutput {
-    pub fn new(payload: ModuleEventDispatchPayload) -> Self {
+    pub fn new(payload: Vec<u8>) -> Self {
         Self { payload }
     }
 }
@@ -127,86 +121,10 @@ pub type DispatchModuleEventError = ModuleEventError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
-pub struct ReadModuleEventInput {
-    arguments: Vec<String>,
-}
-
-impl From<ReadModuleEventInput> for (Vec<String>,) {
-    fn from(input: ReadModuleEventInput) -> Self {
-        (input.arguments,)
-    }
-}
-
-impl ReadModuleEventInput {
-    pub fn new(arguments: Vec<String>) -> Self {
-        Self { arguments }
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct ReadModuleEventOutput {
-    payload: ModuleEventDispatchPayload,
-}
-
-impl From<ReadModuleEventOutput> for (ModuleEventDispatchPayload,) {
-    fn from(output: ReadModuleEventOutput) -> Self {
-        (output.payload,)
-    }
-}
-
-impl ReadModuleEventOutput {
-    pub fn new(payload: ModuleEventDispatchPayload) -> Self {
-        Self { payload }
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type ReadModuleEventError = ModuleEventError;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub struct WriteModuleEventInput {
-    payload: ModuleEventDispatchPayload,
-}
-
-impl From<WriteModuleEventInput> for (ModuleEventDispatchPayload,) {
-    fn from(input: WriteModuleEventInput) -> Self {
-        (input.payload,)
-    }
-}
-
-impl WriteModuleEventInput {
-    pub fn new(payload: ModuleEventDispatchPayload) -> Self {
-        Self { payload }
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type WriteModuleEventOutput = ();
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type WriteModuleEventError = ModuleEventError;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #[async_trait]
 pub trait ModuleEventListener: Send + Sync {
-    async fn read(
-        &self,
-        event: ReadModuleEventInput,
-    ) -> Result<ReadModuleEventOutput, ReadModuleEventError>;
     async fn dispatch(
         &self,
         event: DispatchModuleEventInput,
     ) -> Result<DispatchModuleEventOutput, DispatchModuleEventError>;
-    async fn write(
-        &self,
-        event: WriteModuleEventInput,
-    ) -> Result<WriteModuleEventOutput, WriteModuleEventError>;
 }

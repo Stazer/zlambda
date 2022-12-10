@@ -44,8 +44,8 @@ pub enum LeaderMessage {
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
     Dispatch(
         ModuleId,
-        ModuleEventDispatchPayload,
-        oneshot::Sender<Result<ModuleEventDispatchPayload, String>>,
+        Vec<u8>,
+        oneshot::Sender<Result<Vec<u8>, String>>,
     ),
 }
 
@@ -322,8 +322,8 @@ impl Leader {
     async fn dispatch(
         &mut self,
         id: ModuleId,
-        payload: ModuleEventDispatchPayload,
-        sender: oneshot::Sender<Result<ModuleEventDispatchPayload, String>>,
+        payload: Vec<u8>,
+        sender: oneshot::Sender<Result<Vec<u8>, String>>,
     ) {
         let module = match self.module_manager.get(id) {
             Some(module) => module,

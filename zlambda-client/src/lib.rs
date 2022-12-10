@@ -2,10 +2,11 @@ use std::error::Error;
 use std::path::Path;
 use tokio::fs::File;
 use tokio::net::{TcpStream, ToSocketAddrs};
+use tokio::io::AsyncRead;
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
 use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
-use zlambda_common::module::{ModuleEventDispatchPayload, ModuleId};
+use zlambda_common::module::{ModuleId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -78,24 +79,42 @@ impl Client {
         Ok(id)
     }
 
-    pub async fn dispatch(
+    pub async fn dispatch<T>(
         &mut self,
         id: ModuleId,
-        payload: ModuleEventDispatchPayload,
-    ) -> Result<ModuleEventDispatchPayload, Box<dyn Error>> {
+        reader: T
+    ) -> Result<Vec<u8>, Box<dyn Error>>
+    where
+        T: AsyncRead + Unpin,
+    {
+        let mut stream = ReaderStream::new(reader);
+        let mut payload = Vec::new();
+
+        while let Some(bytes) = stream.next().await {
+            let bytes = bytes?;
+
+            if bytes.is_empty() {
+                break;
+            }
+
+            payload.extend(&bytes);
+        }
+
         self.writer
             .write(&Message::Client(ClientMessage::DispatchRequest(
                 id,
-                payload.into(),
+                payload,
             )))
             .await?;
 
-        let payload = match self.reader.read().await? {
+        let result = match self.reader.read().await? {
             None => return Err("Expected response".into()),
             Some(Message::Client(ClientMessage::DispatchResponse(id, payload))) => payload,
             Some(_) => return Err("Expected response".into()),
         };
 
-        Ok(payload.into())
+        let payload = result?;
+
+        Ok(payload)
     }
 }

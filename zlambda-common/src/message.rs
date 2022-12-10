@@ -130,7 +130,7 @@ pub enum ClientMessage {
     LoadResponse(Result<ModuleId, String>),
 
     DispatchRequest(ModuleId, Vec<u8>),
-    DispatchResponse(ModuleId, Vec<u8>),
+    DispatchResponse(ModuleId, Result<Vec<u8>, String>),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

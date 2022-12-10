@@ -4,12 +4,13 @@
 
 use clap::{Parser, Subcommand};
 use std::error::Error;
-use std::iter::once;
 use std::path::PathBuf;
 use zlambda_client::Client;
-use zlambda_common::module::{Module, ModuleEventDispatchPayload, ModuleId, ReadModuleEventInput};
+use zlambda_common::module::ModuleId;
 use zlambda_common::runtime::Runtime;
 use zlambda_server::Server;
+use tokio::io::{stdout,stdin};
+use tokio::io::AsyncWriteExt;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -46,8 +47,6 @@ enum ClientCommand {
     },
     Dispatch {
         id: ModuleId,
-        path: PathBuf,
-        commands: Vec<String>,
     },
 }
 
@@ -91,20 +90,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                         println!("{}", id);
                     }
-                    ClientCommand::Dispatch { id, path, commands } => {
-                        let arguments = once(path.display().to_string())
-                            .chain(commands.into_iter())
-                            .collect::<Vec<_>>();
-
-                        let module = Module::load(0, &path)?;
-
-                        let (payload,) = module
-                            .event_listener()
-                            .read(ReadModuleEventInput::new(arguments))
-                            .await?
-                            .into();
-
-                        let payload = client.dispatch(id, payload).await?;
+                    ClientCommand::Dispatch { id } => {
+                        stdout().write_all(&client.dispatch(id, stdin()).await?).await?;
                     }
                 };
 

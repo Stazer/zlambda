@@ -114,10 +114,15 @@ impl LeaderClient {
         let (sender, receiver) = oneshot::channel();
 
         self.leader_sender
-            .send(LeaderMessage::Dispatch(id, payload.into(), sender))
+            .send(LeaderMessage::Dispatch(id, payload, sender))
             .await?;
 
-        receiver.await?;
+        self.writer
+            .write(&Message::Client(ClientMessage::DispatchResponse(
+                id,
+                receiver.await?,
+            )))
+            .await?;
 
         Ok(())
     }

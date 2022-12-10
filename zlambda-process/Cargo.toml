@@ -9,6 +9,5 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 zlambda-common = { path = "../zlambda-common" }
 serde = { version = "1", features = ["derive"] }
-clap = { version = "4" }
+serde_json = { version = "1" }
 tokio = { version = "1", features = ["process"] }
-tracing = { version = "0" }
