@@ -1,12 +1,12 @@
 use std::error::Error;
 use std::path::Path;
 use tokio::fs::File;
-use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::io::AsyncRead;
+use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
 use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
-use zlambda_common::module::{ModuleId};
+use zlambda_common::module::ModuleId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,11 +79,7 @@ impl Client {
         Ok(id)
     }
 
-    pub async fn dispatch<T>(
-        &mut self,
-        id: ModuleId,
-        reader: T
-    ) -> Result<Vec<u8>, Box<dyn Error>>
+    pub async fn dispatch<T>(&mut self, id: ModuleId, reader: T) -> Result<Vec<u8>, Box<dyn Error>>
     where
         T: AsyncRead + Unpin,
     {
@@ -102,8 +98,7 @@ impl Client {
 
         self.writer
             .write(&Message::Client(ClientMessage::DispatchRequest(
-                id,
-                payload,
+                id, payload,
             )))
             .await?;
 
