@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
-use zlambda_common::async_trait::async_trait;
-use zlambda_common::module::{
-    ModuleEventListener,
-    DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
-};
 use serde_json::from_slice;
 use tokio::process::Command;
 use tokio::spawn;
+use zlambda_common::async_trait::async_trait;
+use zlambda_common::module::{
+    DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
+    ModuleEventListener,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,15 +31,14 @@ impl ModuleEventListener for EventListener {
         let payload = from_slice::<DispatchPayload>(&payload)
             .map_err(|e| DispatchModuleEventError::from(Box::from(e)))?;
 
-        spawn(async move {
-            let stdout = Command::new(payload.program).args(payload.arguments).output().await
-            .map_err(|e| DispatchModuleEventError::from(Box::from(e))).unwrap()
+        let stdout = Command::new(payload.program)
+            .args(payload.arguments)
+            .output()
+            .await
+            .map_err(|e| DispatchModuleEventError::from(Box::from(e)))?
             .stdout;
 
-            println!("{:?}", stdout);
-        });
-
-        Ok(DispatchModuleEventOutput::new(Vec::new()))
+        Ok(DispatchModuleEventOutput::new(stdout))
     }
 }
 

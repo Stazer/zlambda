@@ -121,8 +121,7 @@ impl LeaderClient {
 
         self.writer
             .write(&Message::Client(ClientMessage::DispatchResponse(
-                id,
-                result,
+                id, result,
             )))
             .await?;
 

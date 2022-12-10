@@ -4,12 +4,13 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1"
+async-ffi = "*"
+async-trait = "*"
 bytes = { version = "1" }
 libloading = "0.7"
 postcard = { version = "1", features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }
+tempfile = { version = "3" }
 tokio = { version = "1", features = ["full"] }
 tokio-stream  = { version = "0", features = ["net"] }
 tokio-util = { version = "0", features = ["full"] }
-tempfile = { version = "3" }

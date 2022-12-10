@@ -42,11 +42,7 @@ pub enum LeaderMessage {
     Initialize(oneshot::Sender<ModuleId>),
     Append(ModuleId, Vec<u8>, oneshot::Sender<()>),
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
-    Dispatch(
-        ModuleId,
-        Vec<u8>,
-        oneshot::Sender<Result<Vec<u8>, String>>,
-    ),
+    Dispatch(ModuleId, Vec<u8>, oneshot::Sender<Result<Vec<u8>, String>>),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
