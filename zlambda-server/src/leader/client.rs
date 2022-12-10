@@ -117,10 +117,12 @@ impl LeaderClient {
             .send(LeaderMessage::Dispatch(id, payload, sender))
             .await?;
 
+        let result = receiver.await?;
+
         self.writer
             .write(&Message::Client(ClientMessage::DispatchResponse(
                 id,
-                receiver.await?,
+                result,
             )))
             .await?;
 

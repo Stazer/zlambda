@@ -5,6 +5,8 @@ use zlambda_common::module::{
     DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
 };
 use serde_json::from_slice;
+use tokio::process::Command;
+use tokio::spawn;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,8 +27,17 @@ impl ModuleEventListener for EventListener {
         event: DispatchModuleEventInput,
     ) -> Result<DispatchModuleEventOutput, DispatchModuleEventError> {
         let (payload,) = event.into();
+
         let payload = from_slice::<DispatchPayload>(&payload)
             .map_err(|e| DispatchModuleEventError::from(Box::from(e)))?;
+
+        spawn(async move {
+            let stdout = Command::new(payload.program).args(payload.arguments).output().await
+            .map_err(|e| DispatchModuleEventError::from(Box::from(e))).unwrap()
+            .stdout;
+
+            println!("{:?}", stdout);
+        });
 
         Ok(DispatchModuleEventOutput::new(Vec::new()))
     }

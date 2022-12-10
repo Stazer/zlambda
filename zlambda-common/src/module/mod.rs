@@ -77,6 +77,10 @@ impl Module {
         Ok(Self::new(id, event_listener, _library))
     }
 
+    pub fn id(&self) -> ModuleId {
+        self.id
+    }
+
     pub fn event_listener(&self) -> &dyn ModuleEventListener {
         &*self.event_listener
     }
