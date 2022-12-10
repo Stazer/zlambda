@@ -5,12 +5,11 @@
 use clap::{Parser, Subcommand};
 use std::error::Error;
 use std::path::PathBuf;
+use tokio::io::AsyncWriteExt;
+use tokio::io::{stdin, stdout};
 use zlambda_client::Client;
 use zlambda_common::module::ModuleId;
-use zlambda_common::runtime::Runtime;
 use zlambda_server::Server;
-use tokio::io::{stdout,stdin};
-use tokio::io::AsyncWriteExt;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,17 +41,14 @@ enum MainCommand {
 
 #[derive(Debug, Subcommand)]
 enum ClientCommand {
-    Load {
-        path: PathBuf,
-    },
-    Dispatch {
-        id: ModuleId,
-    },
+    Load { path: PathBuf },
+    Dispatch { id: ModuleId },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = MainArguments::parse();
 
     match arguments.command {
@@ -62,41 +58,31 @@ fn main() -> Result<(), Box<dyn Error>> {
         } => {
             tracing_subscriber::fmt::init();
 
-            let runtime = Runtime::new()?;
+            let server = match Server::new(listener_address, leader_address).await {
+                Err(error) => return Err(error),
+                Ok(server) => server,
+            };
 
-            runtime.block_on(async move {
-                let server = match Server::new(listener_address, leader_address).await {
-                    Err(error) => return Err(error),
-                    Ok(server) => server,
-                };
-
-                server.run().await;
-
-                Ok(())
-            })?;
+            server.run().await;
         }
         MainCommand::Client { address, command } => {
-            let runtime = Runtime::new()?;
+            let mut client = match Client::new(address).await {
+                Err(error) => return Err(error),
+                Ok(client) => client,
+            };
 
-            runtime.block_on(async move {
-                let mut client = match Client::new(address).await {
-                    Err(error) => return Err(error),
-                    Ok(client) => client,
-                };
+            match command {
+                ClientCommand::Load { path } => {
+                    let id = client.load_module(&path).await?;
 
-                match command {
-                    ClientCommand::Load { path } => {
-                        let id = client.load_module(&path).await?;
-
-                        println!("{}", id);
-                    }
-                    ClientCommand::Dispatch { id } => {
-                        stdout().write_all(&client.dispatch(id, stdin()).await?).await?;
-                    }
-                };
-
-                Ok(())
-            })?;
+                    println!("{}", id);
+                }
+                ClientCommand::Dispatch { id } => {
+                    stdout()
+                        .write_all(&client.dispatch(id, stdin()).await?)
+                        .await?;
+                }
+            };
         }
     };
 
