@@ -6,6 +6,9 @@ use zlambda_common::async_trait::async_trait;
 use zlambda_common::module::{
     DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
     ModuleEventListener,
+    ModuleEventHandler,
+    SimpleModuleEventHandler,
+    async_ffi,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,7 +21,7 @@ struct DispatchPayload {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct EventListener {}
+struct EventListener {}
 
 #[async_trait]
 impl ModuleEventListener for EventListener {
@@ -29,20 +32,41 @@ impl ModuleEventListener for EventListener {
         let (payload,) = event.into();
 
         let payload = from_slice::<DispatchPayload>(&payload)
-            .map_err(|e| DispatchModuleEventError::from(Box::from(e)))?;
+            .map_err(|e| DispatchModuleEventError::from(Box::from(e)))
+            .unwrap();
 
         let stdout = Command::new(payload.program)
             .args(payload.arguments)
             .output()
             .await
-            .map_err(|e| DispatchModuleEventError::from(Box::from(e)))?
+            .map_err(|e| DispatchModuleEventError::from(Box::from(e)))
+            .unwrap()
             .stdout;
 
         Ok(DispatchModuleEventOutput::new(stdout))
     }
 }
 
+struct EventHandler(EventListener);
+
+use async_ffi::FutureExt;
+
+impl ModuleEventHandler for EventHandler {
+    fn dispatch(
+        &self,
+        handle: tokio::runtime::Handle,
+        input: DispatchModuleEventInput,
+    ) -> async_ffi::BorrowingFfiFuture<Result<DispatchModuleEventOutput, DispatchModuleEventError>> {
+        let future = self.0.dispatch(input);
+
+        async move {
+            let _enter = handle.enter();
+            future.await
+        }.into_ffi()
+    }
+}
+
 #[no_mangle]
-pub extern "C" fn module_event_listener() -> Box<dyn ModuleEventListener> {
-    Box::new(EventListener {})
+pub extern "C" fn module_event_listener() -> Box<dyn ModuleEventHandler> {
+    Box::new(SimpleModuleEventHandler::new(Box::new(EventListener{})))
 }

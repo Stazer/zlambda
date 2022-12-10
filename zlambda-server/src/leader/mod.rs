@@ -330,8 +330,13 @@ impl Leader {
         };
 
         let result = module
-            .event_listener()
-            .dispatch(DispatchModuleEventInput::new(payload))
+            .event_handler()
+            .dispatch(
+                tokio::runtime::Handle::current(),
+                DispatchModuleEventInput::new(
+                    payload,
+                ),
+            )
             .await
             .map(|output| {
                 let (payload,) = output.into();
