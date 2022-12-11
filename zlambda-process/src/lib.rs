@@ -1,14 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::from_slice;
 use tokio::process::Command;
-use tokio::spawn;
 use zlambda_common::async_trait::async_trait;
 use zlambda_common::module::{
-    DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
-    ModuleEventListener,
-    ModuleEventHandler,
-    SimpleModuleEventHandler,
-    async_ffi,
+    DefaultModuleEventHandler, DispatchModuleEventError, DispatchModuleEventInput,
+    DispatchModuleEventOutput, ModuleEventHandler, ModuleEventListener,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,26 +43,7 @@ impl ModuleEventListener for EventListener {
     }
 }
 
-struct EventHandler(EventListener);
-
-use async_ffi::FutureExt;
-
-impl ModuleEventHandler for EventHandler {
-    fn dispatch(
-        &self,
-        handle: tokio::runtime::Handle,
-        input: DispatchModuleEventInput,
-    ) -> async_ffi::BorrowingFfiFuture<Result<DispatchModuleEventOutput, DispatchModuleEventError>> {
-        let future = self.0.dispatch(input);
-
-        async move {
-            let _enter = handle.enter();
-            future.await
-        }.into_ffi()
-    }
-}
-
 #[no_mangle]
-pub extern "C" fn module_event_listener() -> Box<dyn ModuleEventHandler> {
-    Box::new(SimpleModuleEventHandler::new(Box::new(EventListener{})))
+pub extern "C" fn module_event_handler() -> Box<dyn ModuleEventHandler> {
+    Box::new(DefaultModuleEventHandler::new(Box::new(EventListener {})))
 }

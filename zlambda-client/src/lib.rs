@@ -5,6 +5,7 @@ use tokio::io::AsyncRead;
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
+use zlambda_common::dispatch::DispatchId;
 use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
 use zlambda_common::module::ModuleId;
 
@@ -13,6 +14,7 @@ use zlambda_common::module::ModuleId;
 pub struct Client {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
+    next_dispatch_id: DispatchId,
 }
 
 impl Client {
@@ -36,7 +38,11 @@ impl Client {
             _ => return Err("Expected response".into()),
         };
 
-        Ok(Self { reader, writer })
+        Ok(Self {
+            reader,
+            writer,
+            next_dispatch_id: 0,
+        })
     }
 
     pub async fn load_module(&mut self, path: &Path) -> Result<u64, Box<dyn Error>> {
@@ -98,13 +104,19 @@ impl Client {
 
         self.writer
             .write(&Message::Client(ClientMessage::DispatchRequest(
-                id, payload,
+                id,
+                self.next_dispatch_id,
+                payload,
             )))
             .await?;
 
+        self.next_dispatch_id += 1;
+
         let result = match self.reader.read().await? {
             None => return Err("Expected response".into()),
-            Some(Message::Client(ClientMessage::DispatchResponse(id, payload))) => payload,
+            Some(Message::Client(ClientMessage::DispatchResponse(_dispatch_id, payload))) => {
+                payload
+            }
             Some(_) => return Err("Expected response".into()),
         };
 

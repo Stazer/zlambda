@@ -1,3 +1,4 @@
+use crate::dispatch::DispatchId;
 use crate::log::{LogEntryData, LogEntryId};
 use crate::module::ModuleId;
 use crate::node::NodeId;
@@ -129,8 +130,8 @@ pub enum ClientMessage {
     LoadRequest(ModuleId),
     LoadResponse(Result<ModuleId, String>),
 
-    DispatchRequest(ModuleId, Vec<u8>),
-    DispatchResponse(ModuleId, Result<Vec<u8>, String>),
+    DispatchRequest(ModuleId, DispatchId, Vec<u8>),
+    DispatchResponse(DispatchId, Result<Vec<u8>, String>),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,7 +2,7 @@ use crate::algorithm::next_key;
 use crate::module::{Module, ModuleId};
 use std::collections::HashMap;
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tempfile::NamedTempFile;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -59,7 +59,7 @@ impl ModuleManager {
         let (tempfile, path) = match self.entries.remove(&id) {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading(tempfile, file, path)) => (tempfile, path),
+            Some(ModuleManagerEntry::Loading(tempfile, _file, path)) => (tempfile, path),
         };
 
         self.entries

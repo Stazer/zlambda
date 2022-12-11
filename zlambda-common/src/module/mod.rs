@@ -1,5 +1,6 @@
 mod error;
 mod event;
+mod handler;
 mod id;
 mod manager;
 mod symbol;
@@ -8,6 +9,7 @@ mod symbol;
 
 pub use error::*;
 pub use event::*;
+pub use handler::*;
 pub use id::*;
 pub use manager::*;
 pub use symbol::*;
@@ -17,8 +19,6 @@ pub use symbol::*;
 use libloading::Library;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::path::Path;
-use tokio::runtime::Handle;
-use async_ffi::{FutureExt, BorrowingFfiFuture};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -72,7 +72,7 @@ impl Module {
 
         let event_handler = unsafe {
             _library.get::<unsafe extern "C" fn() -> Box<dyn ModuleEventHandler>>(
-                MODULE_EVENT_LISTENER_SYMBOL,
+                MODULE_EVENT_HANDLER_SYMBOL,
             )?()
         };
 
@@ -85,44 +85,5 @@ impl Module {
 
     pub fn event_handler(&self) -> &dyn ModuleEventHandler {
         &*self.event_handler
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub trait ModuleEventHandler {
-    fn dispatch(
-        &self,
-        handle: Handle,
-        input: DispatchModuleEventInput,
-    ) -> BorrowingFfiFuture<Result<DispatchModuleEventOutput, DispatchModuleEventError>>;
-}
-
-pub use async_ffi;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub struct SimpleModuleEventHandler {
-    listener: Box<dyn ModuleEventListener>,
-}
-
-impl SimpleModuleEventHandler {
-    pub fn new(listener: Box<dyn ModuleEventListener>) -> Self {
-        Self { listener }
-    }
-}
-
-impl ModuleEventHandler for SimpleModuleEventHandler {
-    fn dispatch(
-        &self,
-        handle: Handle,
-        input: DispatchModuleEventInput,
-    ) -> BorrowingFfiFuture<Result<DispatchModuleEventOutput, DispatchModuleEventError>> {
-        let future = self.listener.dispatch(input);
-
-        async move {
-            let _enter = handle.enter();
-            future.await
-        }.into_ffi()
     }
 }

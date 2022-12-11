@@ -333,9 +333,7 @@ impl Leader {
             .event_handler()
             .dispatch(
                 tokio::runtime::Handle::current(),
-                DispatchModuleEventInput::new(
-                    payload,
-                ),
+                DispatchModuleEventInput::new(payload),
             )
             .await
             .map(|output| {

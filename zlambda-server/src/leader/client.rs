@@ -3,6 +3,7 @@ use std::error::Error;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
+use zlambda_common::dispatch::DispatchId;
 use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
 use zlambda_common::module::{ModuleEventDispatchPayload, ModuleId};
 
@@ -49,7 +50,7 @@ impl LeaderClient {
                                 ClientMessage::InitializeRequest => self.initialize().await.expect(""),
                                 ClientMessage::Append(id, bytes) => self.append(id, bytes).await.expect(""),
                                 ClientMessage::LoadRequest(id) => self.load(id).await.expect(""),
-                                ClientMessage::DispatchRequest(id, payload) => self.dispatch(id, payload).await.expect(""),
+                                ClientMessage::DispatchRequest(module_id, dispatch_id, payload) => self.dispatch(module_id, dispatch_id, payload).await.expect(""),
                                 message => {
                                     error!("Unhandled message {:?}", message);
                                     break;
@@ -110,18 +111,24 @@ impl LeaderClient {
         Ok(())
     }
 
-    async fn dispatch(&mut self, id: ModuleId, payload: Vec<u8>) -> Result<(), Box<dyn Error>> {
+    async fn dispatch(
+        &mut self,
+        module_id: ModuleId,
+        dispatch_id: DispatchId,
+        payload: Vec<u8>,
+    ) -> Result<(), Box<dyn Error>> {
         let (sender, receiver) = oneshot::channel();
 
         self.leader_sender
-            .send(LeaderMessage::Dispatch(id, payload, sender))
+            .send(LeaderMessage::Dispatch(module_id, payload, sender))
             .await?;
 
         let result = receiver.await?;
 
         self.writer
             .write(&Message::Client(ClientMessage::DispatchResponse(
-                id, result,
+                dispatch_id,
+                result,
             )))
             .await?;
 
