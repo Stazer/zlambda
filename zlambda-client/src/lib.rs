@@ -29,7 +29,7 @@ impl Client {
         );
 
         writer
-            .write(&Message::Client(ClientMessage::RegisterRequest))
+            .write(Message::Client(ClientMessage::RegisterRequest))
             .await?;
 
         match reader.read().await {
@@ -49,7 +49,7 @@ impl Client {
         let file = File::open(path).await?;
 
         self.writer
-            .write(&Message::Client(ClientMessage::InitializeRequest))
+            .write(Message::Client(ClientMessage::InitializeRequest))
             .await?;
 
         let id = match self.reader.read().await? {
@@ -68,12 +68,12 @@ impl Client {
             }
 
             self.writer
-                .write(&Message::Client(ClientMessage::Append(id, bytes.to_vec())))
+                .write(Message::Client(ClientMessage::Append(id, bytes.to_vec())))
                 .await?;
         }
 
         self.writer
-            .write(&Message::Client(ClientMessage::LoadRequest(id)))
+            .write(Message::Client(ClientMessage::LoadRequest(id)))
             .await?;
 
         let id = match self.reader.read().await? {
@@ -103,7 +103,7 @@ impl Client {
         }
 
         self.writer
-            .write(&Message::Client(ClientMessage::DispatchRequest(
+            .write(Message::Client(ClientMessage::DispatchRequest(
                 id,
                 self.next_dispatch_id,
                 payload,

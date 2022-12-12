@@ -61,7 +61,7 @@ impl FollowerConnection {
 
                             self.follower_sender.send(FollowerMessage::ReadLeaderAddress {
                                 sender,
-                            }).await;
+                            }).await.expect("Cannot send FollowerMessage::ReadLeaderAddress");
 
                             let leader_address = match receiver.await {
                                 Err(error) => {
@@ -79,7 +79,7 @@ impl FollowerConnection {
                                 ),
                             );
 
-                            let result = self.writer.write(&message).await;
+                            let result = self.writer.write(message).await;
 
                             if let Err(error) = result {
                                 error!("{}", error);
@@ -108,7 +108,7 @@ impl FollowerConnection {
 
     async fn register_client(mut self) -> Result<(), Box<dyn Error>> {
         self.writer
-            .write(&Message::Client(ClientMessage::RegisterResponse))
+            .write(Message::Client(ClientMessage::RegisterResponse))
             .await?;
 
         spawn(async move {

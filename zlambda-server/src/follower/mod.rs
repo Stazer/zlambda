@@ -13,7 +13,7 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, trace};
-use zlambda_common::log::LogEntryData;
+use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
     ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
     MessageStreamWriter,
@@ -62,7 +62,7 @@ impl Follower {
         );
 
         writer
-            .write(&Message::Cluster(ClusterMessage::RegisterRequest {
+            .write(Message::Cluster(ClusterMessage::RegisterRequest {
                 address,
             }))
             .await?;
@@ -133,7 +133,7 @@ impl Follower {
                     };
 
                     match message {
-                        Message::Cluster(ClusterMessage::AppendEntriesRequest { term, log_entry_data }) => self.append_entries(term, log_entry_data).await,
+                        Message::Cluster(ClusterMessage::AppendEntriesRequest { term, last_committed_log_entry_id, log_entry_data }) => self.append_entries(term, last_committed_log_entry_id, log_entry_data).await,
                         message => {
                             error!("Unexpected message {:?}", message);
                             break
@@ -167,7 +167,12 @@ impl Follower {
         }
     }
 
-    async fn append_entries(&mut self, _term: Term, log_entry_data: Vec<LogEntryData>) {
+    async fn append_entries(
+        &mut self,
+        _term: Term,
+        last_committed_log_entry_id: Option<LogEntryId>,
+        log_entry_data: Vec<LogEntryData>,
+    ) {
         let log_entry_ids = log_entry_data
             .iter()
             .map(|log_entry_data| log_entry_data.id())
@@ -175,7 +180,7 @@ impl Follower {
 
         let result = self
             .writer
-            .write(&Message::Cluster(ClusterMessage::AppendEntriesResponse {
+            .write(Message::Cluster(ClusterMessage::AppendEntriesResponse {
                 log_entry_ids,
             }))
             .await;
@@ -186,6 +191,10 @@ impl Follower {
 
         for log_entry_data in log_entry_data.into_iter() {
             self.log.append(log_entry_data);
+        }
+
+        if let Some(last_committed_log_entry_id) = last_committed_log_entry_id {
+            self.log.commit(last_committed_log_entry_id)
         }
     }
 }

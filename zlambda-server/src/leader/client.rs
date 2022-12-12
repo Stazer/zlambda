@@ -75,7 +75,7 @@ impl LeaderClient {
             .await?;
 
         self.writer
-            .write(&Message::Client(ClientMessage::InitializeResponse(
+            .write(Message::Client(ClientMessage::InitializeResponse(
                 receiver.await?,
             )))
             .await?;
@@ -103,7 +103,7 @@ impl LeaderClient {
             .await?;
 
         self.writer
-            .write(&Message::Client(ClientMessage::LoadResponse(
+            .write(Message::Client(ClientMessage::LoadResponse(
                 receiver.await?,
             )))
             .await?;
@@ -126,7 +126,7 @@ impl LeaderClient {
         let result = receiver.await?;
 
         self.writer
-            .write(&Message::Client(ClientMessage::DispatchResponse(
+            .write(Message::Client(ClientMessage::DispatchResponse(
                 dispatch_id,
                 result,
             )))

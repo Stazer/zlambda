@@ -179,6 +179,7 @@ impl Leader {
             if let Err(error) = follower_sender
                 .send(LeaderFollowerMessage::Replicate(
                     self.term,
+                    self.log.last_committed_log_entry_id(),
                     vec![log_entry_data],
                     sender,
                 ))

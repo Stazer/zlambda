@@ -96,7 +96,7 @@ impl LeaderConnection {
         let (id, leader_id, term, addresses) = result_receiver.await?;
 
         self.writer
-            .write(&Message::Cluster(ClusterMessage::RegisterResponse(
+            .write(Message::Cluster(ClusterMessage::RegisterResponse(
                 ClusterMessageRegisterResponse::Ok {
                     id,
                     leader_id,
@@ -123,7 +123,7 @@ impl LeaderConnection {
 
     async fn register_client(mut self) -> Result<(), Box<dyn Error>> {
         self.writer
-            .write(&Message::Client(ClientMessage::RegisterResponse))
+            .write(Message::Client(ClientMessage::RegisterResponse))
             .await?;
 
         spawn(async move {
