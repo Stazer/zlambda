@@ -7,8 +7,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientMessage, ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
-    MessageStreamWriter,
+    ClientToNodeMessage, ClusterMessage, ClusterMessageRegisterResponse, Message,
+    MessageStreamReader, MessageStreamWriter,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,8 +64,8 @@ impl LeaderConnection {
 
                             break
                         },
-                        Some(Message::Client(ClientMessage::RegisterRequest)) => {
-                            if let Err(error) = self.register_client().await {
+                        Some(Message::ClientToNode(message)) => {
+                            if let Err(error) = self.register_client(message).await {
                                 error!("{}", error);
                             }
 
@@ -121,15 +121,20 @@ impl LeaderConnection {
         Ok(())
     }
 
-    async fn register_client(mut self) -> Result<(), Box<dyn Error>> {
-        self.writer
-            .write(Message::Client(ClientMessage::RegisterResponse))
-            .await?;
-
+    async fn register_client(
+        self,
+        initial_message: ClientToNodeMessage,
+    ) -> Result<(), Box<dyn Error>> {
         spawn(async move {
-            LeaderClient::new(self.reader, self.writer, self.leader_sender)
-                .run()
-                .await;
+            LeaderClient::new(
+                self.reader.into(),
+                self.writer.into(),
+                self.leader_sender,
+                initial_message,
+            )
+            .await
+            .run()
+            .await;
         });
 
         Ok(())

@@ -65,12 +65,6 @@ impl From<io::Error> for MessageError {
     }
 }
 
-impl From<std::convert::Infallible> for MessageError {
-    fn from(v: std::convert::Infallible) -> Self {
-        panic!()
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -109,23 +103,6 @@ pub enum ClusterMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum ClientMessage {
-    RegisterRequest,
-    RegisterResponse,
-
-    InitializeRequest,
-    InitializeResponse(ModuleId),
-    Append(ModuleId, Vec<u8>),
-    LoadRequest(ModuleId),
-    LoadResponse(Result<ModuleId, String>),
-
-    DispatchRequest(ModuleId, DispatchId, Vec<u8>),
-    DispatchResponse(DispatchId, Result<Vec<u8>, String>),
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum LeaderToFollowerMessage {
     RegisterResponse {},
 }
@@ -159,10 +136,19 @@ impl From<Message> for Result<FollowerToLeaderMessage, MessageError> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum ClientToNodeMessage {
-    RegisterRequest,
     InitializeRequest,
-    Append { module_id: ModuleId, bytes: Vec<u8> },
-    LoadRequest { module_id: ModuleId },
+    Append {
+        module_id: ModuleId,
+        bytes: Vec<u8>,
+    },
+    LoadRequest {
+        module_id: ModuleId,
+    },
+    DispatchRequest {
+        module_id: ModuleId,
+        dispatch_id: DispatchId,
+        payload: Vec<u8>,
+    },
 }
 
 impl From<Message> for Result<ClientToNodeMessage, MessageError> {
@@ -178,13 +164,16 @@ impl From<Message> for Result<ClientToNodeMessage, MessageError> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum NodeToClientMessage {
-    RegisterResponse,
     InitializeResponse {
         module_id: ModuleId,
     },
     LoadResponse {
         module_id: ModuleId,
         result: Result<(), String>,
+    },
+    DispatchResponse {
+        dispatch_id: DispatchId,
+        result: Result<Vec<u8>, String>,
     },
 }
 
@@ -216,7 +205,6 @@ impl From<Message> for Result<CandidateToCandidateMessage, MessageError> {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Message {
     Cluster(ClusterMessage),
-    Client(ClientMessage),
 
     LeaderToFollower(LeaderToFollowerMessage),
     FollowerToLeader(FollowerToLeaderMessage),
@@ -306,12 +294,23 @@ where
     pub fn next(&mut self) -> Result<Option<T>, MessageError> {
         let (read, message) = match Message::from_vec(&self.buffer) {
             Ok((read, message)) => (read, message),
+            Err(MessageError::UnexpectedEnd) => return Ok(None),
             Err(error) => return Err(error),
         };
 
         self.buffer.drain(0..read);
 
         Ok(Some(Result::<T, MessageError>::from(message)?))
+    }
+
+    pub fn into<S>(self) -> BasicMessageBufferReader<S>
+    where
+        Result<S, MessageError>: From<Message>,
+    {
+        BasicMessageBufferReader {
+            buffer: self.buffer,
+            r#type: PhantomData::<S>,
+        }
     }
 }
 
@@ -350,15 +349,22 @@ where
             }
         }
     }
+
+    pub fn into<S>(self) -> BasicMessageStreamReader<S>
+    where
+        Result<S, MessageError>: From<Message>,
+    {
+        BasicMessageStreamReader {
+            buffer: self.buffer.into(),
+            reader: self.reader,
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct BasicMessageStreamWriter<T>
-where
-    Message: From<T>,
-{
+pub struct BasicMessageStreamWriter<T> {
     writer: OwnedWriteHalf,
     r#type: PhantomData<T>,
 }
@@ -380,6 +386,16 @@ where
             .write_all(&Message::from(message).to_bytes()?)
             .await
             .map(|_| ())?)
+    }
+
+    pub fn into<S>(self) -> BasicMessageStreamWriter<S>
+    where
+        Message: From<S>,
+    {
+        BasicMessageStreamWriter {
+            writer: self.writer,
+            r#type: PhantomData::<S>,
+        }
     }
 }
 

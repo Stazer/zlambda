@@ -4,29 +4,37 @@ use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 use zlambda_common::dispatch::DispatchId;
-use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
-use zlambda_common::module::{ModuleEventDispatchPayload, ModuleId};
+use zlambda_common::message::{
+    ClientToNodeMessage, ClientToNodeMessageStreamReader, NodeToClientMessage,
+    NodeToClientMessageStreamWriter,
+};
+use zlambda_common::module::ModuleId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct LeaderClient {
-    reader: MessageStreamReader,
-    writer: MessageStreamWriter,
+    reader: ClientToNodeMessageStreamReader,
+    writer: NodeToClientMessageStreamWriter,
     leader_sender: mpsc::Sender<LeaderMessage>,
 }
 
 impl LeaderClient {
-    pub fn new(
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
+    pub async fn new(
+        reader: ClientToNodeMessageStreamReader,
+        writer: NodeToClientMessageStreamWriter,
         leader_sender: mpsc::Sender<LeaderMessage>,
+        initial_message: ClientToNodeMessage,
     ) -> Self {
-        Self {
+        let mut leader_client = Self {
             reader,
             writer,
             leader_sender,
-        }
+        };
+
+        leader_client.handle_message(initial_message).await;
+
+        leader_client
     }
 
     pub async fn run(mut self) {
@@ -44,26 +52,27 @@ impl LeaderClient {
                         }
                     };
 
-                    match message {
-                        Message::Client(client_message) => {
-                            match client_message {
-                                ClientMessage::InitializeRequest => self.initialize().await.expect(""),
-                                ClientMessage::Append(id, bytes) => self.append(id, bytes).await.expect(""),
-                                ClientMessage::LoadRequest(id) => self.load(id).await.expect(""),
-                                ClientMessage::DispatchRequest(module_id, dispatch_id, payload) => self.dispatch(module_id, dispatch_id, payload).await.expect(""),
-                                message => {
-                                    error!("Unhandled message {:?}", message);
-                                    break;
-                                }
-                            }
-                        }
-                        message => {
-                            error!("Unhandled message {:?}", message);
-                            break;
-                        }
-                    }
+                    self.handle_message(message).await;
                 }
             )
+        }
+    }
+
+    async fn handle_message(&mut self, message: ClientToNodeMessage) {
+        match message {
+            ClientToNodeMessage::InitializeRequest => self.initialize().await.expect(""),
+            ClientToNodeMessage::Append { module_id, bytes } => {
+                self.append(module_id, bytes).await.expect("")
+            }
+            ClientToNodeMessage::LoadRequest { module_id } => self.load(module_id).await.expect(""),
+            ClientToNodeMessage::DispatchRequest {
+                module_id,
+                dispatch_id,
+                payload,
+            } => self
+                .dispatch(module_id, dispatch_id, payload)
+                .await
+                .expect(""),
         }
     }
 
@@ -74,10 +83,10 @@ impl LeaderClient {
             .send(LeaderMessage::Initialize(sender))
             .await?;
 
+        let module_id = receiver.await?;
+
         self.writer
-            .write(Message::Client(ClientMessage::InitializeResponse(
-                receiver.await?,
-            )))
+            .write(NodeToClientMessage::InitializeResponse { module_id })
             .await?;
 
         Ok(())
@@ -95,17 +104,18 @@ impl LeaderClient {
         Ok(())
     }
 
-    async fn load(&mut self, id: ModuleId) -> Result<(), Box<dyn Error>> {
+    async fn load(&mut self, module_id: ModuleId) -> Result<(), Box<dyn Error>> {
         let (sender, receiver) = oneshot::channel();
 
         self.leader_sender
-            .send(LeaderMessage::Load(id, sender))
+            .send(LeaderMessage::Load(module_id, sender))
             .await?;
 
         self.writer
-            .write(Message::Client(ClientMessage::LoadResponse(
-                receiver.await?,
-            )))
+            .write(NodeToClientMessage::LoadResponse {
+                module_id,
+                result: Ok(receiver.await.map(|x| ())?),
+            })
             .await?;
 
         Ok(())
@@ -126,10 +136,10 @@ impl LeaderClient {
         let result = receiver.await?;
 
         self.writer
-            .write(Message::Client(ClientMessage::DispatchResponse(
+            .write(NodeToClientMessage::DispatchResponse {
                 dispatch_id,
                 result,
-            )))
+            })
             .await?;
 
         Ok(())

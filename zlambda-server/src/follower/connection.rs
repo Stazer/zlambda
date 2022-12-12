@@ -1,13 +1,12 @@
 use crate::follower::client::FollowerClient;
 use crate::follower::FollowerMessage;
 use std::error::Error;
-use std::net::SocketAddr;
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientMessage, ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
-    MessageStreamWriter,
+    ClientToNodeMessage, ClusterMessage, ClusterMessageRegisterResponse, Message,
+    MessageStreamReader, MessageStreamWriter,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,14 +87,22 @@ impl FollowerConnection {
 
                             break
                         },
-                        Some(Message::Client(ClientMessage::RegisterRequest)) => {
+                        Some(Message::ClientToNode(message)) => {
+                            if let Err(error) = self.register_client(message).await {
+                                error!("{}", error);
+                                break
+                            }
+
+                            break
+                        },
+                        /*Some(Message::Client(ClientMessage::RegisterRequest)) => {
                             if let Err(error) = self.register_client().await {
                                 error!("{}", error);
                                 break
                             }
 
                             break
-                        }
+                        }*/
                         Some(message) => {
                             error!("Unhandled message {:?}", message);
                             break
@@ -106,15 +113,20 @@ impl FollowerConnection {
         }
     }
 
-    async fn register_client(mut self) -> Result<(), Box<dyn Error>> {
-        self.writer
-            .write(Message::Client(ClientMessage::RegisterResponse))
-            .await?;
-
+    async fn register_client(
+        mut self,
+        initial_message: ClientToNodeMessage,
+    ) -> Result<(), Box<dyn Error>> {
         spawn(async move {
-            FollowerClient::new(self.reader, self.writer, self.follower_sender)
-                .run()
-                .await;
+            FollowerClient::new(
+                self.reader.into(),
+                self.writer.into(),
+                self.follower_sender,
+                initial_message,
+            )
+            .await
+            .run()
+            .await;
         });
 
         Ok(())

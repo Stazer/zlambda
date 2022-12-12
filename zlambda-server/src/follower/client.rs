@@ -1,29 +1,36 @@
 use crate::follower::FollowerMessage;
 use tokio::select;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use tracing::error;
-use zlambda_common::message::{ClientMessage, Message, MessageStreamReader, MessageStreamWriter};
+use zlambda_common::message::{
+    ClientToNodeMessage, ClientToNodeMessageStreamReader, NodeToClientMessageStreamWriter,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct FollowerClient {
-    reader: MessageStreamReader,
-    writer: MessageStreamWriter,
+    reader: ClientToNodeMessageStreamReader,
+    writer: NodeToClientMessageStreamWriter,
     follower_sender: mpsc::Sender<FollowerMessage>,
 }
 
 impl FollowerClient {
-    pub fn new(
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
+    pub async fn new(
+        reader: ClientToNodeMessageStreamReader,
+        writer: NodeToClientMessageStreamWriter,
         follower_sender: mpsc::Sender<FollowerMessage>,
+        initial_message: ClientToNodeMessage,
     ) -> Self {
-        Self {
+        let mut follower_client = Self {
             reader,
             writer,
             follower_sender,
-        }
+        };
+
+        follower_client.handle_message(initial_message).await;
+
+        follower_client
     }
 
     pub async fn run(mut self) {
@@ -41,14 +48,13 @@ impl FollowerClient {
                         }
                     };
 
-                    match message {
-                        message => {
-                            error!("Unhandled message {:?}", message);
-                            break;
-                        }
-                    }
+                    self.handle_message(message).await;
                 }
             )
         }
+    }
+
+    async fn handle_message(&mut self, message: ClientToNodeMessage) {
+        error!("Unhandled message {:?}", message);
     }
 }
