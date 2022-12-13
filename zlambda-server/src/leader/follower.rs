@@ -6,8 +6,7 @@ use tracing::error;
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
     LeaderToRegisteredFollowerMessage, LeaderToRegisteredFollowerMessageStreamWriter,
-    RegisteredFollowerToLeaderMessage,
-    RegisteredFollowerToLeaderMessageStreamReader,
+    RegisteredFollowerToLeaderMessage, RegisteredFollowerToLeaderMessageStreamReader,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;

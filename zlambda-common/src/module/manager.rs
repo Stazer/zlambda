@@ -3,6 +3,7 @@ use crate::module::{Module, ModuleId};
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -10,7 +11,7 @@ use tokio::io::AsyncWriteExt;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum ModuleManagerEntry {
-    Loaded(Module),
+    Loaded(Arc<Module>),
     Loading(NamedTempFile, File, PathBuf),
 }
 
@@ -22,7 +23,7 @@ pub struct ModuleManager {
 }
 
 impl ModuleManager {
-    pub fn get(&self, id: ModuleId) -> Option<&Module> {
+    pub fn get(&self, id: ModuleId) -> Option<&Arc<Module>> {
         self.entries.get(&id).and_then(|entry| match entry {
             ModuleManagerEntry::Loaded(module) => Some(module),
             ModuleManagerEntry::Loading { .. } => None,
@@ -62,8 +63,10 @@ impl ModuleManager {
             Some(ModuleManagerEntry::Loading(tempfile, _file, path)) => (tempfile, path),
         };
 
-        self.entries
-            .insert(id, ModuleManagerEntry::Loaded(Module::load(id, &path)?));
+        self.entries.insert(
+            id,
+            ModuleManagerEntry::Loaded(Arc::new(Module::load(id, &path)?)),
+        );
 
         tempfile.close()?;
 

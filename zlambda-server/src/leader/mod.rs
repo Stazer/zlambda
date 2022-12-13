@@ -14,17 +14,15 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
-use tokio::select;
 use tokio::sync::{mpsc, oneshot};
+use tokio::{select, spawn};
 use tracing::{error, trace};
 use zlambda_common::algorithm::next_key;
 use zlambda_common::log::{
     ClientLogEntryType, ClusterLogEntryType, LogEntryData, LogEntryId, LogEntryType,
 };
 use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
-use zlambda_common::module::{
-    DispatchModuleEventInput, ModuleId, ModuleManager,
-};
+use zlambda_common::module::{DispatchModuleEventInput, ModuleId, ModuleManager};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
 
@@ -247,8 +245,7 @@ impl Leader {
     }
 
     async fn append(&mut self, id: ModuleId, chunk: Vec<u8>, sender: oneshot::Sender<()>) {
-        self
-            .replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
+        self.replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
             .await;
 
         if sender.send(()).is_err() {
@@ -321,28 +318,31 @@ impl Leader {
         sender: oneshot::Sender<Result<Vec<u8>, String>>,
     ) {
         let module = match self.module_manager.get(id) {
-            Some(module) => module,
+            Some(module) => module.clone(),
             None => {
-                sender.send(Err("Module not found".into())).expect("Cannot send");
+                sender
+                    .send(Err("Module not found".into()))
+                    .expect("Cannot send");
                 return;
             }
         };
 
-        let result =
-            module
-            .event_handler()
-            .dispatch(
-                tokio::runtime::Handle::current(),
-                DispatchModuleEventInput::new(payload),
-            )
-            .await
-            .map(|output| {
-                let (payload,) = output.into();
+        spawn(async move {
+            let result = module
+                .event_handler()
+                .dispatch(
+                    tokio::runtime::Handle::current(),
+                    DispatchModuleEventInput::new(payload),
+                )
+                .await
+                .map(|output| {
+                    let (payload,) = output.into();
 
-                payload
-            })
-            .map_err(|e| e.to_string());
+                    payload
+                })
+                .map_err(|e| e.to_string());
 
-        sender.send(result).expect("Cannot send");
+            sender.send(result).expect("Cannot send");
+        });
     }
 }

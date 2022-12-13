@@ -7,7 +7,7 @@ use tokio::runtime::Handle;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub trait ModuleEventHandler {
+pub trait ModuleEventHandler: Send + Sync {
     fn dispatch(
         &self,
         handle: Handle,

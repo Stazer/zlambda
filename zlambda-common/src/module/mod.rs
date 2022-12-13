@@ -71,7 +71,7 @@ impl Module {
         let _library = unsafe { Library::new(path)? };
 
         let event_handler = unsafe {
-            _library.get::<unsafe extern "C" fn() -> Box<dyn ModuleEventHandler>>(
+            _library.get::<unsafe extern "C" fn() -> Box<dyn ModuleEventHandler + Send + Sync>>(
                 MODULE_EVENT_HANDLER_SYMBOL,
             )?()
         };

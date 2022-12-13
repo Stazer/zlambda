@@ -17,10 +17,9 @@ use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
     ClusterMessageRegisterResponse, LeaderToRegisteredFollowerMessage,
     LeaderToRegisteredFollowerMessageStreamReader, LeaderToUnregisteredFollowerMessage,
-    LeaderToUnregisteredFollowerMessageStreamReader, MessageStreamReader,
-    MessageStreamWriter, RegisteredFollowerToLeaderMessage,
-    RegisteredFollowerToLeaderMessageStreamWriter, UnregisteredFollowerToLeaderMessage,
-    UnregisteredFollowerToLeaderMessageStreamWriter,
+    LeaderToUnregisteredFollowerMessageStreamReader, MessageStreamReader, MessageStreamWriter,
+    RegisteredFollowerToLeaderMessage, RegisteredFollowerToLeaderMessageStreamWriter,
+    UnregisteredFollowerToLeaderMessage, UnregisteredFollowerToLeaderMessageStreamWriter,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
