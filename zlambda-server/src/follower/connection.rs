@@ -5,8 +5,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClusterMessage, ClusterMessageRegisterResponse, Message,
-    MessageStreamReader, MessageStreamWriter,
+    ClientToNodeMessage, ClusterMessageRegisterResponse, LeaderToUnregisteredFollowerMessage,
+    Message, MessageStreamReader, MessageStreamWriter, UnregisteredFollowerToLeaderMessage,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,38 +55,9 @@ impl FollowerConnection {
 
                     match message {
                         None => continue,
-                        Some(Message::Cluster(ClusterMessage::RegisterRequest { address })) => {
-                            let (sender, receiver) = oneshot::channel();
-
-                            self.follower_sender.send(FollowerMessage::ReadLeaderAddress {
-                                sender,
-                            }).await.expect("Cannot send FollowerMessage::ReadLeaderAddress");
-
-                            let leader_address = match receiver.await {
-                                Err(error) => {
-                                    error!("{}", error);
-                                    break
-                                }
-                                Ok(leader_address) => leader_address,
-                            };
-
-                            let message = Message::Cluster(
-                                ClusterMessage::RegisterResponse(
-                                    ClusterMessageRegisterResponse::NotALeader {
-                                        leader_address
-                                    },
-                                ),
-                            );
-
-                            let result = self.writer.write(message).await;
-
-                            if let Err(error) = result {
-                                error!("{}", error);
-                                break
-                            }
-
-                            break
-                        },
+                        Some(Message::UnregisteredFollowerToLeader(message)) => {
+                            self.on_unregistered_follower_to_leader_message(message).await;
+                        }
                         Some(Message::ClientToNode(message)) => {
                             if let Err(error) = self.register_client(message).await {
                                 error!("{}", error);
@@ -95,14 +66,6 @@ impl FollowerConnection {
 
                             break
                         },
-                        /*Some(Message::Client(ClientMessage::RegisterRequest)) => {
-                            if let Err(error) = self.register_client().await {
-                                error!("{}", error);
-                                break
-                            }
-
-                            break
-                        }*/
                         Some(message) => {
                             error!("Unhandled message {:?}", message);
                             break
@@ -110,6 +73,45 @@ impl FollowerConnection {
                     };
                 }
             )
+        }
+    }
+
+    async fn on_unregistered_follower_to_leader_message(
+        &mut self,
+        message: UnregisteredFollowerToLeaderMessage,
+    ) {
+        match message {
+            UnregisteredFollowerToLeaderMessage::RegisterRequest { address } => {
+                let (sender, receiver) = oneshot::channel();
+
+                self.follower_sender
+                    .send(FollowerMessage::ReadLeaderAddress { sender })
+                    .await
+                    .expect("Cannot send FollowerMessage::ReadLeaderAddress");
+
+                let leader_address = match receiver.await {
+                    Err(error) => {
+                        error!("{}", error);
+                        return;
+                    }
+                    Ok(leader_address) => leader_address,
+                };
+
+                let message = Message::LeaderToUnregisteredFollower(
+                    LeaderToUnregisteredFollowerMessage::RegisterResponse(
+                        ClusterMessageRegisterResponse::NotALeader { leader_address },
+                    ),
+                );
+
+                let result = self.writer.write(message).await;
+
+                if let Err(error) = result {
+                    error!("{}", error);
+                    return;
+                }
+
+                return;
+            }
         }
     }
 

@@ -330,7 +330,8 @@ impl Leader {
             }
         };
 
-        let result = module
+        let result =
+            module
             .event_handler()
             .dispatch(
                 tokio::runtime::Handle::current(),

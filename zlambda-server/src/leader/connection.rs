@@ -7,8 +7,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClusterMessage, ClusterMessageRegisterResponse, Message,
-    MessageStreamReader, MessageStreamWriter,
+    ClientToNodeMessage, ClusterMessageRegisterResponse, LeaderToUnregisteredFollowerMessage,
+    Message, MessageStreamReader, MessageStreamWriter, UnregisteredFollowerToLeaderMessage,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,11 +57,8 @@ impl LeaderConnection {
 
                     match message {
                         None => continue,
-                        Some(Message::Cluster(ClusterMessage::RegisterRequest { address })) => {
-                            if let Err(error) = self.register_follower(address).await {
-                                error!("{}", error);
-                            }
-
+                        Some(Message::UnregisteredFollowerToLeader(message)) => {
+                            self.on_unregistered_follower_to_leader_message(message).await;
                             break
                         },
                         Some(Message::ClientToNode(message)) => {
@@ -81,6 +78,17 @@ impl LeaderConnection {
         }
     }
 
+    async fn on_unregistered_follower_to_leader_message(
+        self,
+        message: UnregisteredFollowerToLeaderMessage,
+    ) {
+        match message {
+            UnregisteredFollowerToLeaderMessage::RegisterRequest { address } => {
+                self.register_follower(address).await.expect("");
+            }
+        }
+    }
+
     async fn register_follower(mut self, address: SocketAddr) -> Result<(), Box<dyn Error>> {
         let (follower_sender, follower_receiver) = mpsc::channel(16);
         let (result_sender, result_receiver) = oneshot::channel();
@@ -95,23 +103,25 @@ impl LeaderConnection {
 
         let (id, leader_id, term, addresses) = result_receiver.await?;
 
-        self.writer
-            .write(Message::Cluster(ClusterMessage::RegisterResponse(
+        let mut writer = self.writer.into();
+
+        writer
+            .write(LeaderToUnregisteredFollowerMessage::RegisterResponse(
                 ClusterMessageRegisterResponse::Ok {
                     id,
                     leader_id,
                     term,
                     addresses,
                 },
-            )))
+            ))
             .await?;
 
         spawn(async move {
             LeaderFollower::new(
                 id,
                 follower_receiver,
-                self.reader,
-                self.writer,
+                self.reader.into(),
+                writer.into(),
                 self.leader_sender,
             )
             .run()

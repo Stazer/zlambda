@@ -15,8 +15,12 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{error, trace};
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
-    ClusterMessage, ClusterMessageRegisterResponse, Message, MessageStreamReader,
-    MessageStreamWriter,
+    ClusterMessageRegisterResponse, LeaderToRegisteredFollowerMessage,
+    LeaderToRegisteredFollowerMessageStreamReader, LeaderToUnregisteredFollowerMessage,
+    LeaderToUnregisteredFollowerMessageStreamReader, Message, MessageStreamReader,
+    MessageStreamWriter, RegisteredFollowerToLeaderMessage,
+    RegisteredFollowerToLeaderMessageStreamWriter, UnregisteredFollowerToLeaderMessage,
+    UnregisteredFollowerToLeaderMessageStreamWriter,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
@@ -37,8 +41,8 @@ pub struct Follower {
     log: FollowerLog,
     term: Term,
     tcp_listener: TcpListener,
-    reader: MessageStreamReader,
-    writer: MessageStreamWriter,
+    reader: LeaderToRegisteredFollowerMessageStreamReader,
+    writer: RegisteredFollowerToLeaderMessageStreamWriter,
     sender: mpsc::Sender<FollowerMessage>,
     receiver: mpsc::Receiver<FollowerMessage>,
     addresses: HashMap<NodeId, SocketAddr>,
@@ -57,26 +61,24 @@ impl Follower {
         let (reader, writer) = TcpStream::connect(registration_address).await?.into_split();
 
         let (mut reader, mut writer) = (
-            MessageStreamReader::new(reader),
-            MessageStreamWriter::new(writer),
+            LeaderToUnregisteredFollowerMessageStreamReader::new(reader),
+            UnregisteredFollowerToLeaderMessageStreamWriter::new(writer),
         );
 
         writer
-            .write(Message::Cluster(ClusterMessage::RegisterRequest {
-                address,
-            }))
+            .write(UnregisteredFollowerToLeaderMessage::RegisterRequest { address })
             .await?;
 
         let (id, leader_id, addresses, term) = match reader.read().await? {
             None => return Err("Expected message".into()),
-            Some(Message::Cluster(ClusterMessage::RegisterResponse(
+            Some(LeaderToUnregisteredFollowerMessage::RegisterResponse(
                 ClusterMessageRegisterResponse::Ok {
                     id,
                     leader_id,
                     addresses,
                     term,
                 },
-            ))) => (id, leader_id, addresses, term),
+            )) => (id, leader_id, addresses, term),
             Some(_) => {
                 return Err("Expected request response".into());
             }
@@ -91,8 +93,8 @@ impl Follower {
             leader_id,
             term,
             tcp_listener,
-            reader,
-            writer,
+            reader: reader.into(),
+            writer: writer.into(),
             log: FollowerLog::default(),
             addresses,
             sender,
@@ -132,13 +134,7 @@ impl Follower {
                         Ok(Some(message)) => message,
                     };
 
-                    match message {
-                        Message::Cluster(ClusterMessage::AppendEntriesRequest { term, last_committed_log_entry_id, log_entry_data }) => self.append_entries(term, last_committed_log_entry_id, log_entry_data).await,
-                        message => {
-                            error!("Unexpected message {:?}", message);
-                            break
-                        }
-                    };
+                    self.on_leader_to_follower_message(message).await;
                 }
                 receive_result = self.receiver.recv() => {
                     let message = match receive_result {
@@ -167,6 +163,20 @@ impl Follower {
         }
     }
 
+    async fn on_leader_to_follower_message(&mut self, message: LeaderToRegisteredFollowerMessage) {
+        match message {
+            LeaderToRegisteredFollowerMessage::AppendEntriesRequest {
+                term,
+                last_committed_log_entry_id,
+                log_entry_data,
+            } => {
+                self.append_entries(term, last_committed_log_entry_id, log_entry_data)
+                    .await
+            }
+            _ => {}
+        };
+    }
+
     async fn append_entries(
         &mut self,
         _term: Term,
@@ -180,9 +190,7 @@ impl Follower {
 
         let result = self
             .writer
-            .write(Message::Cluster(ClusterMessage::AppendEntriesResponse {
-                log_entry_ids,
-            }))
+            .write(RegisteredFollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids })
             .await;
 
         if let Err(error) = result {

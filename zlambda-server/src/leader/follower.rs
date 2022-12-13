@@ -4,7 +4,11 @@ use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 use zlambda_common::log::{LogEntryData, LogEntryId};
-use zlambda_common::message::{ClusterMessage, Message, MessageStreamReader, MessageStreamWriter};
+use zlambda_common::message::{
+    LeaderToRegisteredFollowerMessage, LeaderToRegisteredFollowerMessageStreamWriter, Message,
+    MessageStreamReader, MessageStreamWriter, RegisteredFollowerToLeaderMessage,
+    RegisteredFollowerToLeaderMessageStreamReader,
+};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
 
@@ -26,8 +30,8 @@ pub enum LeaderFollowerMessage {
 pub struct LeaderFollower {
     id: NodeId,
     receiver: mpsc::Receiver<LeaderFollowerMessage>,
-    reader: MessageStreamReader,
-    writer: MessageStreamWriter,
+    reader: RegisteredFollowerToLeaderMessageStreamReader,
+    writer: LeaderToRegisteredFollowerMessageStreamWriter,
     leader_sender: mpsc::Sender<LeaderMessage>,
 }
 
@@ -35,8 +39,8 @@ impl LeaderFollower {
     pub fn new(
         id: NodeId,
         receiver: mpsc::Receiver<LeaderFollowerMessage>,
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
+        reader: RegisteredFollowerToLeaderMessageStreamReader,
+        writer: LeaderToRegisteredFollowerMessageStreamWriter,
         leader_sender: mpsc::Sender<LeaderMessage>,
     ) -> Self {
         Self {
@@ -64,23 +68,17 @@ impl LeaderFollower {
                         }
                     };
 
-                    match message {
+                    /*match message {
+                        FollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids } =
                         Message::Cluster(ClusterMessage::AppendEntriesResponse { log_entry_ids }) => {
-                            let result = self.leader_sender.send(LeaderMessage::Acknowledge(
-                                log_entry_ids,
-                                self.id,
-                            )).await;
-
-                            if let Err(error) = result {
-                                error!("{}", error);
-                                break
-                            }
                         }
                         message => {
                             error!("Unexpected message {:?}", message);
                             break
                         }
-                    };
+                    };*/
+
+                    self.on_registered_follower_to_leader_message(message).await;
                 }
                 receive_result = self.receiver.recv() => {
                     let message = match receive_result {
@@ -104,6 +102,25 @@ impl LeaderFollower {
         }
     }
 
+    async fn on_registered_follower_to_leader_message(
+        &mut self,
+        message: RegisteredFollowerToLeaderMessage,
+    ) {
+        match message {
+            RegisteredFollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids } => {
+                let result = self
+                    .leader_sender
+                    .send(LeaderMessage::Acknowledge(log_entry_ids, self.id))
+                    .await;
+
+                if let Err(error) = result {
+                    error!("{}", error);
+                    return;
+                }
+            }
+        }
+    }
+
     async fn replicate(
         &mut self,
         term: Term,
@@ -112,11 +129,11 @@ impl LeaderFollower {
         sender: oneshot::Sender<()>,
     ) -> Result<(), Box<dyn Error>> {
         self.writer
-            .write(Message::Cluster(ClusterMessage::AppendEntriesRequest {
+            .write(LeaderToRegisteredFollowerMessage::AppendEntriesRequest {
                 term,
                 last_committed_log_entry_id,
                 log_entry_data,
-            }))
+            })
             .await?;
 
         sender
