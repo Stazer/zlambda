@@ -23,7 +23,7 @@ use zlambda_common::log::{
 };
 use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
 use zlambda_common::module::{
-    DispatchModuleEventInput, ModuleEventDispatchPayload, ModuleId, ModuleManager,
+    DispatchModuleEventInput, ModuleId, ModuleManager,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
@@ -196,7 +196,8 @@ impl Leader {
 
         self.sender
             .send(LeaderMessage::Acknowledge(vec![id], self.id))
-            .await;
+            .await
+            .expect("Cannot send");
 
         id
     }
@@ -246,7 +247,7 @@ impl Leader {
     }
 
     async fn append(&mut self, id: ModuleId, chunk: Vec<u8>, sender: oneshot::Sender<()>) {
-        let id = self
+        self
             .replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
             .await;
 
@@ -290,9 +291,6 @@ impl Leader {
                     handler(result).await;
                 }
             }
-            r#type => {
-                error!("Unhandled type {:?}", r#type);
-            }
         };
     }
 
@@ -325,7 +323,7 @@ impl Leader {
         let module = match self.module_manager.get(id) {
             Some(module) => module,
             None => {
-                sender.send(Err("Module not found".into()));
+                sender.send(Err("Module not found".into())).expect("Cannot send");
                 return;
             }
         };
@@ -345,6 +343,6 @@ impl Leader {
             })
             .map_err(|e| e.to_string());
 
-        sender.send(result);
+        sender.send(result).expect("Cannot send");
     }
 }

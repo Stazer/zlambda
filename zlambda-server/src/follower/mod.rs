@@ -17,7 +17,7 @@ use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
     ClusterMessageRegisterResponse, LeaderToRegisteredFollowerMessage,
     LeaderToRegisteredFollowerMessageStreamReader, LeaderToUnregisteredFollowerMessage,
-    LeaderToUnregisteredFollowerMessageStreamReader, Message, MessageStreamReader,
+    LeaderToUnregisteredFollowerMessageStreamReader, MessageStreamReader,
     MessageStreamWriter, RegisteredFollowerToLeaderMessage,
     RegisteredFollowerToLeaderMessageStreamWriter, UnregisteredFollowerToLeaderMessage,
     UnregisteredFollowerToLeaderMessageStreamWriter,
@@ -173,7 +173,6 @@ impl Follower {
                 self.append_entries(term, last_committed_log_entry_id, log_entry_data)
                     .await
             }
-            _ => {}
         };
     }
 
@@ -194,7 +193,7 @@ impl Follower {
             .await;
 
         if let Err(error) = result {
-            todo!("Switch to candidate {}", error);
+            todo!("Switch to candidate {} {} {}", error, self.id, self.term);
         }
 
         for log_entry_data in log_entry_data.into_iter() {

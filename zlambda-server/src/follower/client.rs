@@ -11,8 +11,8 @@ use zlambda_common::message::{
 #[derive(Debug)]
 pub struct FollowerClient {
     reader: ClientToNodeMessageStreamReader,
-    writer: NodeToClientMessageStreamWriter,
-    follower_sender: mpsc::Sender<FollowerMessage>,
+    _writer: NodeToClientMessageStreamWriter,
+    _follower_sender: mpsc::Sender<FollowerMessage>,
 }
 
 impl FollowerClient {
@@ -24,8 +24,8 @@ impl FollowerClient {
     ) -> Self {
         let mut follower_client = Self {
             reader,
-            writer,
-            follower_sender,
+            _writer: writer,
+            _follower_sender: follower_sender,
         };
 
         follower_client.handle_message(initial_message).await;

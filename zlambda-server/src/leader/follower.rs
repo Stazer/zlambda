@@ -5,8 +5,8 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
-    LeaderToRegisteredFollowerMessage, LeaderToRegisteredFollowerMessageStreamWriter, Message,
-    MessageStreamReader, MessageStreamWriter, RegisteredFollowerToLeaderMessage,
+    LeaderToRegisteredFollowerMessage, LeaderToRegisteredFollowerMessageStreamWriter,
+    RegisteredFollowerToLeaderMessage,
     RegisteredFollowerToLeaderMessageStreamReader,
 };
 use zlambda_common::node::NodeId;
@@ -59,7 +59,6 @@ impl LeaderFollower {
                     let message = match read_result {
                         Ok(None) => {
                             todo!("Follower crashed");
-                            break
                         }
                         Ok(Some(message)) => message,
                         Err(error) => {

@@ -81,7 +81,7 @@ impl FollowerConnection {
         message: UnregisteredFollowerToLeaderMessage,
     ) {
         match message {
-            UnregisteredFollowerToLeaderMessage::RegisterRequest { address } => {
+            UnregisteredFollowerToLeaderMessage::RegisterRequest { .. } => {
                 let (sender, receiver) = oneshot::channel();
 
                 self.follower_sender
@@ -109,14 +109,12 @@ impl FollowerConnection {
                     error!("{}", error);
                     return;
                 }
-
-                return;
             }
         }
     }
 
     async fn register_client(
-        mut self,
+        self,
         initial_message: ClientToNodeMessage,
     ) -> Result<(), Box<dyn Error>> {
         spawn(async move {

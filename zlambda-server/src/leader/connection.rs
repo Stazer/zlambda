@@ -89,7 +89,7 @@ impl LeaderConnection {
         }
     }
 
-    async fn register_follower(mut self, address: SocketAddr) -> Result<(), Box<dyn Error>> {
+    async fn register_follower(self, address: SocketAddr) -> Result<(), Box<dyn Error>> {
         let (follower_sender, follower_receiver) = mpsc::channel(16);
         let (result_sender, result_receiver) = oneshot::channel();
 

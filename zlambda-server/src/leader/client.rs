@@ -114,7 +114,7 @@ impl LeaderClient {
         self.writer
             .write(NodeToClientMessage::LoadResponse {
                 module_id,
-                result: Ok(receiver.await.map(|x| ())?),
+                result: Ok(receiver.await.map(|_x| ())?),
             })
             .await?;
 
