@@ -16,10 +16,10 @@ use tracing::{error, trace};
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
     ClusterMessageRegisterResponse, LeaderToRegisteredFollowerMessage,
-    LeaderToRegisteredFollowerMessageStreamReader, LeaderToUnregisteredFollowerMessage,
-    LeaderToUnregisteredFollowerMessageStreamReader, MessageStreamReader, MessageStreamWriter,
+    LeaderToRegisteredFollowerMessageStreamReader, NodeToUnregisteredMessage,
+    NodeToUnregisteredMessageStreamReader, MessageStreamReader, MessageStreamWriter,
     RegisteredFollowerToLeaderMessage, RegisteredFollowerToLeaderMessageStreamWriter,
-    UnregisteredFollowerToLeaderMessage, UnregisteredFollowerToLeaderMessageStreamWriter,
+    UnregisteredToNodeMessage, UnregisteredToNodeMessageStreamWriter,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
@@ -60,17 +60,17 @@ impl Follower {
         let (reader, writer) = TcpStream::connect(registration_address).await?.into_split();
 
         let (mut reader, mut writer) = (
-            LeaderToUnregisteredFollowerMessageStreamReader::new(reader),
-            UnregisteredFollowerToLeaderMessageStreamWriter::new(writer),
+            NodeToUnregisteredMessageStreamReader::new(reader),
+            UnregisteredToNodeMessageStreamWriter::new(writer),
         );
 
         writer
-            .write(UnregisteredFollowerToLeaderMessage::RegisterRequest { address })
+            .write(UnregisteredToNodeMessage::RegisterRequest { address })
             .await?;
 
         let (id, leader_id, addresses, term) = match reader.read().await? {
             None => return Err("Expected message".into()),
-            Some(LeaderToUnregisteredFollowerMessage::RegisterResponse(
+            Some(NodeToUnregisteredMessage::RegisterResponse(
                 ClusterMessageRegisterResponse::Ok {
                     id,
                     leader_id,

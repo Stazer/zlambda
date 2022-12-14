@@ -7,8 +7,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClusterMessageRegisterResponse, LeaderToUnregisteredFollowerMessage,
-    Message, MessageStreamReader, MessageStreamWriter, UnregisteredFollowerToLeaderMessage,
+    ClientToNodeMessage, ClusterMessageRegisterResponse, NodeToUnregisteredMessage,
+    Message, MessageStreamReader, MessageStreamWriter, UnregisteredToNodeMessage,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,8 +57,8 @@ impl LeaderConnection {
 
                     match message {
                         None => continue,
-                        Some(Message::UnregisteredFollowerToLeader(message)) => {
-                            self.on_unregistered_follower_to_leader_message(message).await;
+                        Some(Message::UnregisteredToNode(message)) => {
+                            self.on_unregistered_to_node_message(message).await;
                             break
                         },
                         Some(Message::ClientToNode(message)) => {
@@ -78,12 +78,12 @@ impl LeaderConnection {
         }
     }
 
-    async fn on_unregistered_follower_to_leader_message(
+    async fn on_unregistered_to_node_message(
         self,
-        message: UnregisteredFollowerToLeaderMessage,
+        message: UnregisteredToNodeMessage,
     ) {
         match message {
-            UnregisteredFollowerToLeaderMessage::RegisterRequest { address } => {
+            UnregisteredToNodeMessage::RegisterRequest { address } => {
                 self.register_follower(address).await.expect("");
             }
         }
@@ -106,7 +106,7 @@ impl LeaderConnection {
         let mut writer = self.writer.into();
 
         writer
-            .write(LeaderToUnregisteredFollowerMessage::RegisterResponse(
+            .write(NodeToUnregisteredMessage::RegisterResponse(
                 ClusterMessageRegisterResponse::Ok {
                     id,
                     leader_id,

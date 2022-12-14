@@ -33,11 +33,9 @@ impl ModuleEventHandler for DefaultModuleEventHandler {
         handle: Handle,
         input: DispatchModuleEventInput,
     ) -> BorrowingFfiFuture<Result<DispatchModuleEventOutput, DispatchModuleEventError>> {
-        let future = self.listener.dispatch(input);
-
         async move {
             let _enter = handle.enter();
-            future.await
+            self.listener.dispatch(input).await
         }
         .into_ffi()
     }

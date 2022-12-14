@@ -5,8 +5,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClusterMessageRegisterResponse, LeaderToUnregisteredFollowerMessage,
-    Message, MessageStreamReader, MessageStreamWriter, UnregisteredFollowerToLeaderMessage,
+    ClientToNodeMessage, ClusterMessageRegisterResponse, NodeToUnregisteredMessage,
+    Message, MessageStreamReader, MessageStreamWriter, UnregisteredToNodeMessage,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,8 +55,8 @@ impl FollowerConnection {
 
                     match message {
                         None => continue,
-                        Some(Message::UnregisteredFollowerToLeader(message)) => {
-                            self.on_unregistered_follower_to_leader_message(message).await;
+                        Some(Message::UnregisteredToNode(message)) => {
+                            self.on_unregistered_follower_to_node_message(message).await;
                         }
                         Some(Message::ClientToNode(message)) => {
                             if let Err(error) = self.register_client(message).await {
@@ -76,12 +76,12 @@ impl FollowerConnection {
         }
     }
 
-    async fn on_unregistered_follower_to_leader_message(
+    async fn on_unregistered_follower_to_node_message(
         &mut self,
-        message: UnregisteredFollowerToLeaderMessage,
+        message: UnregisteredToNodeMessage,
     ) {
         match message {
-            UnregisteredFollowerToLeaderMessage::RegisterRequest { .. } => {
+            UnregisteredToNodeMessage::RegisterRequest { .. } => {
                 let (sender, receiver) = oneshot::channel();
 
                 self.follower_sender
@@ -97,8 +97,8 @@ impl FollowerConnection {
                     Ok(leader_address) => leader_address,
                 };
 
-                let message = Message::LeaderToUnregisteredFollower(
-                    LeaderToUnregisteredFollowerMessage::RegisterResponse(
+                let message = Message::NodeToUnregistered(
+                    NodeToUnregisteredMessage::RegisterResponse(
                         ClusterMessageRegisterResponse::NotALeader { leader_address },
                     ),
                 );

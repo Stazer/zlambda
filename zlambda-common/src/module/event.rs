@@ -121,10 +121,53 @@ pub type DispatchModuleEventError = ModuleEventError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
+pub struct InitializeModuleEventInput {}
+
+impl InitializeModuleEventInput {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct InitializeModuleEventOutput {
+    event_listener: Box<dyn ModuleEventListener>,
+}
+
+impl From<InitializeModuleEventOutput> for (Box<dyn ModuleEventListener>,) {
+    fn from(output: InitializeModuleEventOutput) -> Self {
+        (output.event_listener,)
+    }
+}
+
+impl InitializeModuleEventOutput {
+    pub fn new(event_listener: Box<dyn ModuleEventListener>) -> Self {
+        Self { event_listener }
+    }
+
+    pub fn event_listener(&self) -> &Box<dyn ModuleEventListener> {
+        &self.event_listener
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type InitializeModuleEventError = ModuleEventError;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[async_trait]
 pub trait ModuleEventListener: Send + Sync {
+    async fn initialize(
+        input: InitializeModuleEventInput,
+    ) -> Result<InitializeModuleEventOutput, DispatchModuleEventError>
+    where
+        Self: Sized;
+
     async fn dispatch(
         &self,
-        event: DispatchModuleEventInput,
+        input: DispatchModuleEventInput,
     ) -> Result<DispatchModuleEventOutput, DispatchModuleEventError>;
 }

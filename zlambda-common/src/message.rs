@@ -83,14 +83,14 @@ pub enum ClusterMessageRegisterResponse {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum UnregisteredFollowerToLeaderMessage {
-    RegisterRequest { address: SocketAddr },
+pub enum LeaderToUnregisteredMessage {
+    HandshakeResponse,
 }
 
-impl From<Message> for Result<UnregisteredFollowerToLeaderMessage, MessageError> {
+impl From<Message> for Result<LeaderToUnregisteredMessage, MessageError> {
     fn from(message: Message) -> Self {
         match message {
-            Message::UnregisteredFollowerToLeader(message) => Ok(message),
+            Message::LeaderToUnregistered(message) => Ok(message),
             _ => Err(MessageError::UnexpectedMessage(message)),
         }
     }
@@ -99,14 +99,30 @@ impl From<Message> for Result<UnregisteredFollowerToLeaderMessage, MessageError>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum LeaderToUnregisteredFollowerMessage {
+pub enum UnregisteredToNodeMessage {
+    RegisterRequest { address: SocketAddr },
+}
+
+impl From<Message> for Result<UnregisteredToNodeMessage, MessageError> {
+    fn from(message: Message) -> Self {
+        match message {
+            Message::UnregisteredToNode(message) => Ok(message),
+            _ => Err(MessageError::UnexpectedMessage(message)),
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum NodeToUnregisteredMessage {
     RegisterResponse(ClusterMessageRegisterResponse),
 }
 
-impl From<Message> for Result<LeaderToUnregisteredFollowerMessage, MessageError> {
+impl From<Message> for Result<NodeToUnregisteredMessage, MessageError> {
     fn from(message: Message) -> Self {
         match message {
-            Message::LeaderToUnregisteredFollower(message) => Ok(message),
+            Message::NodeToUnregistered(message) => Ok(message),
             _ => Err(MessageError::UnexpectedMessage(message)),
         }
     }
@@ -220,8 +236,10 @@ impl From<Message> for Result<CandidateToCandidateMessage, MessageError> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Message {
-    LeaderToUnregisteredFollower(LeaderToUnregisteredFollowerMessage),
-    UnregisteredFollowerToLeader(UnregisteredFollowerToLeaderMessage),
+    LeaderToUnregistered(LeaderToUnregisteredMessage),
+
+    NodeToUnregistered(NodeToUnregisteredMessage),
+    UnregisteredToNode(UnregisteredToNodeMessage),
 
     LeaderToRegisteredFollower(LeaderToRegisteredFollowerMessage),
     RegisteredFollowerToLeader(RegisteredFollowerToLeaderMessage),
@@ -238,15 +256,21 @@ impl From<Message> for Result<Message, MessageError> {
     }
 }
 
-impl From<LeaderToUnregisteredFollowerMessage> for Message {
-    fn from(message: LeaderToUnregisteredFollowerMessage) -> Self {
-        Self::LeaderToUnregisteredFollower(message)
+impl From<LeaderToUnregisteredMessage> for Message {
+    fn from(message: LeaderToUnregisteredMessage) -> Self {
+        Self::LeaderToUnregistered(message)
     }
 }
 
-impl From<UnregisteredFollowerToLeaderMessage> for Message {
-    fn from(message: UnregisteredFollowerToLeaderMessage) -> Self {
-        Self::UnregisteredFollowerToLeader(message)
+impl From<NodeToUnregisteredMessage> for Message {
+    fn from(message: NodeToUnregisteredMessage) -> Self {
+        Self::NodeToUnregistered(message)
+    }
+}
+
+impl From<UnregisteredToNodeMessage> for Message {
+    fn from(message: UnregisteredToNodeMessage) -> Self {
+        Self::UnregisteredToNode(message)
     }
 }
 
@@ -430,17 +454,17 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type LeaderToUnregisteredFollowerMessageStreamReader =
-    BasicMessageStreamReader<LeaderToUnregisteredFollowerMessage>;
-pub type LeaderToUnregisteredFollowerMessageStreamWriter =
-    BasicMessageStreamWriter<LeaderToUnregisteredFollowerMessage>;
+pub type NodeToUnregisteredMessageStreamReader =
+    BasicMessageStreamReader<NodeToUnregisteredMessage>;
+pub type NodeToUnregisteredMessageStreamWriter =
+    BasicMessageStreamWriter<NodeToUnregisteredMessage>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type UnregisteredFollowerToLeaderMessageStreamReader =
-    BasicMessageStreamReader<UnregisteredFollowerToLeaderMessage>;
-pub type UnregisteredFollowerToLeaderMessageStreamWriter =
-    BasicMessageStreamWriter<UnregisteredFollowerToLeaderMessage>;
+pub type UnregisteredToNodeMessageStreamReader =
+    BasicMessageStreamReader<UnregisteredToNodeMessage>;
+pub type UnregisteredToNodeMessageStreamWriter =
+    BasicMessageStreamWriter<UnregisteredToNodeMessage>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -65,7 +65,7 @@ impl ModuleManager {
 
         self.entries.insert(
             id,
-            ModuleManagerEntry::Loaded(Arc::new(Module::load(id, &path)?)),
+            ModuleManagerEntry::Loaded(Arc::new(Module::load(id, &path).await?)),
         );
 
         tempfile.close()?;

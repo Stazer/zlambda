@@ -3,9 +3,11 @@ use serde_json::from_slice;
 use tokio::process::Command;
 use zlambda_common::async_trait::async_trait;
 use zlambda_common::module::{
-    DefaultModuleEventHandler, DispatchModuleEventError, DispatchModuleEventInput,
-    DispatchModuleEventOutput, ModuleEventHandler, ModuleEventListener,
+    DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
+    InitializeModuleEventError, InitializeModuleEventInput, InitializeModuleEventOutput,
+    ModuleEventListener,
 };
+use zlambda_common::module_event_listener;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,6 +23,12 @@ struct EventListener {}
 
 #[async_trait]
 impl ModuleEventListener for EventListener {
+    async fn initialize(
+        _input: InitializeModuleEventInput,
+    ) -> Result<InitializeModuleEventOutput, InitializeModuleEventError> {
+        Ok(InitializeModuleEventOutput::new(Box::new(Self {})))
+    }
+
     async fn dispatch(
         &self,
         event: DispatchModuleEventInput,
@@ -43,7 +51,6 @@ impl ModuleEventListener for EventListener {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn module_event_handler() -> Box<dyn ModuleEventHandler> {
-    Box::new(DefaultModuleEventHandler::new(Box::new(EventListener {})))
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+module_event_listener!(EventListener);

@@ -10,6 +10,7 @@ use zlambda_common::message::{
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
+use std::future::pending;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,6 +22,10 @@ pub enum LeaderFollowerMessage {
         Vec<LogEntryData>,
         oneshot::Sender<()>,
     ),
+    Handshake {
+        reader: RegisteredFollowerToLeaderMessageStreamReader,
+        writer: LeaderToRegisteredFollowerMessageStreamWriter,
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,8 +34,9 @@ pub enum LeaderFollowerMessage {
 pub struct LeaderFollower {
     id: NodeId,
     receiver: mpsc::Receiver<LeaderFollowerMessage>,
-    reader: RegisteredFollowerToLeaderMessageStreamReader,
-    writer: LeaderToRegisteredFollowerMessageStreamWriter,
+    reader: Option<RegisteredFollowerToLeaderMessageStreamReader>,
+    writer: Option<LeaderToRegisteredFollowerMessageStreamWriter>,
+    writer_message_buffer: Vec<LeaderToRegisteredFollowerMessage>,
     leader_sender: mpsc::Sender<LeaderMessage>,
 }
 
@@ -45,36 +51,47 @@ impl LeaderFollower {
         Self {
             id,
             receiver,
-            reader,
-            writer,
+            reader: Some(reader),
+            writer: Some(writer),
+            writer_message_buffer: Vec::default(),
             leader_sender,
+
         }
     }
 
-    pub async fn run(mut self) {
+    pub async fn run(mut self)
+    {
+        let mut reader = self.reader;
+
+        let a = async move {
+            if let Some(ref mut reader) = &mut std::mem::take(&mut reader) {
+                    reader.read().await
+            } else {
+                pending().await
+            }
+        };
+
         loop {
+            use futures::future::{OptionFuture, TryFuture, TryFutureExt};
+
+            //let a = OptionFuture::from(self.reader.map(|x| x.read())).unwrap_or_else(|| pending());
+
             select!(
-                read_result = self.reader.read() => {
+                read_result = a => {
                     let message = match read_result {
                         Ok(None) => {
-                            todo!("Follower crashed");
+                            self.reader = None;
+                            self.writer = None;
+
+                            continue
                         }
                         Ok(Some(message)) => message,
                         Err(error) => {
                             error!("{}", error);
+
                             break
                         }
                     };
-
-                    /*match message {
-                        FollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids } =
-                        Message::Cluster(ClusterMessage::AppendEntriesResponse { log_entry_ids }) => {
-                        }
-                        message => {
-                            error!("Unexpected message {:?}", message);
-                            break
-                        }
-                    };*/
 
                     self.on_registered_follower_to_leader_message(message).await;
                 }
@@ -87,16 +104,28 @@ impl LeaderFollower {
                         Some(message) => message,
                     };
 
-                    match message {
-                        LeaderFollowerMessage::Replicate(term, last_committed_log_entry_id, log_entry_data, sender) => self.replicate(
-                            term,
-                            last_committed_log_entry_id,
-                            log_entry_data,
-                            sender,
-                        ).await.expect(""),
-                    }
                 }
             )
+        }
+    }
+
+    async fn on_message(
+        &mut self,
+        message: LeaderFollowerMessage,
+    ) {
+        match message {
+            LeaderFollowerMessage::Replicate(term, last_committed_log_entry_id, log_entry_data, sender) => self.replicate(
+                term,
+                last_committed_log_entry_id,
+                log_entry_data,
+                sender,
+            ).await.expect(""),
+            LeaderFollowerMessage::Handshake {
+                reader,
+                writer
+            } => {
+
+            }
         }
     }
 
@@ -113,7 +142,6 @@ impl LeaderFollower {
 
                 if let Err(error) = result {
                     error!("{}", error);
-                    return;
                 }
             }
         }
@@ -126,13 +154,19 @@ impl LeaderFollower {
         log_entry_data: Vec<LogEntryData>,
         sender: oneshot::Sender<()>,
     ) -> Result<(), Box<dyn Error>> {
-        self.writer
-            .write(LeaderToRegisteredFollowerMessage::AppendEntriesRequest {
-                term,
-                last_committed_log_entry_id,
-                log_entry_data,
-            })
-            .await?;
+        let message = LeaderToRegisteredFollowerMessage::AppendEntriesRequest {
+            term,
+            last_committed_log_entry_id,
+            log_entry_data,
+        };
+
+        if let Some(ref mut writer) = &mut self.writer {
+            writer
+                .write(message.clone())
+                .await?;
+        } else {
+            self.writer_message_buffer.push(message);
+        }
 
         sender
             .send(())
