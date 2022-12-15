@@ -15,11 +15,11 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{error, trace};
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
-    ClusterMessageRegisterResponse, LeaderToRegisteredFollowerMessage,
-    LeaderToRegisteredFollowerMessageStreamReader, NodeToUnregisteredMessage,
-    NodeToUnregisteredMessageStreamReader, MessageStreamReader, MessageStreamWriter,
-    RegisteredFollowerToLeaderMessage, RegisteredFollowerToLeaderMessageStreamWriter,
-    UnregisteredToNodeMessage, UnregisteredToNodeMessageStreamWriter,
+    ClusterMessageRegisterResponse, LeaderToFollowerMessage,
+    LeaderToFollowerMessageStreamReader, NodeToGuestMessage,
+    NodeToGuestMessageStreamReader, MessageStreamReader, MessageStreamWriter,
+    FollowerToLeaderMessage, FollowerToLeaderMessageStreamWriter,
+    GuestToNodeMessage, GuestToNodeMessageStreamWriter,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
@@ -40,8 +40,8 @@ pub struct Follower {
     log: FollowerLog,
     term: Term,
     tcp_listener: TcpListener,
-    reader: LeaderToRegisteredFollowerMessageStreamReader,
-    writer: RegisteredFollowerToLeaderMessageStreamWriter,
+    reader: LeaderToFollowerMessageStreamReader,
+    writer: FollowerToLeaderMessageStreamWriter,
     sender: mpsc::Sender<FollowerMessage>,
     receiver: mpsc::Receiver<FollowerMessage>,
     addresses: HashMap<NodeId, SocketAddr>,
@@ -60,17 +60,17 @@ impl Follower {
         let (reader, writer) = TcpStream::connect(registration_address).await?.into_split();
 
         let (mut reader, mut writer) = (
-            NodeToUnregisteredMessageStreamReader::new(reader),
-            UnregisteredToNodeMessageStreamWriter::new(writer),
+            NodeToGuestMessageStreamReader::new(reader),
+            GuestToNodeMessageStreamWriter::new(writer),
         );
 
         writer
-            .write(UnregisteredToNodeMessage::RegisterRequest { address })
+            .write(GuestToNodeMessage::RegisterRequest { address })
             .await?;
 
         let (id, leader_id, addresses, term) = match reader.read().await? {
             None => return Err("Expected message".into()),
-            Some(NodeToUnregisteredMessage::RegisterResponse(
+            Some(NodeToGuestMessage::RegisterResponse(
                 ClusterMessageRegisterResponse::Ok {
                     id,
                     leader_id,
@@ -162,9 +162,9 @@ impl Follower {
         }
     }
 
-    async fn on_leader_to_follower_message(&mut self, message: LeaderToRegisteredFollowerMessage) {
+    async fn on_leader_to_follower_message(&mut self, message: LeaderToFollowerMessage) {
         match message {
-            LeaderToRegisteredFollowerMessage::AppendEntriesRequest {
+            LeaderToFollowerMessage::AppendEntriesRequest {
                 term,
                 last_committed_log_entry_id,
                 log_entry_data,
@@ -188,7 +188,7 @@ impl Follower {
 
         let result = self
             .writer
-            .write(RegisteredFollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids })
+            .write(FollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids })
             .await;
 
         if let Err(error) = result {

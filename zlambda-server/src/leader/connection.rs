@@ -7,8 +7,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClusterMessageRegisterResponse, NodeToUnregisteredMessage,
-    Message, MessageStreamReader, MessageStreamWriter, UnregisteredToNodeMessage,
+    ClientToNodeMessage, ClusterMessageRegisterResponse, NodeToGuestMessage,
+    Message, MessageStreamReader, MessageStreamWriter, GuestToNodeMessage,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,7 +57,7 @@ impl LeaderConnection {
 
                     match message {
                         None => continue,
-                        Some(Message::UnregisteredToNode(message)) => {
+                        Some(Message::GuestToNode(message)) => {
                             self.on_unregistered_to_node_message(message).await;
                             break
                         },
@@ -80,10 +80,10 @@ impl LeaderConnection {
 
     async fn on_unregistered_to_node_message(
         self,
-        message: UnregisteredToNodeMessage,
+        message: GuestToNodeMessage,
     ) {
         match message {
-            UnregisteredToNodeMessage::RegisterRequest { address } => {
+            GuestToNodeMessage::RegisterRequest { address } => {
                 self.register_follower(address).await.expect("");
             }
         }
@@ -106,7 +106,7 @@ impl LeaderConnection {
         let mut writer = self.writer.into();
 
         writer
-            .write(NodeToUnregisteredMessage::RegisterResponse(
+            .write(NodeToGuestMessage::RegisterResponse(
                 ClusterMessageRegisterResponse::Ok {
                     id,
                     leader_id,

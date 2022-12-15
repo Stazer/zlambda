@@ -5,8 +5,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClusterMessageRegisterResponse, NodeToUnregisteredMessage,
-    Message, MessageStreamReader, MessageStreamWriter, UnregisteredToNodeMessage,
+    ClientToNodeMessage, ClusterMessageRegisterResponse, NodeToGuestMessage,
+    Message, MessageStreamReader, MessageStreamWriter, GuestToNodeMessage,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,7 +55,7 @@ impl FollowerConnection {
 
                     match message {
                         None => continue,
-                        Some(Message::UnregisteredToNode(message)) => {
+                        Some(Message::GuestToNode(message)) => {
                             self.on_unregistered_follower_to_node_message(message).await;
                         }
                         Some(Message::ClientToNode(message)) => {
@@ -78,10 +78,10 @@ impl FollowerConnection {
 
     async fn on_unregistered_follower_to_node_message(
         &mut self,
-        message: UnregisteredToNodeMessage,
+        message: GuestToNodeMessage,
     ) {
         match message {
-            UnregisteredToNodeMessage::RegisterRequest { .. } => {
+            GuestToNodeMessage::RegisterRequest { .. } => {
                 let (sender, receiver) = oneshot::channel();
 
                 self.follower_sender
@@ -97,8 +97,8 @@ impl FollowerConnection {
                     Ok(leader_address) => leader_address,
                 };
 
-                let message = Message::NodeToUnregistered(
-                    NodeToUnregisteredMessage::RegisterResponse(
+                let message = Message::NodeToGuest(
+                    NodeToGuestMessage::RegisterResponse(
                         ClusterMessageRegisterResponse::NotALeader { leader_address },
                     ),
                 );
