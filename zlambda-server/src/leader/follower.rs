@@ -5,8 +5,8 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
-    LeaderToFollowerMessage, LeaderToFollowerMessageStreamWriter,
-    FollowerToLeaderMessage, FollowerToLeaderMessageStreamReader,
+    FollowerToLeaderMessage, FollowerToLeaderMessageStreamReader, LeaderToFollowerMessage,
+    LeaderToFollowerMessageStreamWriter,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
@@ -54,7 +54,6 @@ impl LeaderFollower {
             writer: Some(writer),
             writer_message_buffer: Vec::default(),
             leader_sender,
-
         }
     }
 
@@ -64,9 +63,7 @@ impl LeaderFollower {
         }
     }
 
-    async fn select(
-        &mut self,
-    ) {
+    async fn select(&mut self) {
         select!(
             read_result = { self.reader.as_mut().unwrap().read() }, if self.reader.is_some() => {
                 let message = match read_result {
@@ -99,30 +96,24 @@ impl LeaderFollower {
         )
     }
 
-    async fn on_message(
-        &mut self,
-        message: LeaderFollowerMessage,
-    ) {
+    async fn on_message(&mut self, message: LeaderFollowerMessage) {
         match message {
-            LeaderFollowerMessage::Replicate(term, last_committed_log_entry_id, log_entry_data, sender) => self.replicate(
+            LeaderFollowerMessage::Replicate(
                 term,
                 last_committed_log_entry_id,
                 log_entry_data,
                 sender,
-            ).await.expect(""),
-            LeaderFollowerMessage::Handshake {
-                reader,
-                writer
-            } => {
+            ) => self
+                .replicate(term, last_committed_log_entry_id, log_entry_data, sender)
+                .await
+                .expect(""),
+            LeaderFollowerMessage::Handshake { reader, writer } => {
                 self.on_handshake(reader, writer).await;
             }
         }
     }
 
-    async fn on_registered_follower_to_leader_message(
-        &mut self,
-        message: FollowerToLeaderMessage,
-    ) {
+    async fn on_registered_follower_to_leader_message(&mut self, message: FollowerToLeaderMessage) {
         match message {
             FollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids } => {
                 let result = self
@@ -160,9 +151,7 @@ impl LeaderFollower {
         };
 
         if let Some(ref mut writer) = &mut self.writer {
-            writer
-                .write(message.clone())
-                .await?;
+            writer.write(message.clone()).await?;
         } else {
             self.writer_message_buffer.push(message);
         }

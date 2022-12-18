@@ -15,11 +15,10 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{error, trace};
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
-    ClusterMessageRegisterResponse, LeaderToFollowerMessage,
-    LeaderToFollowerMessageStreamReader, NodeToGuestMessage,
-    NodeToGuestMessageStreamReader, MessageStreamReader, MessageStreamWriter,
-    FollowerToLeaderMessage, FollowerToLeaderMessageStreamWriter,
-    GuestToNodeMessage, GuestToNodeMessageStreamWriter,
+    FollowerToGuestMessage, FollowerToLeaderMessage, FollowerToLeaderMessageStreamWriter,
+    GuestToNodeMessage, GuestToNodeMessageStreamWriter, LeaderToFollowerMessage,
+    LeaderToFollowerMessageStreamReader, LeaderToGuestMessage, Message, MessageStreamReader,
+    MessageStreamWriter,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
@@ -56,50 +55,130 @@ impl Follower {
     where
         T: ToSocketAddrs,
     {
+        match node_id {
+            None => Self::new_registration(tcp_listener, registration_address).await,
+            Some(node_id) => Self::new_handshake(tcp_listener, registration_address, node_id).await,
+        }
+    }
+
+    async fn new_registration<T>(
+        tcp_listener: TcpListener,
+        registration_address: T,
+    ) -> Result<Self, Box<dyn Error>>
+    where
+        T: ToSocketAddrs,
+    {
         let address = tcp_listener.local_addr()?;
+        let mut socket = TcpStream::connect(registration_address).await?;
 
-        let (reader, writer) = TcpStream::connect(registration_address).await?.into_split();
+        loop {
+            let (reader, writer) = socket.into_split();
 
-        let (mut reader, mut writer) = (
-            NodeToGuestMessageStreamReader::new(reader),
-            GuestToNodeMessageStreamWriter::new(writer),
-        );
+            let (mut reader, mut writer) = (
+                MessageStreamReader::new(reader),
+                GuestToNodeMessageStreamWriter::new(writer),
+            );
 
-        writer
-            .write(GuestToNodeMessage::RegisterRequest { address })
-            .await?;
+            writer
+                .write(GuestToNodeMessage::RegisterRequest { address })
+                .await?;
 
-        let (id, leader_id, addresses, term) = match reader.read().await? {
-            None => return Err("Expected message".into()),
-            Some(NodeToGuestMessage::RegisterResponse(
-                ClusterMessageRegisterResponse::Ok {
+            let (id, leader_id, addresses, term) = match reader.read().await? {
+                None => return Err("Expected message".into()),
+                Some(Message::FollowerToGuest(
+                    FollowerToGuestMessage::RegisterNotALeaderResponse { leader_address },
+                )) => {
+                    socket = TcpStream::connect(leader_address).await?;
+                    continue;
+                }
+                Some(Message::LeaderToGuest(LeaderToGuestMessage::RegisterOkResponse {
                     id,
                     leader_id,
                     addresses,
                     term,
-                },
-            )) => (id, leader_id, addresses, term),
-            Some(_) => {
-                return Err("Expected request response".into());
-            }
-        };
+                })) => (id, leader_id, addresses, term),
+                Some(_) => {
+                    return Err("Expected request response".into());
+                }
+            };
 
-        let (sender, receiver) = mpsc::channel(16);
+            let (sender, receiver) = mpsc::channel(16);
 
-        trace!("Registered");
+            trace!("Registered");
 
-        Ok(Self {
-            id,
-            leader_id,
-            term,
-            tcp_listener,
-            reader: reader.into(),
-            writer: writer.into(),
-            log: FollowerLog::default(),
-            addresses,
-            sender,
-            receiver,
-        })
+            return Ok(Self {
+                id,
+                leader_id,
+                term,
+                tcp_listener,
+                reader: reader.into(),
+                writer: writer.into(),
+                log: FollowerLog::default(),
+                addresses,
+                sender,
+                receiver,
+            });
+        }
+    }
+
+    async fn new_handshake<T>(
+        tcp_listener: TcpListener,
+        registration_address: T,
+        node_id: NodeId,
+    ) -> Result<Self, Box<dyn Error>>
+    where
+        T: ToSocketAddrs,
+    {
+        let address = tcp_listener.local_addr()?;
+        let mut socket = TcpStream::connect(registration_address).await?;
+
+        loop {
+            let (reader, writer) = socket.into_split();
+
+            let (mut reader, mut writer) = (
+                MessageStreamReader::new(reader),
+                GuestToNodeMessageStreamWriter::new(writer),
+            );
+
+            writer
+                .write(GuestToNodeMessage::RegisterRequest { address })
+                .await?;
+
+            let (leader_id, addresses, term) = match reader.read().await? {
+                None => return Err("Expected message".into()),
+                Some(Message::FollowerToGuest(
+                    FollowerToGuestMessage::HandshakeNotALeaderResponse { leader_address },
+                )) => {
+                    socket = TcpStream::connect(leader_address).await?;
+                    continue;
+                }
+                Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeOkResponse {
+                    leader_id,
+                    addresses,
+                    term,
+                })) => (leader_id, addresses, term),
+                Some(_) => {
+                    return Err("Expected request response".into());
+                }
+            };
+
+            let (sender, receiver) = mpsc::channel(16);
+
+            trace!("Registered");
+
+            return Ok(Self {
+                id: node_id,
+                leader_id,
+                term,
+                tcp_listener,
+                reader: reader.into(),
+                writer: writer.into(),
+                log: FollowerLog::default(),
+                addresses,
+                sender,
+                receiver,
+            });
+        }
     }
 
     pub async fn run(&mut self) {

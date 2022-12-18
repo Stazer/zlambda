@@ -7,9 +7,10 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClusterMessageRegisterResponse, NodeToGuestMessage,
-    Message, MessageStreamReader, MessageStreamWriter, GuestToNodeMessage,
+    ClientToNodeMessage, GuestToNodeMessage, LeaderToGuestMessage, Message, MessageStreamReader,
+    MessageStreamWriter,
 };
+use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -78,13 +79,13 @@ impl LeaderConnection {
         }
     }
 
-    async fn on_unregistered_to_node_message(
-        self,
-        message: GuestToNodeMessage,
-    ) {
+    async fn on_unregistered_to_node_message(self, message: GuestToNodeMessage) {
         match message {
             GuestToNodeMessage::RegisterRequest { address } => {
                 self.register_follower(address).await.expect("");
+            }
+            GuestToNodeMessage::HandshakeRequest { address, node_id } => {
+                self.handshake_follower(address, node_id).await.expect("");
             }
         }
     }
@@ -106,14 +107,12 @@ impl LeaderConnection {
         let mut writer = self.writer.into();
 
         writer
-            .write(NodeToGuestMessage::RegisterResponse(
-                ClusterMessageRegisterResponse::Ok {
-                    id,
-                    leader_id,
-                    term,
-                    addresses,
-                },
-            ))
+            .write(LeaderToGuestMessage::RegisterOkResponse {
+                id,
+                leader_id,
+                term,
+                addresses,
+            })
             .await?;
 
         spawn(async move {
@@ -128,6 +127,14 @@ impl LeaderConnection {
             .await;
         });
 
+        Ok(())
+    }
+
+    async fn handshake_follower(
+        self,
+        address: SocketAddr,
+        node_id: NodeId,
+    ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 

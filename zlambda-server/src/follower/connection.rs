@@ -5,8 +5,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClusterMessageRegisterResponse, NodeToGuestMessage,
-    Message, MessageStreamReader, MessageStreamWriter, GuestToNodeMessage,
+    ClientToNodeMessage, FollowerToGuestMessage, GuestToNodeMessage, Message, MessageStreamReader,
+    MessageStreamWriter,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,10 +76,7 @@ impl FollowerConnection {
         }
     }
 
-    async fn on_unregistered_follower_to_node_message(
-        &mut self,
-        message: GuestToNodeMessage,
-    ) {
+    async fn on_unregistered_follower_to_node_message(&mut self, message: GuestToNodeMessage) {
         match message {
             GuestToNodeMessage::RegisterRequest { .. } => {
                 let (sender, receiver) = oneshot::channel();
@@ -97,17 +94,42 @@ impl FollowerConnection {
                     Ok(leader_address) => leader_address,
                 };
 
-                let message = Message::NodeToGuest(
-                    NodeToGuestMessage::RegisterResponse(
-                        ClusterMessageRegisterResponse::NotALeader { leader_address },
-                    ),
-                );
+                let message =
+                    Message::FollowerToGuest(FollowerToGuestMessage::RegisterNotALeaderResponse {
+                        leader_address,
+                    });
 
                 let result = self.writer.write(message).await;
 
                 if let Err(error) = result {
                     error!("{}", error);
-                    return;
+                }
+            }
+            GuestToNodeMessage::HandshakeRequest { .. } => {
+                let (sender, receiver) = oneshot::channel();
+
+                self.follower_sender
+                    .send(FollowerMessage::ReadLeaderAddress { sender })
+                    .await
+                    .expect("Cannot send FollowerMessage::ReadLeaderAddress");
+
+                let leader_address = match receiver.await {
+                    Err(error) => {
+                        error!("{}", error);
+                        return;
+                    }
+                    Ok(leader_address) => leader_address,
+                };
+
+                let message =
+                    Message::FollowerToGuest(FollowerToGuestMessage::HandshakeNotALeaderResponse {
+                        leader_address,
+                    });
+
+                let result = self.writer.write(message).await;
+
+                if let Err(error) = result {
+                    error!("{}", error);
                 }
             }
         }

@@ -2,7 +2,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use clap::{Parser, Subcommand, Args};
+use clap::{Args, Parser, Subcommand};
 use std::error::Error;
 use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
@@ -55,7 +55,7 @@ enum ServerCommand {
     Follower {
         leader_address: String,
         node_id: Option<NodeId>,
-    }
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,12 +80,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             tracing_subscriber::fmt::init();
 
             let server = match command {
-                ServerCommand::Leader => {
-                    Server::new::<_, String>(listener_address, None).await?
-                },
-                ServerCommand::Follower { leader_address, node_id } => {
-                    Server::new(listener_address, Some((leader_address, node_id))).await?
-                }
+                ServerCommand::Leader => Server::new::<_, String>(listener_address, None).await?,
+                ServerCommand::Follower {
+                    leader_address,
+                    node_id,
+                } => Server::new(listener_address, Some((leader_address, node_id))).await?,
             };
 
             server.run().await;
