@@ -114,7 +114,7 @@ impl Leader {
                     };
 
                     match message {
-                        LeaderMessage::Register(address, follower_sender, result_sender  ) => self.register(
+                        LeaderMessage::Register(address, follower_sender, result_sender) => self.register(
                             address,
                             follower_sender,
                             result_sender,

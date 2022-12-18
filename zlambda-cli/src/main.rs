@@ -2,13 +2,14 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, Args};
 use std::error::Error;
 use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
 use tokio::io::{stdin, stdout};
 use zlambda_client::Client;
 use zlambda_common::module::ModuleId;
+use zlambda_common::node::NodeId;
 use zlambda_server::Server;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,12 +23,21 @@ struct MainArguments {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Clone, Debug, Args)]
+struct FollowerData {
+    address: String,
+    node_id: NodeId,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug, Subcommand)]
 enum MainCommand {
     Server {
         #[clap(default_value = "0.0.0.0:8000")]
         listener_address: String,
-        leader_address: Option<String>,
+        #[clap(subcommand)]
+        command: ServerCommand,
     },
     Client {
         #[clap(default_value = "0.0.0.0:8000")]
@@ -35,6 +45,17 @@ enum MainCommand {
         #[clap(subcommand)]
         command: ClientCommand,
     },
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Subcommand)]
+enum ServerCommand {
+    Leader,
+    Follower {
+        leader_address: String,
+        node_id: Option<NodeId>,
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,13 +75,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     match arguments.command {
         MainCommand::Server {
             listener_address,
-            leader_address,
+            command,
         } => {
             tracing_subscriber::fmt::init();
 
-            let server = match Server::new(listener_address, leader_address).await {
-                Err(error) => return Err(error),
-                Ok(server) => server,
+            let server = match command {
+                ServerCommand::Leader => {
+                    Server::new::<_, String>(listener_address, None).await?
+                },
+                ServerCommand::Follower { leader_address, node_id } => {
+                    Server::new(listener_address, Some((leader_address, node_id))).await?
+                }
             };
 
             server.run().await;

@@ -13,6 +13,7 @@ use crate::follower::Follower;
 use crate::leader::Leader;
 use std::error::Error;
 use tokio::net::{TcpListener, ToSocketAddrs};
+use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,7 +32,7 @@ pub struct Server {
 impl Server {
     pub async fn new<S, T>(
         listener_address: S,
-        registration_address: Option<T>,
+        follower_data: Option<(T, Option<NodeId>)>,
     ) -> Result<Self, Box<dyn Error>>
     where
         S: ToSocketAddrs,
@@ -39,13 +40,13 @@ impl Server {
     {
         let tcp_listener = TcpListener::bind(listener_address).await?;
 
-        let node = match registration_address {
+        let node = match follower_data {
             None => Self {
                 r#type: NodeType::Leader(Leader::new(tcp_listener)?),
             },
-            Some(registration_address) => Self {
+            Some((registration_address, node_id)) => Self {
                 r#type: NodeType::Follower(
-                    Follower::new(tcp_listener, registration_address).await?,
+                    Follower::new(tcp_listener, registration_address, node_id).await?,
                 ),
             },
         };

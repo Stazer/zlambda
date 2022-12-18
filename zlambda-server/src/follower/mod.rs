@@ -51,6 +51,7 @@ impl Follower {
     pub async fn new<T>(
         tcp_listener: TcpListener,
         registration_address: T,
+        node_id: Option<NodeId>,
     ) -> Result<Self, Box<dyn Error>>
     where
         T: ToSocketAddrs,
