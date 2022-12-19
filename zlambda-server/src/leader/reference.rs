@@ -3,17 +3,17 @@ use crate::leader::LeaderMessage;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct InternalLeaderReference {
+pub struct InternalLeaderHandle {
     sender: mpsc::Sender<LeaderMessage>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct ExternalLeaderReference {
+pub struct ExternalLeaderHandle {
     sender: mpsc::Sender<LeaderMessage>,
 }
 
-impl ExternalLeaderReference {
+impl ExternalLeaderHandle {
     pub async fn dispatch(&self, id: ModuleId, payload: Vec<u8>) -> Result<Vec<u8>, String> {
         let (sender, receiver) = oneshot::channel();
 

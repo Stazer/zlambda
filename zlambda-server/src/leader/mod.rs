@@ -41,6 +41,13 @@ pub enum LeaderMessage {
     Append(ModuleId, Vec<u8>, oneshot::Sender<()>),
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
     Dispatch(ModuleId, Vec<u8>, oneshot::Sender<Result<Vec<u8>, String>>),
+    Handshake {
+        node_id: NodeId,
+        address: SocketAddr,
+        reader: MessageStreamReader,
+        writer: MessageStreamWriter,
+        result: oneshot::Sender<Result<(), String>>,
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -113,28 +120,61 @@ impl Leader {
                         Some(message) => message,
                     };
 
-                    match message {
-                        LeaderMessage::Register(address, follower_sender, result_sender) => self.register(
-                            address,
-                            follower_sender,
-                            result_sender,
-                        ).await,
-                        LeaderMessage::Replicate(log_entry_type, sender) => {
-                            let id = self.replicate(log_entry_type).await;
-
-                            if sender.send(id).is_err() {
-                                error!("Cannot send result");
-                            }
-                        }
-                        LeaderMessage::Acknowledge(log_entry_ids, node_id) => self.acknowledge(log_entry_ids, node_id).await,
-                        LeaderMessage::Initialize(sender)  => self.initialize(sender).await,
-                        LeaderMessage::Append(id, chunk, sender) => self.append(id, chunk, sender).await,
-                        LeaderMessage::Load(id, sender) => self.load(id, sender).await,
-                        LeaderMessage::Dispatch(id, payload, sender) => self.dispatch(id, payload, sender).await,
-                    }
+                    self.on_message(message).await.expect("");
                 }
             )
         }
+    }
+
+    async fn on_message(
+        &mut self,
+        message: LeaderMessage,
+    ) -> Result<(), Box<dyn Error>> {
+        match message {
+            LeaderMessage::Register(address, follower_sender, result_sender) => self.register(
+                address,
+                follower_sender,
+                result_sender,
+            ).await,
+            LeaderMessage::Replicate(log_entry_type, sender) => {
+                let id = self.replicate(log_entry_type).await;
+
+                if sender.send(id).is_err() {
+                    error!("Cannot send result");
+                }
+
+                Ok(())
+            }
+            LeaderMessage::Acknowledge(log_entry_ids, node_id) => self.acknowledge(log_entry_ids, node_id).await,
+            LeaderMessage::Initialize(sender)  => self.initialize(sender).await,
+            LeaderMessage::Append(id, chunk, sender) => self.append(id, chunk, sender).await,
+            LeaderMessage::Load(id, sender) => self.load(id, sender).await,
+            LeaderMessage::Dispatch(id, payload, sender) => self.dispatch(id, payload, sender).await,
+            LeaderMessage::Handshake {
+                node_id,
+            address,
+            reader,
+            writer,
+            result,
+            } => self.on_handshake(node_id,
+            address,
+            reader,
+            writer,
+            result,).await
+        }.expect("");
+
+        Ok(())
+    }
+
+    async fn on_handshake(
+        &mut self,
+        node_id: NodeId,
+        address: SocketAddr,
+        reader: MessageStreamReader,
+        writer: MessageStreamWriter,
+        result: oneshot::Sender<Result<(), String>>,
+    ) -> Result<(), Box<dyn Error>> {
+        Ok(())
     }
 
     async fn register(
@@ -142,7 +182,7 @@ impl Leader {
         address: SocketAddr,
         follower_sender: mpsc::Sender<LeaderFollowerMessage>,
         result_sender: oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let id = next_key(self.addresses.keys());
         self.addresses.insert(id, address);
 
@@ -161,6 +201,8 @@ impl Leader {
         {
             error!("Cannot send result");
         }
+
+        Ok(())
     }
 
     async fn replicate(&mut self, log_entry_type: LogEntryType) -> LogEntryId {
@@ -200,7 +242,9 @@ impl Leader {
         id
     }
 
-    async fn acknowledge(&mut self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId) {
+    async fn acknowledge(&mut self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId
+
+    ) -> Result<(), Box<dyn Error>> {
         for log_entry_id in log_entry_ids.into_iter() {
             trace!(
                 "Log entry {} acknowledged by node {}",
@@ -213,7 +257,7 @@ impl Leader {
                     match log_entry.data().r#type() {
                         LogEntryType::Client(client_log_entry_type) => {
                             self.apply(committed_log_entry_id, client_log_entry_type.clone())
-                                .await;
+                                .await?;
                         }
                         LogEntryType::Cluster(ClusterLogEntryType::Addresses(addresses)) => {
                             self.addresses = addresses.clone();
@@ -222,9 +266,12 @@ impl Leader {
                 }
             }
         }
+
+        Ok(())
     }
 
-    async fn initialize(&mut self, sender: oneshot::Sender<ModuleId>) {
+    async fn initialize(&mut self, sender: oneshot::Sender<ModuleId>
+    ) -> Result<(), Box<dyn Error>> {
         let id = self
             .replicate(LogEntryType::Client(ClientLogEntryType::Initialize))
             .await;
@@ -242,18 +289,24 @@ impl Leader {
                 .boxed()
             }),
         );
+
+        Ok(())
     }
 
-    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>, sender: oneshot::Sender<()>) {
+    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>, sender: oneshot::Sender<()>
+    ) -> Result<(), Box<dyn Error>> {
         self.replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
             .await;
 
         if sender.send(()).is_err() {
             error!("Error sending append module");
         }
+
+    Ok(())
     }
 
-    async fn apply(&mut self, log_entry_id: LogEntryId, client_log_entry_type: ClientLogEntryType) {
+    async fn apply(&mut self, log_entry_id: LogEntryId, client_log_entry_type: ClientLogEntryType
+    ) -> Result<(), Box<dyn Error>> {
         trace!("Apply {}", log_entry_id);
 
         match client_log_entry_type {
@@ -261,7 +314,7 @@ impl Leader {
                 let module_id = match self.module_manager.initialize() {
                     Err(error) => {
                         error!("{}", error);
-                        return;
+                        return Ok(());
                     }
                     Ok(module_id) => module_id,
                 };
@@ -289,9 +342,12 @@ impl Leader {
                 }
             }
         };
+
+        Ok(())
     }
 
-    async fn load(&mut self, id: ModuleId, sender: oneshot::Sender<Result<ModuleId, String>>) {
+    async fn load(&mut self, id: ModuleId, sender: oneshot::Sender<Result<ModuleId, String>>
+    ) -> Result<(), Box<dyn Error>> {
         let id = self
             .replicate(LogEntryType::Client(ClientLogEntryType::Load(id)))
             .await;
@@ -309,6 +365,8 @@ impl Leader {
                 .boxed()
             }),
         );
+
+        Ok(())
     }
 
     async fn dispatch(
@@ -316,14 +374,14 @@ impl Leader {
         id: ModuleId,
         payload: Vec<u8>,
         sender: oneshot::Sender<Result<Vec<u8>, String>>,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let module = match self.module_manager.get(id) {
             Some(module) => module.clone(),
             None => {
                 sender
                     .send(Err("Module not found".into()))
                     .expect("Cannot send");
-                return;
+                return Ok(());
             }
         };
 
@@ -344,5 +402,7 @@ impl Leader {
 
             sender.send(result).expect("Cannot send");
         });
+
+        Ok(())
     }
 }
