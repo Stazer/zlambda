@@ -1,5 +1,8 @@
 use crate::leader::client::LeaderClient;
-use crate::leader::follower::LeaderFollower;
+use crate::leader::follower::{
+    LeaderFollowerTask,
+    LeaderFollowerHandle,
+};
 use crate::leader::LeaderMessage;
 use std::error::Error;
 use std::net::SocketAddr;
@@ -97,7 +100,7 @@ impl LeaderConnection {
         self.leader_sender
             .send(LeaderMessage::Register(
                 address,
-                follower_sender,
+                LeaderFollowerHandle::new(follower_sender.clone()),
                 result_sender,
             ))
             .await?;
@@ -115,17 +118,14 @@ impl LeaderConnection {
             })
             .await?;
 
-        spawn(async move {
-            LeaderFollower::new(
-                id,
-                follower_receiver,
-                self.reader.into(),
-                writer.into(),
-                self.leader_sender,
-            )
-            .run()
-            .await;
-        });
+        LeaderFollowerTask::new(
+            id,
+            follower_sender.clone(),
+            follower_receiver,
+            Some(self.reader.into()),
+            Some(writer.into()),
+            self.leader_sender,
+        ).spawn();
 
         Ok(())
     }

@@ -6,7 +6,7 @@ pub mod log;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use connection::LeaderConnection;
-use follower::LeaderFollowerMessage;
+use follower::{LeaderFollowerHandle};
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use log::LeaderLog;
@@ -32,7 +32,7 @@ use zlambda_common::term::Term;
 pub enum LeaderMessage {
     Register(
         SocketAddr,
-        mpsc::Sender<LeaderFollowerMessage>,
+        LeaderFollowerHandle,
         oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
     ),
     Acknowledge(Vec<LogEntryId>, NodeId),
@@ -61,11 +61,13 @@ pub struct Leader {
     sender: mpsc::Sender<LeaderMessage>,
     receiver: mpsc::Receiver<LeaderMessage>,
     module_manager: ModuleManager,
-    follower_senders: HashMap<NodeId, mpsc::Sender<LeaderFollowerMessage>>,
+    follower_senders: HashMap<NodeId, LeaderFollowerHandle>,
     on_apply_initialize_module_handler:
         HashMap<LogEntryId, Box<dyn FnOnce(ModuleId) -> BoxFuture<'static, ()>>>,
     on_load_handler:
         HashMap<LogEntryId, Box<dyn FnOnce(Result<ModuleId, String>) -> BoxFuture<'static, ()>>>,
+
+    on_apply_message: HashMap<LogEntryId, LeaderMessage>,
 }
 
 impl Leader {
@@ -86,6 +88,7 @@ impl Leader {
             follower_senders: HashMap::default(),
             on_apply_initialize_module_handler: HashMap::default(),
             on_load_handler: HashMap::default(),
+            on_apply_message: HashMap::default(),
         })
     }
 
@@ -126,16 +129,11 @@ impl Leader {
         }
     }
 
-    async fn on_message(
-        &mut self,
-        message: LeaderMessage,
-    ) -> Result<(), Box<dyn Error>> {
+    async fn on_message(&mut self, message: LeaderMessage) -> Result<(), Box<dyn Error>> {
         match message {
-            LeaderMessage::Register(address, follower_sender, result_sender) => self.register(
-                address,
-                follower_sender,
-                result_sender,
-            ).await,
+            LeaderMessage::Register(address, follower_sender, result_sender) => {
+                self.register(address, follower_sender, result_sender).await
+            }
             LeaderMessage::Replicate(log_entry_type, sender) => {
                 let id = self.replicate(log_entry_type).await;
 
@@ -145,23 +143,27 @@ impl Leader {
 
                 Ok(())
             }
-            LeaderMessage::Acknowledge(log_entry_ids, node_id) => self.acknowledge(log_entry_ids, node_id).await,
-            LeaderMessage::Initialize(sender)  => self.initialize(sender).await,
+            LeaderMessage::Acknowledge(log_entry_ids, node_id) => {
+                self.acknowledge(log_entry_ids, node_id).await
+            }
+            LeaderMessage::Initialize(sender) => self.initialize(sender).await,
             LeaderMessage::Append(id, chunk, sender) => self.append(id, chunk, sender).await,
             LeaderMessage::Load(id, sender) => self.load(id, sender).await,
-            LeaderMessage::Dispatch(id, payload, sender) => self.dispatch(id, payload, sender).await,
+            LeaderMessage::Dispatch(id, payload, sender) => {
+                self.dispatch(id, payload, sender).await
+            }
             LeaderMessage::Handshake {
                 node_id,
-            address,
-            reader,
-            writer,
-            result,
-            } => self.on_handshake(node_id,
-            address,
-            reader,
-            writer,
-            result,).await
-        }.expect("");
+                address,
+                reader,
+                writer,
+                result,
+            } => {
+                self.on_handshake(node_id, address, reader, writer, result)
+                    .await
+            }
+        }
+        .expect("");
 
         Ok(())
     }
@@ -174,13 +176,18 @@ impl Leader {
         writer: MessageStreamWriter,
         result: oneshot::Sender<Result<(), String>>,
     ) -> Result<(), Box<dyn Error>> {
+        let follower_sender = match self.follower_senders.get(&node_id) {
+            Some(follower_sender) => follower_sender,
+            None => return Err("Follower not found".into()),
+        };
+
         Ok(())
     }
 
     async fn register(
         &mut self,
         address: SocketAddr,
-        follower_sender: mpsc::Sender<LeaderFollowerMessage>,
+        follower_sender: LeaderFollowerHandle,
         result_sender: oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
     ) -> Result<(), Box<dyn Error>> {
         let id = next_key(self.addresses.keys());
@@ -214,24 +221,11 @@ impl Leader {
         for follower_sender in self.follower_senders.values() {
             let log_entry_data = LogEntryData::new(id, log_entry_type.clone());
 
-            let (sender, receiver) = oneshot::channel();
-
-            if let Err(error) = follower_sender
-                .send(LeaderFollowerMessage::Replicate(
-                    self.term,
-                    self.log.last_committed_log_entry_id(),
-                    vec![log_entry_data],
-                    sender,
-                ))
-                .await
-            {
-                error!("Cannot send LeaderFollowerMessage::Replicate {}", error);
-                continue;
-            }
-
-            if let Err(error) = receiver.await {
-                error!("Cannot receive LeaderFollowerMessage::Replicate {}", error);
-            }
+            follower_sender.replicate(
+                self.term,
+                self.log.last_committed_log_entry_id(),
+                vec![log_entry_data],
+            ).await;
         }
 
         self.sender
@@ -242,8 +236,10 @@ impl Leader {
         id
     }
 
-    async fn acknowledge(&mut self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId
-
+    async fn acknowledge(
+        &mut self,
+        log_entry_ids: Vec<LogEntryId>,
+        node_id: NodeId,
     ) -> Result<(), Box<dyn Error>> {
         for log_entry_id in log_entry_ids.into_iter() {
             trace!(
@@ -270,7 +266,9 @@ impl Leader {
         Ok(())
     }
 
-    async fn initialize(&mut self, sender: oneshot::Sender<ModuleId>
+    async fn initialize(
+        &mut self,
+        sender: oneshot::Sender<ModuleId>,
     ) -> Result<(), Box<dyn Error>> {
         let id = self
             .replicate(LogEntryType::Client(ClientLogEntryType::Initialize))
@@ -293,7 +291,11 @@ impl Leader {
         Ok(())
     }
 
-    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>, sender: oneshot::Sender<()>
+    async fn append(
+        &mut self,
+        id: ModuleId,
+        chunk: Vec<u8>,
+        sender: oneshot::Sender<()>,
     ) -> Result<(), Box<dyn Error>> {
         self.replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
             .await;
@@ -302,10 +304,13 @@ impl Leader {
             error!("Error sending append module");
         }
 
-    Ok(())
+        Ok(())
     }
 
-    async fn apply(&mut self, log_entry_id: LogEntryId, client_log_entry_type: ClientLogEntryType
+    async fn apply(
+        &mut self,
+        log_entry_id: LogEntryId,
+        client_log_entry_type: ClientLogEntryType,
     ) -> Result<(), Box<dyn Error>> {
         trace!("Apply {}", log_entry_id);
 
@@ -343,10 +348,21 @@ impl Leader {
             }
         };
 
+        if let Some(message) = self.on_apply_message.remove(&log_entry_id) {
+            let sender = self.sender.clone();
+
+            spawn(async move {
+                sender.send(message).await;
+            });
+        }
+
         Ok(())
     }
 
-    async fn load(&mut self, id: ModuleId, sender: oneshot::Sender<Result<ModuleId, String>>
+    async fn load(
+        &mut self,
+        id: ModuleId,
+        sender: oneshot::Sender<Result<ModuleId, String>>,
     ) -> Result<(), Box<dyn Error>> {
         let id = self
             .replicate(LogEntryType::Client(ClientLogEntryType::Load(id)))

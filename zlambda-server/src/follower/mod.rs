@@ -164,7 +164,7 @@ impl Follower {
 
             let (sender, receiver) = mpsc::channel(16);
 
-            trace!("Registered");
+            trace!("Handshaked");
 
             return Ok(Self {
                 id: node_id,
