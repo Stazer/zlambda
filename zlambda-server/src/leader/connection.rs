@@ -1,8 +1,5 @@
 use crate::leader::client::LeaderClient;
-use crate::leader::follower::{
-    LeaderFollowerTask,
-    LeaderFollowerHandle,
-};
+use crate::leader::follower::LeaderFollowerBuilder;
 use crate::leader::LeaderMessage;
 use std::error::Error;
 use std::net::SocketAddr;
@@ -17,14 +14,33 @@ use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub struct LeaderConnectionBuilder {}
+
+impl LeaderConnectionBuilder {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn build(
+        self,
+        reader: MessageStreamReader,
+        writer: MessageStreamWriter,
+        leader_sender: mpsc::Sender<LeaderMessage>,
+    ) -> LeaderConnectionTask {
+        LeaderConnectionTask::new(reader, writer, leader_sender)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
-pub struct LeaderConnection {
+pub struct LeaderConnectionTask {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
     leader_sender: mpsc::Sender<LeaderMessage>,
 }
 
-impl LeaderConnection {
+impl LeaderConnectionTask {
     fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
@@ -37,13 +53,9 @@ impl LeaderConnection {
         }
     }
 
-    pub fn spawn(
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
-        leader_sender: mpsc::Sender<LeaderMessage>,
-    ) {
+    pub fn spawn(self) {
         spawn(async move {
-            Self::new(reader, writer, leader_sender).main().await;
+            self.main().await;
         });
     }
 
@@ -94,15 +106,12 @@ impl LeaderConnection {
     }
 
     async fn register_follower(self, address: SocketAddr) -> Result<(), Box<dyn Error>> {
-        let (follower_sender, follower_receiver) = mpsc::channel(16);
         let (result_sender, result_receiver) = oneshot::channel();
+        let builder = LeaderFollowerBuilder::new();
+        let handle = builder.handle();
 
         self.leader_sender
-            .send(LeaderMessage::Register(
-                address,
-                LeaderFollowerHandle::new(follower_sender.clone()),
-                result_sender,
-            ))
+            .send(LeaderMessage::Register(address, handle, result_sender))
             .await?;
 
         let (id, leader_id, term, addresses) = result_receiver.await?;
@@ -118,14 +127,14 @@ impl LeaderConnection {
             })
             .await?;
 
-        LeaderFollowerTask::new(
-            id,
-            follower_sender.clone(),
-            follower_receiver,
-            Some(self.reader.into()),
-            Some(writer.into()),
-            self.leader_sender,
-        ).spawn();
+        builder
+            .build(
+                id,
+                Some(self.reader.into()),
+                Some(writer.into()),
+                self.leader_sender,
+            )
+            .spawn();
 
         Ok(())
     }

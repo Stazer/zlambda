@@ -5,8 +5,8 @@ pub mod log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use connection::LeaderConnection;
-use follower::{LeaderFollowerHandle};
+use connection::LeaderConnectionBuilder;
+use follower::LeaderFollowerHandle;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use log::LeaderLog;
@@ -25,6 +25,123 @@ use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
 use zlambda_common::module::{DispatchModuleEventInput, ModuleId, ModuleManager};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct LeaderInternalHandle {
+    sender: mpsc::Sender<LeaderMessage>,
+}
+
+impl LeaderInternalHandle {
+    fn new(sender: mpsc::Sender<LeaderMessage>) -> Self {
+        Self { sender }
+    }
+
+    pub async fn register(
+        &self,
+        address: SocketAddr,
+        handle: LeaderFollowerHandle,
+    ) -> (NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>) {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .send(LeaderMessage::Register(address, handle, sender))
+            .await
+            .expect("");
+
+        receiver.await.expect("")
+    }
+
+    pub async fn acknowledge(&self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId) {}
+
+    pub async fn replicate(&self, log_entry_type: LogEntryType) -> LogEntryId {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .send(LeaderMessage::Replicate(log_entry_type, sender))
+            .await
+            .expect("");
+
+        receiver.await.expect("")
+    }
+
+    pub async fn initialize(&self) -> ModuleId {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .send(LeaderMessage::Initialize(sender))
+            .await
+            .expect("");
+
+        receiver.await.expect("")
+    }
+
+    pub async fn append(&self, module_id: ModuleId, bytes: Vec<u8>) {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .send(LeaderMessage::Append(module_id, bytes, sender))
+            .await
+            .expect("");
+
+        receiver.await.expect("");
+    }
+
+    pub async fn load(&self, module_id: ModuleId) -> Result<(), String> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .send(LeaderMessage::Load(module_id, sender))
+            .await
+            .expect("");
+
+        receiver.await.expect("")?;
+
+        Ok(())
+    }
+
+    pub async fn dispatch(&self, module_id: ModuleId, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .send(LeaderMessage::Dispatch(module_id, bytes, sender))
+            .await
+            .expect("");
+
+        receiver.await.expect("")
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct LeaderBuilder {
+    sender: mpsc::Sender<LeaderMessage>,
+    receiver: mpsc::Receiver<LeaderMessage>,
+}
+
+impl LeaderBuilder {
+    pub fn new() -> Self {
+        let (sender, receiver) = mpsc::channel(16);
+
+        Self {
+            sender,
+            receiver,
+        }
+    }
+
+    pub fn internal_handle(&self) -> LeaderInternalHandle {
+        LeaderInternalHandle::new(self.sender.clone())
+    }
+
+    pub fn build(
+        self,
+        tcp_listener: TcpListener
+    ) -> Result<Leader, Box<dyn Error>> {
+        Leader::new(tcp_listener)
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -108,11 +225,11 @@ impl Leader {
 
                     let (reader, writer) = stream.into_split();
 
-                    LeaderConnection::spawn(
+                    LeaderConnectionBuilder::new().build(
                         MessageStreamReader::new(reader),
                         MessageStreamWriter::new(writer),
                         self.sender.clone(),
-                    );
+                    ).spawn();
                 }
                 receive_result = self.receiver.recv() => {
                     let message = match receive_result {
@@ -221,11 +338,13 @@ impl Leader {
         for follower_sender in self.follower_senders.values() {
             let log_entry_data = LogEntryData::new(id, log_entry_type.clone());
 
-            follower_sender.replicate(
-                self.term,
-                self.log.last_committed_log_entry_id(),
-                vec![log_entry_data],
-            ).await;
+            follower_sender
+                .replicate(
+                    self.term,
+                    self.log.last_committed_log_entry_id(),
+                    vec![log_entry_data],
+                )
+                .await;
         }
 
         self.sender

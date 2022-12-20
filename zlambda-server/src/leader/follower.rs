@@ -1,7 +1,7 @@
 use crate::leader::LeaderMessage;
 use std::error::Error;
-use tokio::{select, spawn};
 use tokio::sync::{mpsc, oneshot};
+use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
@@ -19,20 +19,17 @@ pub struct LeaderFollowerHandle {
 }
 
 impl LeaderFollowerHandle {
-    pub fn new(
-        sender: mpsc::Sender<LeaderFollowerMessage>,
-    ) -> Self {
-        Self {
-            sender,
-        }
+    fn new(sender: mpsc::Sender<LeaderFollowerMessage>) -> Self {
+        Self { sender }
     }
 
     pub async fn status(&self) -> LeaderFollowerStatus {
         let (sender, receiver) = oneshot::channel();
 
-        self.sender.send(LeaderFollowerMessage::Status {
-            sender,
-        }).await.expect("LeaderFollowerMessage::Status should be sent");
+        self.sender
+            .send(LeaderFollowerMessage::Status { sender })
+            .await
+            .expect("LeaderFollowerMessage::Status should be sent");
 
         receiver.await.expect("Value should be received")
     }
@@ -45,12 +42,15 @@ impl LeaderFollowerHandle {
     ) {
         let (sender, receiver) = oneshot::channel();
 
-        self.sender.send(LeaderFollowerMessage::Replicate (
-            term,
-            last_committed_log_entry_id,
-            log_entry_data,
-            sender,
-        )).await.expect("LeaderFollowerMessage::Replicate should be sent");
+        self.sender
+            .send(LeaderFollowerMessage::Replicate {
+                term,
+                last_committed_log_entry_id,
+                log_entry_data,
+                sender,
+            })
+            .await
+            .expect("LeaderFollowerMessage::Replicate should be sent");
 
         receiver.await.expect("Value should be received")
     }
@@ -58,18 +58,50 @@ impl LeaderFollowerHandle {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub struct LeaderFollowerBuilder {
+    sender: mpsc::Sender<LeaderFollowerMessage>,
+    receiver: mpsc::Receiver<LeaderFollowerMessage>,
+}
+
+impl LeaderFollowerBuilder {
+    pub fn new() -> Self {
+        let (sender, receiver) = mpsc::channel(16);
+
+        Self { sender, receiver }
+    }
+
+    pub fn handle(&self) -> LeaderFollowerHandle {
+        LeaderFollowerHandle::new(self.sender.clone())
+    }
+
+    pub fn build(
+        self,
+        id: NodeId,
+        reader: Option<FollowerToLeaderMessageStreamReader>,
+        writer: Option<LeaderToFollowerMessageStreamWriter>,
+        leader_sender: mpsc::Sender<LeaderMessage>,
+    ) -> LeaderFollowerTask {
+        LeaderFollowerTask::new(
+            id,
+            self.sender,
+            self.receiver,
+            reader,
+            writer,
+            leader_sender,
+        )
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub struct LeaderFollowerStatus {
-    connected: bool
+    connected: bool,
 }
 
 impl LeaderFollowerStatus {
-    pub fn new(
-        connected: bool
-    ) -> Self {
-        Self {
-            connected,
-        }
+    pub fn new(connected: bool) -> Self {
+        Self { connected }
     }
 
     pub fn connected(&self) -> bool {
@@ -80,20 +112,20 @@ impl LeaderFollowerStatus {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum LeaderFollowerMessage {
-    Replicate(
-        Term,
-        Option<LogEntryId>,
-        Vec<LogEntryData>,
-        oneshot::Sender<()>,
-    ),
+enum LeaderFollowerMessage {
+    Replicate {
+        term: Term,
+        last_committed_log_entry_id: Option<LogEntryId>,
+        log_entry_data: Vec<LogEntryData>,
+        sender: oneshot::Sender<()>,
+    },
     Status {
         sender: oneshot::Sender<LeaderFollowerStatus>,
     },
     Handshake {
         reader: FollowerToLeaderMessageStreamReader,
         writer: LeaderToFollowerMessageStreamWriter,
-        result_sender: oneshot::Sender<Result<(), String>>,
+        sender: oneshot::Sender<Result<(), String>>,
     },
 }
 
@@ -111,7 +143,7 @@ pub struct LeaderFollowerTask {
 }
 
 impl LeaderFollowerTask {
-    pub fn new(
+    fn new(
         id: NodeId,
         sender: mpsc::Sender<LeaderFollowerMessage>,
         receiver: mpsc::Receiver<LeaderFollowerMessage>,
@@ -121,8 +153,8 @@ impl LeaderFollowerTask {
     ) -> Self {
         Self {
             id,
-            receiver,
             sender,
+            receiver,
             reader,
             writer,
             writer_message_buffer: Vec::default(),
@@ -131,9 +163,7 @@ impl LeaderFollowerTask {
     }
 
     pub fn spawn(self) {
-        spawn(async move {
-            self.run().await
-        });
+        spawn(async move { self.run().await });
     }
 
     async fn run(mut self) {
@@ -177,25 +207,23 @@ impl LeaderFollowerTask {
 
     async fn on_message(&mut self, message: LeaderFollowerMessage) {
         match message {
-            LeaderFollowerMessage::Replicate(
+            LeaderFollowerMessage::Replicate {
                 term,
                 last_committed_log_entry_id,
                 log_entry_data,
                 sender,
-            ) => self
+            } => self
                 .on_replicate(term, last_committed_log_entry_id, log_entry_data, sender)
                 .await
                 .expect(""),
             LeaderFollowerMessage::Handshake {
                 reader,
                 writer,
-                result_sender,
-            } => {
-                self.on_handshake(reader, writer, result_sender).await;
-            }
-            LeaderFollowerMessage::Status {
                 sender,
             } => {
+                self.on_handshake(reader, writer, sender).await;
+            }
+            LeaderFollowerMessage::Status { sender } => {
                 self.on_status(sender).await;
             }
         }
@@ -220,32 +248,27 @@ impl LeaderFollowerTask {
         &mut self,
         reader: FollowerToLeaderMessageStreamReader,
         writer: LeaderToFollowerMessageStreamWriter,
-        result_sender: oneshot::Sender<Result<(), String>>,
+        sender: oneshot::Sender<Result<(), String>>,
     ) -> Result<(), Box<dyn Error>> {
         if self.reader.is_none() && self.writer.is_none() {
             self.reader = Some(reader);
             self.writer = Some(writer);
 
-            if result_sender.send(Ok(())).is_err() {
-                return Err("Cannot send result".into())
+            if sender.send(Ok(())).is_err() {
+                return Err("Cannot send result".into());
             }
         } else {
-            if result_sender.send(Err("Follower is online".into())).is_err() {
-                return Err("Cannot send result".into())
+            if sender.send(Err("Follower is online".into())).is_err() {
+                return Err("Cannot send result".into());
             }
         }
 
         Ok(())
-
-
     }
 
-    async fn on_status(
-        &mut self,
-        sender: oneshot::Sender<LeaderFollowerStatus>,
-    ) {
+    async fn on_status(&mut self, sender: oneshot::Sender<LeaderFollowerStatus>) {
         sender.send(LeaderFollowerStatus::new(
-            self.reader.is_some() && self.writer.is_some()
+            self.reader.is_some() && self.writer.is_some(),
         ));
     }
 
