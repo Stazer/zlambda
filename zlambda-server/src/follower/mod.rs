@@ -76,7 +76,8 @@ impl FollowerBuilder {
         T: ToSocketAddrs,
     {
         FollowerTask::new(
-            self.receiver
+            self.sender,
+            self.receiver,
             tcp_listener,
             registration_address,
             node_id,
@@ -108,7 +109,7 @@ pub struct FollowerTask {
 }
 
 impl FollowerTask {
-    pub async fn new<T>(
+    async fn new<T>(
         sender: mpsc::Sender<FollowerMessage>,
         receiver: mpsc::Receiver<FollowerMessage>,
         tcp_listener: TcpListener,

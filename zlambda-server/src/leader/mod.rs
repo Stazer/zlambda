@@ -7,8 +7,6 @@ pub mod log;
 
 use connection::LeaderConnectionBuilder;
 use follower::LeaderFollowerHandle;
-use futures::future::BoxFuture;
-use futures::FutureExt;
 use log::LeaderLog;
 use std::collections::HashMap;
 use std::error::Error;
