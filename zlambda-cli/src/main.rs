@@ -10,7 +10,7 @@ use tokio::io::{stdin, stdout};
 use zlambda_client::Client;
 use zlambda_common::module::ModuleId;
 use zlambda_common::node::NodeId;
-use zlambda_server::Server;
+use zlambda_server::ServerBuilder;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,15 +79,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         } => {
             tracing_subscriber::fmt::init();
 
-            let server = match command {
-                ServerCommand::Leader => Server::new::<_, String>(listener_address, None).await?,
-                ServerCommand::Follower {
-                    leader_address,
-                    node_id,
-                } => Server::new(listener_address, Some((leader_address, node_id))).await?,
-            };
-
-            server.run().await;
+            ServerBuilder::new()
+                .task(
+                    listener_address,
+                    match command {
+                        ServerCommand::Leader => None,
+                        ServerCommand::Follower {
+                            leader_address,
+                            node_id,
+                        } => Some((leader_address, node_id)),
+                    },
+                )
+                .await?
+                .run()
+                .await;
         }
         MainCommand::Client { address, command } => {
             let mut client = match Client::new(address).await {

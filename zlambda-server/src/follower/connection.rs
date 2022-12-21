@@ -1,5 +1,5 @@
-use crate::follower::client::FollowerClient;
-use crate::follower::FollowerMessage;
+use crate::follower::client::FollowerClientBuilder;
+use crate::follower::FollowerHandle;
 use std::error::Error;
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
@@ -12,36 +12,52 @@ use zlambda_common::message::{
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct FollowerConnection {
-    reader: MessageStreamReader,
-    writer: MessageStreamWriter,
-    follower_sender: mpsc::Sender<FollowerMessage>,
+pub struct FollowerConnectionBuilder {}
+
+impl FollowerConnectionBuilder {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn task(
+        self,
+        reader: MessageStreamReader,
+        writer: MessageStreamWriter,
+        follower_handle: FollowerHandle,
+    ) -> FollowerConnectionTask {
+        FollowerConnectionTask::new(reader, writer, follower_handle)
+    }
 }
 
-impl FollowerConnection {
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct FollowerConnectionTask {
+    reader: MessageStreamReader,
+    writer: MessageStreamWriter,
+    follower_handle: FollowerHandle,
+}
+
+impl FollowerConnectionTask {
     fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        follower_sender: mpsc::Sender<FollowerMessage>,
+        follower_handle: FollowerHandle,
     ) -> Self {
         Self {
             reader,
             writer,
-            follower_sender,
+            follower_handle,
         }
     }
 
-    pub fn spawn(
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
-        follower_sender: mpsc::Sender<FollowerMessage>,
-    ) {
+    pub fn spawn(self) {
         spawn(async move {
-            Self::new(reader, writer, follower_sender).main().await;
+            self.run().await;
         });
     }
 
-    async fn main(mut self) {
+    pub async fn run(mut self) {
         loop {
             select!(
                 read_result = self.reader.read() => {
@@ -79,20 +95,7 @@ impl FollowerConnection {
     async fn on_unregistered_follower_to_node_message(&mut self, message: GuestToNodeMessage) {
         match message {
             GuestToNodeMessage::RegisterRequest { .. } => {
-                let (sender, receiver) = oneshot::channel();
-
-                self.follower_sender
-                    .send(FollowerMessage::ReadLeaderAddress { sender })
-                    .await
-                    .expect("Cannot send FollowerMessage::ReadLeaderAddress");
-
-                let leader_address = match receiver.await {
-                    Err(error) => {
-                        error!("{}", error);
-                        return;
-                    }
-                    Ok(leader_address) => leader_address,
-                };
+                let leader_address = self.follower_handle.leader_address().await;
 
                 let message =
                     Message::FollowerToGuest(FollowerToGuestMessage::RegisterNotALeaderResponse {
@@ -106,20 +109,7 @@ impl FollowerConnection {
                 }
             }
             GuestToNodeMessage::HandshakeRequest { .. } => {
-                let (sender, receiver) = oneshot::channel();
-
-                self.follower_sender
-                    .send(FollowerMessage::ReadLeaderAddress { sender })
-                    .await
-                    .expect("Cannot send FollowerMessage::ReadLeaderAddress");
-
-                let leader_address = match receiver.await {
-                    Err(error) => {
-                        error!("{}", error);
-                        return;
-                    }
-                    Ok(leader_address) => leader_address,
-                };
+                let leader_address = self.follower_handle.leader_address().await;
 
                 let message =
                     Message::FollowerToGuest(FollowerToGuestMessage::HandshakeNotALeaderResponse {
@@ -139,17 +129,15 @@ impl FollowerConnection {
         self,
         initial_message: ClientToNodeMessage,
     ) -> Result<(), Box<dyn Error>> {
-        spawn(async move {
-            FollowerClient::new(
+        FollowerClientBuilder::new()
+            .task(
                 self.reader.into(),
                 self.writer.into(),
-                self.follower_sender,
+                self.follower_handle,
                 initial_message,
             )
             .await
-            .run()
-            .await;
-        });
+            .spawn();
 
         Ok(())
     }

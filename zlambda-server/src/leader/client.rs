@@ -1,7 +1,7 @@
-use crate::leader::LeaderMessage;
+use crate::leader::LeaderHandle;
 use std::error::Error;
-use tokio::select;
 use tokio::sync::{mpsc, oneshot};
+use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::dispatch::DispatchId;
 use zlambda_common::message::{
@@ -13,28 +13,55 @@ use zlambda_common::module::ModuleId;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct LeaderClient {
-    reader: ClientToNodeMessageStreamReader,
-    writer: NodeToClientMessageStreamWriter,
-    leader_sender: mpsc::Sender<LeaderMessage>,
-}
+pub struct LeaderClientBuilder {}
 
-impl LeaderClient {
-    pub async fn new(
+impl LeaderClientBuilder {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub async fn task(
+        self,
         reader: ClientToNodeMessageStreamReader,
         writer: NodeToClientMessageStreamWriter,
-        leader_sender: mpsc::Sender<LeaderMessage>,
+        leader_handle: LeaderHandle,
+        initial_message: ClientToNodeMessage,
+    ) -> LeaderClientTask {
+        LeaderClientTask::new(reader, writer, leader_handle, initial_message).await
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct LeaderClientTask {
+    reader: ClientToNodeMessageStreamReader,
+    writer: NodeToClientMessageStreamWriter,
+    leader_handle: LeaderHandle,
+}
+
+impl LeaderClientTask {
+    async fn new(
+        reader: ClientToNodeMessageStreamReader,
+        writer: NodeToClientMessageStreamWriter,
+        leader_handle: LeaderHandle,
         initial_message: ClientToNodeMessage,
     ) -> Self {
         let mut leader_client = Self {
             reader,
             writer,
-            leader_sender,
+            leader_handle,
         };
 
         leader_client.handle_message(initial_message).await;
 
         leader_client
+    }
+
+    pub fn spawn(mut self) {
+        spawn(async move {
+            self.run().await;
+        });
     }
 
     pub async fn run(mut self) {
@@ -77,13 +104,7 @@ impl LeaderClient {
     }
 
     async fn initialize(&mut self) -> Result<(), Box<dyn Error>> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.leader_sender
-            .send(LeaderMessage::Initialize(sender))
-            .await?;
-
-        let module_id = receiver.await?;
+        let module_id = self.leader_handle.initialize().await;
 
         self.writer
             .write(NodeToClientMessage::InitializeResponse { module_id })
@@ -93,28 +114,18 @@ impl LeaderClient {
     }
 
     async fn append(&mut self, id: ModuleId, chunk: Vec<u8>) -> Result<(), Box<dyn Error>> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.leader_sender
-            .send(LeaderMessage::Append(id, chunk, sender))
-            .await?;
-
-        receiver.await?;
+        self.leader_handle.append(id, chunk).await;
 
         Ok(())
     }
 
     async fn load(&mut self, module_id: ModuleId) -> Result<(), Box<dyn Error>> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.leader_sender
-            .send(LeaderMessage::Load(module_id, sender))
-            .await?;
+        let result = self.leader_handle.load(module_id).await;
 
         self.writer
             .write(NodeToClientMessage::LoadResponse {
                 module_id,
-                result: Ok(receiver.await.map(|_x| ())?),
+                result: Ok(result.map(|_x| ())?),
             })
             .await?;
 
@@ -127,13 +138,7 @@ impl LeaderClient {
         dispatch_id: DispatchId,
         payload: Vec<u8>,
     ) -> Result<(), Box<dyn Error>> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.leader_sender
-            .send(LeaderMessage::Dispatch(module_id, payload, sender))
-            .await?;
-
-        let result = receiver.await?;
+        let result = self.leader_handle.dispatch(module_id, payload).await;
 
         self.writer
             .write(NodeToClientMessage::DispatchResponse {

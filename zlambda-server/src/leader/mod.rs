@@ -29,11 +29,11 @@ use zlambda_common::term::Term;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct LeaderInternalHandle {
+pub struct LeaderHandle {
     sender: mpsc::Sender<LeaderMessage>,
 }
 
-impl LeaderInternalHandle {
+impl LeaderHandle {
     fn new(sender: mpsc::Sender<LeaderMessage>) -> Self {
         Self { sender }
     }
@@ -53,7 +53,20 @@ impl LeaderInternalHandle {
         receiver.await.expect("")
     }
 
-    pub async fn acknowledge(&self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId) {}
+    pub async fn acknowledge(&self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId) {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .send(LeaderMessage::Acknowledge {
+                log_entry_ids,
+                node_id,
+                sender: Some(sender),
+            })
+            .await
+            .expect("");
+
+        receiver.await.expect("")
+    }
 
     pub async fn replicate(&self, log_entry_type: LogEntryType) -> LogEntryId {
         let (sender, receiver) = oneshot::channel();
@@ -125,34 +138,36 @@ impl LeaderBuilder {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel(16);
 
-        Self {
-            sender,
-            receiver,
-        }
+        Self { sender, receiver }
     }
 
-    pub fn internal_handle(&self) -> LeaderInternalHandle {
-        LeaderInternalHandle::new(self.sender.clone())
+    pub fn handle(&self) -> LeaderHandle {
+        LeaderHandle::new(self.sender.clone())
     }
 
-    pub fn build(
-        self,
-        tcp_listener: TcpListener
-    ) -> Result<Leader, Box<dyn Error>> {
-        Leader::new(tcp_listener)
+    pub fn task(self, tcp_listener: TcpListener) -> Result<LeaderTask, Box<dyn Error>> {
+        LeaderTask::new(
+            self.sender,
+            self.receiver,
+            tcp_listener,
+        )
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum LeaderMessage {
+enum LeaderMessage {
     Register(
         SocketAddr,
         LeaderFollowerHandle,
         oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
     ),
-    Acknowledge(Vec<LogEntryId>, NodeId),
+    Acknowledge {
+        log_entry_ids: Vec<LogEntryId>,
+        node_id: NodeId,
+        sender: Option<oneshot::Sender<()>>,
+    },
     Replicate(LogEntryType, oneshot::Sender<LogEntryId>),
     Initialize(oneshot::Sender<ModuleId>),
     Append(ModuleId, Vec<u8>, oneshot::Sender<()>),
@@ -165,11 +180,19 @@ pub enum LeaderMessage {
         writer: MessageStreamWriter,
         result: oneshot::Sender<Result<(), String>>,
     },
+    ApplyInitialize {
+        log_entry_id: LogEntryId,
+        sender: oneshot::Sender<ModuleId>,
+    },
+    ApplyLoad {
+        log_entry_id: LogEntryId,
+        sender: oneshot::Sender<Result<ModuleId, String>>,
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct Leader {
+pub struct LeaderTask {
     id: NodeId,
     log: LeaderLog,
     term: Term,
@@ -179,18 +202,15 @@ pub struct Leader {
     receiver: mpsc::Receiver<LeaderMessage>,
     module_manager: ModuleManager,
     follower_senders: HashMap<NodeId, LeaderFollowerHandle>,
-    on_apply_initialize_module_handler:
-        HashMap<LogEntryId, Box<dyn FnOnce(ModuleId) -> BoxFuture<'static, ()>>>,
-    on_load_handler:
-        HashMap<LogEntryId, Box<dyn FnOnce(Result<ModuleId, String>) -> BoxFuture<'static, ()>>>,
-
     on_apply_message: HashMap<LogEntryId, LeaderMessage>,
 }
 
-impl Leader {
-    pub fn new(tcp_listener: TcpListener) -> Result<Self, Box<dyn Error>> {
-        let (sender, receiver) = mpsc::channel(16);
-
+impl LeaderTask {
+    fn new(
+        sender: mpsc::Sender<LeaderMessage>,
+        receiver: mpsc::Receiver<LeaderMessage>,
+        tcp_listener: TcpListener,
+    ) -> Result<Self, Box<dyn Error>> {
         let address = tcp_listener.local_addr()?;
 
         Ok(Self {
@@ -203,13 +223,15 @@ impl Leader {
             receiver,
             module_manager: ModuleManager::default(),
             follower_senders: HashMap::default(),
-            on_apply_initialize_module_handler: HashMap::default(),
-            on_load_handler: HashMap::default(),
             on_apply_message: HashMap::default(),
         })
     }
 
-    pub async fn run(&mut self) {
+    pub fn spawn(mut self) {
+        spawn(async move { self.run().await });
+    }
+
+    pub async fn run(mut self) {
         loop {
             select!(
                 accept_result = self.tcp_listener.accept() => {
@@ -225,10 +247,10 @@ impl Leader {
 
                     let (reader, writer) = stream.into_split();
 
-                    LeaderConnectionBuilder::new().build(
+                    LeaderConnectionBuilder::new().task(
                         MessageStreamReader::new(reader),
                         MessageStreamWriter::new(writer),
-                        self.sender.clone(),
+                        LeaderHandle::new(self.sender.clone()),
                     ).spawn();
                 }
                 receive_result = self.receiver.recv() => {
@@ -260,9 +282,11 @@ impl Leader {
 
                 Ok(())
             }
-            LeaderMessage::Acknowledge(log_entry_ids, node_id) => {
-                self.acknowledge(log_entry_ids, node_id).await
-            }
+            LeaderMessage::Acknowledge {
+                log_entry_ids,
+                node_id,
+                sender,
+            } => self.acknowledge(log_entry_ids, node_id, sender).await,
             LeaderMessage::Initialize(sender) => self.initialize(sender).await,
             LeaderMessage::Append(id, chunk, sender) => self.append(id, chunk, sender).await,
             LeaderMessage::Load(id, sender) => self.load(id, sender).await,
@@ -279,8 +303,71 @@ impl Leader {
                 self.on_handshake(node_id, address, reader, writer, result)
                     .await
             }
+            LeaderMessage::ApplyInitialize {
+                log_entry_id,
+                sender,
+            } => self.on_apply_initialize(log_entry_id, sender).await,
+            LeaderMessage::ApplyLoad {
+                log_entry_id,
+                sender,
+            } => self.on_apply_load(log_entry_id, sender).await,
         }
         .expect("");
+
+        Ok(())
+    }
+
+    async fn on_apply_initialize(
+        &mut self,
+        log_entry_id: LogEntryId,
+        sender: oneshot::Sender<ModuleId>,
+    ) -> Result<(), Box<dyn Error>> {
+        let log_entry = match self.log.get(log_entry_id) {
+            None => return Err("Log entry should exist".into()),
+            Some(log_entry) => log_entry,
+        };
+
+        if !matches!(
+            log_entry.data().r#type(),
+            LogEntryType::Client(ClientLogEntryType::Initialize)
+        ) {
+            return Err("Log entry type should be Load".into());
+        }
+
+        let module_id = match self.module_manager.initialize() {
+            Err(error) => {
+                error!("{}", error);
+                return Ok(());
+            }
+            Ok(module_id) => module_id,
+        };
+
+        sender.send(module_id).expect("");
+
+        Ok(())
+    }
+
+    async fn on_apply_load(
+        &mut self,
+        log_entry_id: LogEntryId,
+        sender: oneshot::Sender<Result<ModuleId, String>>,
+    ) -> Result<(), Box<dyn Error>> {
+        let log_entry = match self.log.get(log_entry_id) {
+            None => return Err("Log entry should exist".into()),
+            Some(log_entry) => log_entry,
+        };
+
+        let module_id = match log_entry.data().r#type() {
+            LogEntryType::Client(ClientLogEntryType::Load(module_id)) => module_id,
+            _ => return Err("Log entry type should be Load".into()),
+        };
+
+        let result = match self.module_manager.load(*module_id).await {
+            Ok(()) => Ok(*module_id),
+            Err(error) => Err(error.to_string()),
+        };
+
+        sender.send(result).expect("");
 
         Ok(())
     }
@@ -348,7 +435,11 @@ impl Leader {
         }
 
         self.sender
-            .send(LeaderMessage::Acknowledge(vec![id], self.id))
+            .send(LeaderMessage::Acknowledge {
+                log_entry_ids: vec![id],
+                node_id: self.id,
+                sender: None,
+            })
             .await
             .expect("Cannot send");
 
@@ -359,6 +450,7 @@ impl Leader {
         &mut self,
         log_entry_ids: Vec<LogEntryId>,
         node_id: NodeId,
+        sender: Option<oneshot::Sender<()>>,
     ) -> Result<(), Box<dyn Error>> {
         for log_entry_id in log_entry_ids.into_iter() {
             trace!(
@@ -382,6 +474,10 @@ impl Leader {
             }
         }
 
+        if let Some(sender) = sender {
+            sender.send(()).expect("");
+        }
+
         Ok(())
     }
 
@@ -389,22 +485,16 @@ impl Leader {
         &mut self,
         sender: oneshot::Sender<ModuleId>,
     ) -> Result<(), Box<dyn Error>> {
-        let id = self
+        let log_entry_id = self
             .replicate(LogEntryType::Client(ClientLogEntryType::Initialize))
             .await;
 
-        self.on_apply_initialize_module_handler.insert(
-            id,
-            Box::new(|module_id| {
-                {
-                    async move {
-                        if let Err(error) = sender.send(module_id) {
-                            error!("{}", error);
-                        }
-                    }
-                }
-                .boxed()
-            }),
+        self.on_apply_message.insert(
+            log_entry_id,
+            LeaderMessage::ApplyInitialize {
+                log_entry_id,
+                sender,
+            },
         );
 
         Ok(())
@@ -416,6 +506,8 @@ impl Leader {
         chunk: Vec<u8>,
         sender: oneshot::Sender<()>,
     ) -> Result<(), Box<dyn Error>> {
+        println!("{}", id);
+
         self.replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
             .await;
 
@@ -433,45 +525,11 @@ impl Leader {
     ) -> Result<(), Box<dyn Error>> {
         trace!("Apply {}", log_entry_id);
 
-        match client_log_entry_type {
-            ClientLogEntryType::Initialize => {
-                let module_id = match self.module_manager.initialize() {
-                    Err(error) => {
-                        error!("{}", error);
-                        return Ok(());
-                    }
-                    Ok(module_id) => module_id,
-                };
-
-                if let Some(handler) = self
-                    .on_apply_initialize_module_handler
-                    .remove(&log_entry_id)
-                {
-                    handler(module_id).await;
-                }
-            }
-            ClientLogEntryType::Append(id, chunk) => {
-                if let Err(error) = self.module_manager.append(id, &chunk).await {
-                    error!("{}", error);
-                }
-            }
-            ClientLogEntryType::Load(id) => {
-                let result = match self.module_manager.load(id).await {
-                    Ok(()) => Ok(id),
-                    Err(error) => Err(error.to_string()),
-                };
-
-                if let Some(handler) = self.on_load_handler.remove(&log_entry_id) {
-                    handler(result).await;
-                }
-            }
-        };
-
         if let Some(message) = self.on_apply_message.remove(&log_entry_id) {
             let sender = self.sender.clone();
 
             spawn(async move {
-                sender.send(message).await;
+                sender.send(message).await.expect("");
             });
         }
 
@@ -483,22 +541,16 @@ impl Leader {
         id: ModuleId,
         sender: oneshot::Sender<Result<ModuleId, String>>,
     ) -> Result<(), Box<dyn Error>> {
-        let id = self
+        let log_entry_id = self
             .replicate(LogEntryType::Client(ClientLogEntryType::Load(id)))
             .await;
 
-        self.on_load_handler.insert(
-            id,
-            Box::new(|result| {
-                {
-                    async move {
-                        if sender.send(result).is_err() {
-                            error!("Cannot send");
-                        }
-                    }
-                }
-                .boxed()
-            }),
+        self.on_apply_message.insert(
+            log_entry_id,
+            LeaderMessage::ApplyLoad {
+                log_entry_id,
+                sender,
+            },
         );
 
         Ok(())

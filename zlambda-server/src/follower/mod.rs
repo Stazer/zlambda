@@ -4,14 +4,14 @@ pub mod log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use connection::FollowerConnection;
+use connection::FollowerConnectionBuilder;
 use log::FollowerLog;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::select;
 use tokio::sync::{mpsc, oneshot};
+use tokio::{select, spawn};
 use tracing::{error, trace};
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
@@ -26,14 +26,75 @@ use zlambda_common::term::Term;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub enum FollowerMessage {
+pub struct FollowerHandle {
+    sender: mpsc::Sender<FollowerMessage>,
+}
+
+impl FollowerHandle {
+    fn new(sender: mpsc::Sender<FollowerMessage>) -> Self {
+        Self { sender }
+    }
+
+    pub async fn leader_address(&self) -> SocketAddr {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .send(FollowerMessage::ReadLeaderAddress { sender })
+            .await
+            .expect("");
+
+        receiver.await.expect("")
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct FollowerBuilder {
+    sender: mpsc::Sender<FollowerMessage>,
+    receiver: mpsc::Receiver<FollowerMessage>,
+}
+
+impl FollowerBuilder {
+    pub fn new() -> Self {
+        let (sender, receiver) = mpsc::channel(16);
+
+        Self { sender, receiver }
+    }
+
+    pub fn handle(&self) -> FollowerHandle {
+        FollowerHandle::new(self.sender.clone())
+    }
+
+    pub async fn task<T>(
+        self,
+        tcp_listener: TcpListener,
+        registration_address: T,
+        node_id: Option<NodeId>,
+    ) -> Result<FollowerTask, Box<dyn Error>>
+    where
+        T: ToSocketAddrs,
+    {
+        FollowerTask::new(
+            self.receiver
+            tcp_listener,
+            registration_address,
+            node_id,
+        ).await
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+enum FollowerMessage {
     ReadLeaderAddress { sender: oneshot::Sender<SocketAddr> },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct Follower {
+pub struct FollowerTask {
     id: NodeId,
     leader_id: NodeId,
     log: FollowerLog,
@@ -46,8 +107,10 @@ pub struct Follower {
     addresses: HashMap<NodeId, SocketAddr>,
 }
 
-impl Follower {
+impl FollowerTask {
     pub async fn new<T>(
+        sender: mpsc::Sender<FollowerMessage>,
+        receiver: mpsc::Receiver<FollowerMessage>,
         tcp_listener: TcpListener,
         registration_address: T,
         node_id: Option<NodeId>,
@@ -56,12 +119,14 @@ impl Follower {
         T: ToSocketAddrs,
     {
         match node_id {
-            None => Self::new_registration(tcp_listener, registration_address).await,
-            Some(node_id) => Self::new_handshake(tcp_listener, registration_address, node_id).await,
+            None => Self::new_registration(sender, receiver, tcp_listener, registration_address).await,
+            Some(node_id) => Self::new_handshake(sender, receiver, tcp_listener, registration_address, node_id).await,
         }
     }
 
     async fn new_registration<T>(
+        sender: mpsc::Sender<FollowerMessage>,
+        receiver: mpsc::Receiver<FollowerMessage>,
         tcp_listener: TcpListener,
         registration_address: T,
     ) -> Result<Self, Box<dyn Error>>
@@ -102,8 +167,6 @@ impl Follower {
                 }
             };
 
-            let (sender, receiver) = mpsc::channel(16);
-
             trace!("Registered");
 
             return Ok(Self {
@@ -122,6 +185,8 @@ impl Follower {
     }
 
     async fn new_handshake<T>(
+        sender: mpsc::Sender<FollowerMessage>,
+        receiver: mpsc::Receiver<FollowerMessage>,
         tcp_listener: TcpListener,
         registration_address: T,
         node_id: NodeId,
@@ -162,8 +227,6 @@ impl Follower {
                 }
             };
 
-            let (sender, receiver) = mpsc::channel(16);
-
             trace!("Handshaked");
 
             return Ok(Self {
@@ -181,7 +244,13 @@ impl Follower {
         }
     }
 
-    pub async fn run(&mut self) {
+    pub fn spawn(self) {
+        spawn(async move {
+            self.run().await;
+        });
+    }
+
+    pub async fn run(mut self) {
         loop {
             select!(
                 accept_result = self.tcp_listener.accept() => {
@@ -197,11 +266,11 @@ impl Follower {
 
                     let (reader, writer) = stream.into_split();
 
-                    FollowerConnection::spawn(
+                    FollowerConnectionBuilder::new().task(
                         MessageStreamReader::new(reader),
                         MessageStreamWriter::new(writer),
-                        self.sender.clone(),
-                    );
+                        FollowerHandle::new(self.sender.clone()),
+                    ).spawn();
                 }
                 read_result = self.reader.read() => {
                     let message = match read_result {

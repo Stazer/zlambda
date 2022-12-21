@@ -1,6 +1,6 @@
-use crate::follower::FollowerMessage;
-use tokio::select;
+use crate::follower::FollowerHandle;
 use tokio::sync::mpsc;
+use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
     ClientToNodeMessage, ClientToNodeMessageStreamReader, NodeToClientMessageStreamWriter,
@@ -9,28 +9,55 @@ use zlambda_common::message::{
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct FollowerClient {
-    reader: ClientToNodeMessageStreamReader,
-    _writer: NodeToClientMessageStreamWriter,
-    _follower_sender: mpsc::Sender<FollowerMessage>,
-}
+pub struct FollowerClientBuilder {}
 
-impl FollowerClient {
-    pub async fn new(
+impl FollowerClientBuilder {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub async fn task(
+        self,
         reader: ClientToNodeMessageStreamReader,
         writer: NodeToClientMessageStreamWriter,
-        follower_sender: mpsc::Sender<FollowerMessage>,
+        follower_handle: FollowerHandle,
+        initial_message: ClientToNodeMessage,
+    ) -> FollowerClientTask {
+        FollowerClientTask::new(reader, writer, follower_handle, initial_message).await
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct FollowerClientTask {
+    reader: ClientToNodeMessageStreamReader,
+    _writer: NodeToClientMessageStreamWriter,
+    _follower_handle: FollowerHandle,
+}
+
+impl FollowerClientTask {
+    async fn new(
+        reader: ClientToNodeMessageStreamReader,
+        writer: NodeToClientMessageStreamWriter,
+        follower_handle: FollowerHandle,
         initial_message: ClientToNodeMessage,
     ) -> Self {
         let mut follower_client = Self {
             reader,
             _writer: writer,
-            _follower_sender: follower_sender,
+            _follower_handle: follower_handle,
         };
 
         follower_client.handle_message(initial_message).await;
 
         follower_client
+    }
+
+    pub fn spawn(self) {
+        spawn(async move {
+            self.run().await;
+        });
     }
 
     pub async fn run(mut self) {

@@ -1,6 +1,6 @@
-use crate::leader::client::LeaderClient;
+use crate::leader::client::LeaderClientBuilder;
 use crate::leader::follower::LeaderFollowerBuilder;
-use crate::leader::LeaderMessage;
+use crate::leader::{LeaderHandle, LeaderMessage};
 use std::error::Error;
 use std::net::SocketAddr;
 use tokio::sync::{mpsc, oneshot};
@@ -21,13 +21,13 @@ impl LeaderConnectionBuilder {
         Self {}
     }
 
-    pub fn build(
+    pub fn task(
         self,
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_sender: mpsc::Sender<LeaderMessage>,
+        leader_handle: LeaderHandle,
     ) -> LeaderConnectionTask {
-        LeaderConnectionTask::new(reader, writer, leader_sender)
+        LeaderConnectionTask::new(reader, writer, leader_handle)
     }
 }
 
@@ -37,19 +37,19 @@ impl LeaderConnectionBuilder {
 pub struct LeaderConnectionTask {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    leader_sender: mpsc::Sender<LeaderMessage>,
+    leader_handle: LeaderHandle,
 }
 
 impl LeaderConnectionTask {
     fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        leader_sender: mpsc::Sender<LeaderMessage>,
+        leader_handle: LeaderHandle,
     ) -> Self {
         Self {
             reader,
             writer,
-            leader_sender,
+            leader_handle,
         }
     }
 
@@ -106,15 +106,10 @@ impl LeaderConnectionTask {
     }
 
     async fn register_follower(self, address: SocketAddr) -> Result<(), Box<dyn Error>> {
-        let (result_sender, result_receiver) = oneshot::channel();
         let builder = LeaderFollowerBuilder::new();
-        let handle = builder.handle();
 
-        self.leader_sender
-            .send(LeaderMessage::Register(address, handle, result_sender))
-            .await?;
-
-        let (id, leader_id, term, addresses) = result_receiver.await?;
+        let (id, leader_id, term, addresses) =
+            self.leader_handle.register(address, builder.handle()).await;
 
         let mut writer = self.writer.into();
 
@@ -132,7 +127,7 @@ impl LeaderConnectionTask {
                 id,
                 Some(self.reader.into()),
                 Some(writer.into()),
-                self.leader_sender,
+                self.leader_handle,
             )
             .spawn();
 
@@ -151,17 +146,15 @@ impl LeaderConnectionTask {
         self,
         initial_message: ClientToNodeMessage,
     ) -> Result<(), Box<dyn Error>> {
-        spawn(async move {
-            LeaderClient::new(
+        LeaderClientBuilder::new()
+            .task(
                 self.reader.into(),
                 self.writer.into(),
-                self.leader_sender,
+                self.leader_handle,
                 initial_message,
             )
             .await
-            .run()
-            .await;
-        });
+            .spawn();
 
         Ok(())
     }
