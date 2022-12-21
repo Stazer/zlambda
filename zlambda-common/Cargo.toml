@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 async-ffi = "*"
 async-trait = "*"
-bytes = { version = "1" }
+bytes = { version = "1", features = ["serde"] }
 libloading = "0.7"
 postcard = { version = "1", features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }

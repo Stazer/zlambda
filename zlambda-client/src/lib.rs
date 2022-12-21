@@ -59,7 +59,7 @@ impl Client {
             self.writer
                 .write(ClientToNodeMessage::Append {
                     module_id,
-                    bytes: bytes.to_vec(),
+                    bytes,
                 })
                 .await?;
         }

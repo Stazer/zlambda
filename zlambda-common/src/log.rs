@@ -2,6 +2,7 @@ use crate::node::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use bytes::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +20,7 @@ pub enum ClusterLogEntryType {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum ClientLogEntryType {
     Initialize,
-    Append(u64, Vec<u8>),
+    Append(u64, Bytes),
     Load(u64),
 }
 

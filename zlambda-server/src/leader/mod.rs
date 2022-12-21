@@ -23,6 +23,7 @@ use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
 use zlambda_common::module::{DispatchModuleEventInput, ModuleId, ModuleManager};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
+use bytes::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -88,7 +89,7 @@ impl LeaderHandle {
         receiver.await.expect("")
     }
 
-    pub async fn append(&self, module_id: ModuleId, bytes: Vec<u8>) {
+    pub async fn append(&self, module_id: ModuleId, bytes: Bytes) {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
@@ -168,7 +169,7 @@ enum LeaderMessage {
     },
     Replicate(LogEntryType, oneshot::Sender<LogEntryId>),
     Initialize(oneshot::Sender<ModuleId>),
-    Append(ModuleId, Vec<u8>, oneshot::Sender<()>),
+    Append(ModuleId, Bytes, oneshot::Sender<()>),
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
     Dispatch(ModuleId, Vec<u8>, oneshot::Sender<Result<Vec<u8>, String>>),
     Handshake {
@@ -290,7 +291,7 @@ impl LeaderTask {
                 sender,
             } => self.acknowledge(log_entry_ids, node_id, sender).await,
             LeaderMessage::Initialize(sender) => self.initialize(sender).await,
-            LeaderMessage::Append(id, chunk, sender) => self.append(id, chunk, sender).await,
+            LeaderMessage::Append(id, bytes, sender) => self.on_append(id, bytes, sender).await,
             LeaderMessage::Load(id, sender) => self.load(id, sender).await,
             LeaderMessage::Dispatch(id, payload, sender) => {
                 self.dispatch(id, payload, sender).await
@@ -528,13 +529,13 @@ impl LeaderTask {
         Ok(())
     }
 
-    async fn append(
+    async fn on_append(
         &mut self,
         id: ModuleId,
-        chunk: Vec<u8>,
+        bytes: Bytes,
         sender: oneshot::Sender<()>,
     ) -> Result<(), Box<dyn Error>> {
-        let log_entry_id = self.replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
+        let log_entry_id = self.replicate(LogEntryType::Client(ClientLogEntryType::Append(id, bytes)))
             .await;
 
         self.on_apply_message.insert(

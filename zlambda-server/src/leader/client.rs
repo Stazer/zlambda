@@ -8,6 +8,7 @@ use zlambda_common::message::{
     NodeToClientMessageStreamWriter,
 };
 use zlambda_common::module::ModuleId;
+use bytes::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -112,8 +113,8 @@ impl LeaderClientTask {
         Ok(())
     }
 
-    async fn append(&mut self, id: ModuleId, chunk: Vec<u8>) -> Result<(), Box<dyn Error>> {
-        self.leader_handle.append(id, chunk).await;
+    async fn append(&mut self, id: ModuleId, bytes: Bytes) -> Result<(), Box<dyn Error>> {
+        self.leader_handle.append(id, bytes).await;
 
         Ok(())
     }

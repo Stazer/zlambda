@@ -16,6 +16,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
+use bytes::BytesMut;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -173,7 +174,7 @@ pub enum ClientToNodeMessage {
     InitializeRequest,
     Append {
         module_id: ModuleId,
-        bytes: Vec<u8>,
+        bytes: Bytes,
     },
     LoadRequest {
         module_id: ModuleId,
@@ -308,7 +309,7 @@ impl From<CandidateToCandidateMessage> for Message {
 }
 
 impl Message {
-    pub fn from_vec(bytes: &Vec<u8>) -> Result<(usize, Self), MessageError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<(usize, Self), MessageError> {
         let (packet, remaining) = take_from_bytes::<Self>(bytes)?;
         Ok((bytes.len() - remaining.len(), packet))
     }
@@ -326,14 +327,14 @@ impl Message {
 
 #[derive(Clone, Debug)]
 pub struct BasicMessageBufferReader<T> {
-    buffer: Vec<u8>,
+    buffer: BytesMut,
     r#type: PhantomData<T>,
 }
 
 impl<T> Default for BasicMessageBufferReader<T> {
     fn default() -> Self {
         Self {
-            buffer: Vec::default(),
+            buffer: BytesMut::default(),
             r#type: PhantomData::<T>,
         }
     }
@@ -344,17 +345,17 @@ where
     Result<T, MessageError>: From<Message>,
 {
     pub fn push(&mut self, bytes: &[u8]) {
-        self.buffer.extend(bytes);
+        self.buffer.extend_from_slice(bytes);
     }
 
     pub fn next(&mut self) -> Result<Option<T>, MessageError> {
-        let (read, message) = match Message::from_vec(&self.buffer) {
+        let (read, message) = match Message::from_bytes(&self.buffer) {
             Ok((read, message)) => (read, message),
             Err(MessageError::UnexpectedEnd) => return Ok(None),
             Err(error) => return Err(error),
         };
 
-        self.buffer.drain(0..read);
+        self.buffer = self.buffer.split_off(read);
 
         Ok(Some(Result::<T, MessageError>::from(message)?))
     }

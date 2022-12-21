@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bytes = { version = "1", features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream  = { version = "0", features = ["net"] }
 tokio-util = { version = "0", features = ["full"] }
