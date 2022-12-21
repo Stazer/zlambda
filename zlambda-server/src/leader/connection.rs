@@ -1,9 +1,8 @@
 use crate::leader::client::LeaderClientBuilder;
 use crate::leader::follower::LeaderFollowerBuilder;
-use crate::leader::{LeaderHandle, LeaderMessage};
+use crate::leader::{LeaderHandle};
 use std::error::Error;
 use std::net::SocketAddr;
-use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
@@ -136,8 +135,8 @@ impl LeaderConnectionTask {
 
     async fn handshake_follower(
         self,
-        address: SocketAddr,
-        node_id: NodeId,
+        _address: SocketAddr,
+        _node_id: NodeId,
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }

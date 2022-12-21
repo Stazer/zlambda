@@ -1,5 +1,4 @@
 use crate::follower::FollowerHandle;
-use tokio::sync::mpsc;
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{

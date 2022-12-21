@@ -1,7 +1,6 @@
 use crate::follower::client::FollowerClientBuilder;
 use crate::follower::FollowerHandle;
 use std::error::Error;
-use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{

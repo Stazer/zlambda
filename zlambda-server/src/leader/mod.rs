@@ -225,7 +225,7 @@ impl LeaderTask {
         })
     }
 
-    pub fn spawn(mut self) {
+    pub fn spawn(self) {
         spawn(async move { self.run().await });
     }
 
@@ -373,12 +373,12 @@ impl LeaderTask {
     async fn on_handshake(
         &mut self,
         node_id: NodeId,
-        address: SocketAddr,
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
-        result: oneshot::Sender<Result<(), String>>,
+        _address: SocketAddr,
+        _reader: MessageStreamReader,
+        _writer: MessageStreamWriter,
+        _result: oneshot::Sender<Result<(), String>>,
     ) -> Result<(), Box<dyn Error>> {
-        let follower_sender = match self.follower_senders.get(&node_id) {
+        let _follower_sender = match self.follower_senders.get(&node_id) {
             Some(follower_sender) => follower_sender,
             None => return Err("Follower not found".into()),
         };
@@ -460,8 +460,8 @@ impl LeaderTask {
             for committed_log_entry_id in self.log.acknowledge(log_entry_id, node_id) {
                 if let Some(log_entry) = self.log.get(committed_log_entry_id) {
                     match log_entry.data().r#type() {
-                        LogEntryType::Client(client_log_entry_type) => {
-                            self.apply(committed_log_entry_id, client_log_entry_type.clone())
+                        LogEntryType::Client(_) => {
+                            self.apply(committed_log_entry_id)
                                 .await?;
                         }
                         LogEntryType::Cluster(ClusterLogEntryType::Addresses(addresses)) => {
@@ -519,7 +519,6 @@ impl LeaderTask {
     async fn apply(
         &mut self,
         log_entry_id: LogEntryId,
-        client_log_entry_type: ClientLogEntryType,
     ) -> Result<(), Box<dyn Error>> {
         trace!("Apply {}", log_entry_id);
 

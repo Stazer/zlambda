@@ -1,6 +1,5 @@
 use crate::leader::LeaderHandle;
 use std::error::Error;
-use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::dispatch::DispatchId;
@@ -58,7 +57,7 @@ impl LeaderClientTask {
         leader_client
     }
 
-    pub fn spawn(mut self) {
+    pub fn spawn(self) {
         spawn(async move {
             self.run().await;
         });
