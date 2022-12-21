@@ -182,6 +182,10 @@ enum LeaderMessage {
         log_entry_id: LogEntryId,
         sender: oneshot::Sender<ModuleId>,
     },
+    ApplyAppend {
+        log_entry_id: LogEntryId,
+        sender: oneshot::Sender<()>,
+    },
     ApplyLoad {
         log_entry_id: LogEntryId,
         sender: oneshot::Sender<Result<ModuleId, String>>,
@@ -305,6 +309,10 @@ impl LeaderTask {
                 log_entry_id,
                 sender,
             } => self.on_apply_initialize(log_entry_id, sender).await,
+            LeaderMessage::ApplyAppend {
+                log_entry_id,
+                sender,
+            } => self.on_apply_append(log_entry_id, sender).await,
             LeaderMessage::ApplyLoad {
                 log_entry_id,
                 sender,
@@ -341,6 +349,28 @@ impl LeaderTask {
         };
 
         sender.send(module_id).expect("");
+
+        Ok(())
+    }
+
+    async fn on_apply_append(
+        &mut self,
+        log_entry_id: LogEntryId,
+        sender: oneshot::Sender<()>,
+    ) -> Result<(), Box<dyn Error>> {
+        let log_entry = match self.log.get(log_entry_id) {
+            None => return Err("Log entry should exist".into()),
+            Some(log_entry) => log_entry,
+        };
+
+        let (module_id, bytes) = match log_entry.data().r#type() {
+            LogEntryType::Client(ClientLogEntryType::Append(module_id, bytes)) => (module_id, bytes),
+            _ => return Err("Log entry type should be Append".into()),
+        };
+
+        self.module_manager.append(*module_id, &bytes).await.expect("");
+
+        sender.send(()).expect("");
 
         Ok(())
     }
@@ -504,14 +534,16 @@ impl LeaderTask {
         chunk: Vec<u8>,
         sender: oneshot::Sender<()>,
     ) -> Result<(), Box<dyn Error>> {
-        println!("{}", id);
-
-        self.replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
+        let log_entry_id = self.replicate(LogEntryType::Client(ClientLogEntryType::Append(id, chunk)))
             .await;
 
-        if sender.send(()).is_err() {
-            error!("Error sending append module");
-        }
+        self.on_apply_message.insert(
+            log_entry_id,
+            LeaderMessage::ApplyAppend {
+                log_entry_id,
+                sender,
+            },
+        );
 
         Ok(())
     }
