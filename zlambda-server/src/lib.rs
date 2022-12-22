@@ -16,6 +16,26 @@ use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use zlambda_common::node::NodeId;
+use zlambda_common::module::ModuleId;
+use bytes::Bytes;
+use zlambda_common::channel::{DoSend, DoReceive};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct ServerPingMessage {
+    sender: oneshot::Sender<()>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct ServerDispatchMessage {
+    module_id: ModuleId,
+    payload: Bytes,
+    node_id: Option<NodeId>,
+    sender: oneshot::Sender<Bytes>,
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,7 +50,8 @@ enum ServerType {
 
 #[derive(Debug)]
 enum ServerMessage {
-    Ping { sender: oneshot::Sender<()> },
+    Ping(ServerPingMessage),
+    Dispatch(ServerDispatchMessage),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,12 +69,31 @@ impl ServerHandle {
     pub async fn ping(&self) {
         let (sender, receiver) = oneshot::channel();
 
-        self.sender
-            .send(ServerMessage::Ping { sender })
-            .await
-            .expect("");
+        self.sender.do_send(ServerMessage::Ping(ServerPingMessage {
+                sender
+            })).await;
 
-        receiver.await.expect("");
+        receiver.do_receive().await
+    }
+
+    pub async fn dispatch(
+        &self,
+        module_id: ModuleId,
+        payload: Bytes,
+        node_id: Option<NodeId>,
+    ) -> Bytes {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .do_send(ServerMessage::Dispatch(ServerDispatchMessage {
+                module_id,
+                payload,
+                node_id,
+                sender,
+            }))
+            .await;
+
+        receiver.do_receive().await
     }
 }
 
@@ -157,11 +197,16 @@ impl ServerTask {
 
     async fn on_message(&mut self, message: ServerMessage) {
         match message {
-            ServerMessage::Ping { sender } => self.on_ping(sender).await,
+            ServerMessage::Ping(message) => self.on_ping(message).await,
+            ServerMessage::Dispatch(message) => self.on_dispatch(message).await,
         }
     }
 
-    async fn on_ping(&mut self, sender: oneshot::Sender<()>) {
-        sender.send(()).expect("");
+    async fn on_ping(&mut self, message: ServerPingMessage) {
+        message.sender.do_send(()).await
+    }
+
+    async fn on_dispatch(&mut self, message: ServerDispatchMessage) {
+        message.sender.do_send(Bytes::default()).await
     }
 }

@@ -1,5 +1,6 @@
 pub mod algorithm;
 pub mod async_trait;
+pub mod channel;
 pub mod dispatch;
 pub mod log;
 pub mod message;

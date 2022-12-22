@@ -175,7 +175,7 @@ impl FollowerTask {
                     addresses,
                     term,
                 })) => (id, leader_id, addresses, term),
-                Some(message) => {
+                Some(_) => {
                     return Err("Expected request response".into());
                 }
             };
@@ -334,13 +334,13 @@ impl FollowerTask {
                 last_committed_log_entry_id,
                 log_entry_data,
             } => {
-                self.append_entries(term, last_committed_log_entry_id, log_entry_data)
+                self.on_append_entries(term, last_committed_log_entry_id, log_entry_data)
                     .await
             }
         };
     }
 
-    async fn append_entries(
+    async fn on_append_entries(
         &mut self,
         _term: Term,
         last_committed_log_entry_id: Option<LogEntryId>,
@@ -351,6 +351,14 @@ impl FollowerTask {
             .map(|log_entry_data| log_entry_data.id())
             .collect();
 
+        for log_entry_data in log_entry_data.into_iter() {
+            self.log.append(log_entry_data);
+        }
+
+        if let Some(last_committed_log_entry_id) = last_committed_log_entry_id {
+            self.log.commit(last_committed_log_entry_id)
+        }
+
         let result = self
             .writer
             .write(FollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids })
@@ -358,14 +366,6 @@ impl FollowerTask {
 
         if let Err(error) = result {
             todo!("Switch to candidate {} {} {}", error, self.id, self.term);
-        }
-
-        for log_entry_data in log_entry_data.into_iter() {
-            self.log.append(log_entry_data);
-        }
-
-        if let Some(last_committed_log_entry_id) = last_committed_log_entry_id {
-            self.log.commit(last_committed_log_entry_id)
         }
     }
 }

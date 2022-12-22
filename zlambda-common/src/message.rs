@@ -208,7 +208,11 @@ pub enum ClientToNodeMessage {
     LoadRequest {
         module_id: ModuleId,
     },
+    /*ApplyRequest {
+        module_id: ModuleId,
+    },*/
     DispatchRequest {
+        //node_id: Option<NodeId>,
         module_id: ModuleId,
         dispatch_id: DispatchId,
         payload: Vec<u8>,
@@ -235,6 +239,10 @@ pub enum NodeToClientMessage {
         module_id: ModuleId,
     },
     LoadResponse {
+        module_id: ModuleId,
+        result: Result<(), String>,
+    },
+    ApplyResponse {
         module_id: ModuleId,
         result: Result<(), String>,
     },

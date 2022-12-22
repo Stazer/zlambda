@@ -103,7 +103,7 @@ impl LeaderFollowerHandle {
             .await
             .expect("");
 
-        receiver.await.expect("");
+        receiver.await.expect("").expect("");
 
         Ok(())
     }
@@ -287,11 +287,13 @@ impl LeaderFollowerTask {
 
             let mut writer = writer.into();
 
-            let iterator = take(&mut self.writer_message_buffer).into_iter();
+            let mut iterator = take(&mut self.writer_message_buffer).into_iter();
 
             while let Some(message) = iterator.next() {
                 if let Err(error) = writer.write(message).await {
+                    error!("{}", error);
                     self.writer_message_buffer = iterator.collect();
+                    break
                 }
             }
 
