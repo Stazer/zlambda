@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use zlambda_common::algorithm::next_key;
 use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
 use zlambda_common::node::NodeId;
+use zlambda_common::term::Term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -100,12 +101,19 @@ impl LeaderLog {
         }
     }
 
-    pub fn begin(&mut self, r#type: LogEntryType, nodes: HashSet<NodeId>) -> LogEntryId {
+    pub fn last_appended_log_entry_id(&self) -> Option<LogEntryId> {
+        match self.last_committed_log_entry_id() {
+            Some(log_entry_id) if log_entry_id > 0 => Some(log_entry_id - 1),
+            _ => None,
+        }
+    }
+
+    pub fn begin(&mut self, r#type: LogEntryType, term: Term, nodes: HashSet<NodeId>) -> LogEntryId {
         let id = self.next_log_entry_id();
 
         self.log_entries.insert(
             id,
-            LeaderLogEntry::new(LogEntryData::new(id, r#type), nodes, HashSet::default()),
+            LeaderLogEntry::new(LogEntryData::new(id, r#type, term), nodes, HashSet::default()),
         );
 
         id

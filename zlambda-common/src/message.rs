@@ -157,7 +157,9 @@ impl From<Message> for Result<FollowerToGuestMessage, MessageError> {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum FollowerToLeaderMessage {
     AppendEntriesResponse {
-        log_entry_ids: Vec<LogEntryId>,
+        appended_log_entry_ids: Vec<LogEntryId>,
+        //acknowledged_log_entry_ids: Vec<LogEntryId>,
+        missing_log_entry_ids: Vec<LogEntryId>,
     },
 }
 
@@ -180,6 +182,7 @@ pub enum LeaderToFollowerMessage {
     AppendEntriesRequest {
         term: Term,
         last_committed_log_entry_id: Option<LogEntryId>,
+        //last_appended_log_entry_id: Option<LogEntryId>,
         log_entry_data: Vec<LogEntryData>,
     },
 }

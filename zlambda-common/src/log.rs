@@ -3,6 +3,7 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use crate::term::Term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,11 +39,12 @@ pub enum LogEntryType {
 pub struct LogEntryData {
     id: LogEntryId,
     r#type: LogEntryType,
+    term: Term,
 }
 
 impl LogEntryData {
-    pub fn new(id: LogEntryId, r#type: LogEntryType) -> Self {
-        Self { id, r#type }
+    pub fn new(id: LogEntryId, r#type: LogEntryType, term: Term) -> Self {
+        Self { id, r#type, term }
     }
 
     pub fn id(&self) -> LogEntryId {
@@ -51,5 +53,9 @@ impl LogEntryData {
 
     pub fn r#type(&self) -> &LogEntryType {
         &self.r#type
+    }
+
+    pub fn term(&self) -> Term {
+        self.term
     }
 }

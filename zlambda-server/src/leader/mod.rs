@@ -500,11 +500,12 @@ impl LeaderTask {
     async fn replicate(&mut self, log_entry_type: LogEntryType) -> LogEntryId {
         let id = self.log.begin(
             log_entry_type.clone(),
+            self.term,
             self.addresses.keys().copied().collect(),
         );
 
         for follower_handle in self.follower_handles.values() {
-            let log_entry_data = LogEntryData::new(id, log_entry_type.clone());
+            let log_entry_data = LogEntryData::new(id, log_entry_type.clone(), self.term);
 
             follower_handle
                 .replicate(

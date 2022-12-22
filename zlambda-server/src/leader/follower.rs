@@ -267,8 +267,8 @@ impl LeaderFollowerTask {
 
     async fn on_registered_follower_to_leader_message(&mut self, message: FollowerToLeaderMessage) {
         match message {
-            FollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids } => {
-                self.leader_handle.acknowledge(log_entry_ids, self.id).await;
+            FollowerToLeaderMessage::AppendEntriesResponse { appended_log_entry_ids, missing_log_entry_ids } => {
+                self.leader_handle.acknowledge(appended_log_entry_ids, self.id).await;
             }
         }
     }

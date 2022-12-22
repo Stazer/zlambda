@@ -346,7 +346,7 @@ impl FollowerTask {
         last_committed_log_entry_id: Option<LogEntryId>,
         log_entry_data: Vec<LogEntryData>,
     ) {
-        let log_entry_ids = log_entry_data
+        let appended_log_entry_ids = log_entry_data
             .iter()
             .map(|log_entry_data| log_entry_data.id())
             .collect();
@@ -359,9 +359,14 @@ impl FollowerTask {
             self.log.commit(last_committed_log_entry_id)
         }
 
+        let missing_log_entry_ids = Vec::default();
+
         let result = self
             .writer
-            .write(FollowerToLeaderMessage::AppendEntriesResponse { log_entry_ids })
+            .write(FollowerToLeaderMessage::AppendEntriesResponse {
+                appended_log_entry_ids,
+                missing_log_entry_ids,
+            })
             .await;
 
         if let Err(error) = result {
