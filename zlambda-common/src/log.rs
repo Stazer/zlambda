@@ -1,8 +1,8 @@
 use crate::node::NodeId;
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use bytes::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

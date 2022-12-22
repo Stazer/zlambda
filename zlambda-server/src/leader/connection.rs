@@ -1,6 +1,6 @@
 use crate::leader::client::LeaderClientBuilder;
 use crate::leader::follower::LeaderFollowerBuilder;
-use crate::leader::{LeaderHandle};
+use crate::leader::LeaderHandle;
 use std::error::Error;
 use std::net::SocketAddr;
 use tokio::{select, spawn};
@@ -135,9 +135,27 @@ impl LeaderConnectionTask {
 
     async fn handshake_follower(
         self,
-        _address: SocketAddr,
-        _node_id: NodeId,
+        address: SocketAddr,
+        node_id: NodeId,
     ) -> Result<(), Box<dyn Error>> {
+        match self.leader_handle.handshake(node_id, address).await {
+            Ok(follower_handle) => {
+                follower_handle
+                    .handshake(self.reader.into(), self.writer.into())
+                    .await
+                    .expect("");
+            }
+            Err(message) => {
+                let mut writer = self.writer.into();
+
+                writer.write(
+                    LeaderToGuestMessage::HandshakeErrorResponse {
+                        message,
+                    }
+                ).await.expect("");
+            }
+        };
+
         Ok(())
     }
 

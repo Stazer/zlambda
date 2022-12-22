@@ -1,4 +1,5 @@
 use crate::leader::LeaderHandle;
+use bytes::Bytes;
 use std::error::Error;
 use tokio::{select, spawn};
 use tracing::error;
@@ -8,7 +9,6 @@ use zlambda_common::message::{
     NodeToClientMessageStreamWriter,
 };
 use zlambda_common::module::ModuleId;
-use bytes::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

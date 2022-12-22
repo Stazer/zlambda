@@ -5,6 +5,7 @@ pub mod log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+use bytes::Bytes;
 use connection::LeaderConnectionBuilder;
 use follower::LeaderFollowerHandle;
 use log::LeaderLog;
@@ -23,7 +24,53 @@ use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
 use zlambda_common::module::{DispatchModuleEventInput, ModuleId, ModuleManager};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
-use bytes::Bytes;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+enum LeaderResult {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+enum LeaderMessage {
+    Register(
+        SocketAddr,
+        LeaderFollowerHandle,
+        oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
+    ),
+    Acknowledge {
+        log_entry_ids: Vec<LogEntryId>,
+        node_id: NodeId,
+        sender: Option<oneshot::Sender<()>>,
+    },
+    Replicate(LogEntryType, oneshot::Sender<LogEntryId>),
+    Initialize(oneshot::Sender<ModuleId>),
+    Append(ModuleId, Bytes, oneshot::Sender<()>),
+    Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
+    Dispatch(ModuleId, Vec<u8>, oneshot::Sender<Result<Vec<u8>, String>>),
+    Handshake {
+        node_id: NodeId,
+        address: SocketAddr,
+        sender: oneshot::Sender<Result<LeaderFollowerHandle, String>>,
+    },
+    ApplyInitialize {
+        log_entry_id: LogEntryId,
+        sender: oneshot::Sender<ModuleId>,
+    },
+    ApplyAppend {
+        log_entry_id: LogEntryId,
+        sender: oneshot::Sender<()>,
+    },
+    ApplyLoad {
+        log_entry_id: LogEntryId,
+        sender: oneshot::Sender<Result<ModuleId, String>>,
+    },
+    ApplyHandshake {
+        follower_handle: LeaderFollowerHandle,
+        sender: oneshot::Sender<Result<LeaderFollowerHandle, String>>,
+    },
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -46,6 +93,25 @@ impl LeaderHandle {
 
         self.sender
             .send(LeaderMessage::Register(address, handle, sender))
+            .await
+            .expect("");
+
+        receiver.await.expect("")
+    }
+
+    pub async fn handshake(
+        &self,
+        node_id: NodeId,
+        address: SocketAddr,
+    ) -> Result<LeaderFollowerHandle, String> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .send(LeaderMessage::Handshake {
+                node_id,
+                address,
+                sender,
+            })
             .await
             .expect("");
 
@@ -145,52 +211,8 @@ impl LeaderBuilder {
     }
 
     pub fn task(self, tcp_listener: TcpListener) -> Result<LeaderTask, Box<dyn Error>> {
-        LeaderTask::new(
-            self.sender,
-            self.receiver,
-            tcp_listener,
-        )
+        LeaderTask::new(self.sender, self.receiver, tcp_listener)
     }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-enum LeaderMessage {
-    Register(
-        SocketAddr,
-        LeaderFollowerHandle,
-        oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
-    ),
-    Acknowledge {
-        log_entry_ids: Vec<LogEntryId>,
-        node_id: NodeId,
-        sender: Option<oneshot::Sender<()>>,
-    },
-    Replicate(LogEntryType, oneshot::Sender<LogEntryId>),
-    Initialize(oneshot::Sender<ModuleId>),
-    Append(ModuleId, Bytes, oneshot::Sender<()>),
-    Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
-    Dispatch(ModuleId, Vec<u8>, oneshot::Sender<Result<Vec<u8>, String>>),
-    Handshake {
-        node_id: NodeId,
-        address: SocketAddr,
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
-        result: oneshot::Sender<Result<(), String>>,
-    },
-    ApplyInitialize {
-        log_entry_id: LogEntryId,
-        sender: oneshot::Sender<ModuleId>,
-    },
-    ApplyAppend {
-        log_entry_id: LogEntryId,
-        sender: oneshot::Sender<()>,
-    },
-    ApplyLoad {
-        log_entry_id: LogEntryId,
-        sender: oneshot::Sender<Result<ModuleId, String>>,
-    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -204,7 +226,7 @@ pub struct LeaderTask {
     sender: mpsc::Sender<LeaderMessage>,
     receiver: mpsc::Receiver<LeaderMessage>,
     module_manager: ModuleManager,
-    follower_senders: HashMap<NodeId, LeaderFollowerHandle>,
+    follower_handles: HashMap<NodeId, LeaderFollowerHandle>,
     on_apply_message: HashMap<LogEntryId, LeaderMessage>,
 }
 
@@ -225,7 +247,7 @@ impl LeaderTask {
             sender,
             receiver,
             module_manager: ModuleManager::default(),
-            follower_senders: HashMap::default(),
+            follower_handles: HashMap::default(),
             on_apply_message: HashMap::default(),
         })
     }
@@ -273,8 +295,8 @@ impl LeaderTask {
 
     async fn on_message(&mut self, message: LeaderMessage) -> Result<(), Box<dyn Error>> {
         match message {
-            LeaderMessage::Register(address, follower_sender, result_sender) => {
-                self.register(address, follower_sender, result_sender).await
+            LeaderMessage::Register(address, follower_handle, result_sender) => {
+                self.register(address, follower_handle, result_sender).await
             }
             LeaderMessage::Replicate(log_entry_type, sender) => {
                 let id = self.replicate(log_entry_type).await;
@@ -299,13 +321,8 @@ impl LeaderTask {
             LeaderMessage::Handshake {
                 node_id,
                 address,
-                reader,
-                writer,
-                result,
-            } => {
-                self.on_handshake(node_id, address, reader, writer, result)
-                    .await
-            }
+                sender,
+            } => self.on_handshake(node_id, address, sender).await,
             LeaderMessage::ApplyInitialize {
                 log_entry_id,
                 sender,
@@ -318,6 +335,10 @@ impl LeaderTask {
                 log_entry_id,
                 sender,
             } => self.on_apply_load(log_entry_id, sender).await,
+            LeaderMessage::ApplyHandshake {
+                sender,
+                follower_handle,
+            } => self.on_apply_handshake(follower_handle, sender).await,
         }
         .expect("");
 
@@ -365,11 +386,16 @@ impl LeaderTask {
         };
 
         let (module_id, bytes) = match log_entry.data().r#type() {
-            LogEntryType::Client(ClientLogEntryType::Append(module_id, bytes)) => (module_id, bytes),
+            LogEntryType::Client(ClientLogEntryType::Append(module_id, bytes)) => {
+                (module_id, bytes)
+            }
             _ => return Err("Log entry type should be Append".into()),
         };
 
-        self.module_manager.append(*module_id, &bytes).await.expect("");
+        self.module_manager
+            .append(*module_id, &bytes)
+            .await
+            .expect("");
 
         sender.send(()).expect("");
 
@@ -404,15 +430,50 @@ impl LeaderTask {
     async fn on_handshake(
         &mut self,
         node_id: NodeId,
-        _address: SocketAddr,
-        _reader: MessageStreamReader,
-        _writer: MessageStreamWriter,
-        _result: oneshot::Sender<Result<(), String>>,
+        address: SocketAddr,
+        sender: oneshot::Sender<Result<LeaderFollowerHandle, String>>,
     ) -> Result<(), Box<dyn Error>> {
-        let _follower_sender = match self.follower_senders.get(&node_id) {
-            Some(follower_sender) => follower_sender,
-            None => return Err("Follower not found".into()),
+        let follower_handle = match self.follower_handles.get(&node_id) {
+            Some(follower_handle) => follower_handle.clone(),
+            None => {
+                sender.send(Err("Follower not found".into())).expect("");
+
+                return Ok(());
+            }
         };
+
+        if follower_handle.status().await.available() {
+            sender.send(Err("Follower not found".into())).expect("");
+
+            return Ok(());
+        }
+
+        let mut addresses = self.addresses.clone();
+        addresses.insert(node_id, address);
+
+        let log_entry_id = self
+            .replicate(LogEntryType::Cluster(ClusterLogEntryType::Addresses(
+                addresses,
+            )))
+            .await;
+
+        self.on_apply_message.insert(
+            log_entry_id,
+            LeaderMessage::ApplyHandshake {
+                follower_handle,
+                sender,
+            },
+        );
+
+        Ok(())
+    }
+
+    async fn on_apply_handshake(
+        &mut self,
+        follower_handle: LeaderFollowerHandle,
+        sender: oneshot::Sender<Result<LeaderFollowerHandle, String>>,
+    ) -> Result<(), Box<dyn Error>> {
+        sender.send(Ok(follower_handle)).expect("");
 
         Ok(())
     }
@@ -420,7 +481,7 @@ impl LeaderTask {
     async fn register(
         &mut self,
         address: SocketAddr,
-        follower_sender: LeaderFollowerHandle,
+        follower_handle: LeaderFollowerHandle,
         result_sender: oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
     ) -> Result<(), Box<dyn Error>> {
         let id = next_key(self.addresses.keys());
@@ -431,7 +492,7 @@ impl LeaderTask {
         )))
         .await;
 
-        self.follower_senders.insert(id, follower_sender);
+        self.follower_handles.insert(id, follower_handle);
 
         trace!("Node {} registered", id);
 
@@ -451,10 +512,10 @@ impl LeaderTask {
             self.addresses.keys().copied().collect(),
         );
 
-        for follower_sender in self.follower_senders.values() {
+        for follower_handle in self.follower_handles.values() {
             let log_entry_data = LogEntryData::new(id, log_entry_type.clone());
 
-            follower_sender
+            follower_handle
                 .replicate(
                     self.term,
                     self.log.last_committed_log_entry_id(),
@@ -492,11 +553,11 @@ impl LeaderTask {
                 if let Some(log_entry) = self.log.get(committed_log_entry_id) {
                     match log_entry.data().r#type() {
                         LogEntryType::Client(_) => {
-                            self.apply(committed_log_entry_id)
-                                .await?;
+                            self.apply(committed_log_entry_id).await?;
                         }
                         LogEntryType::Cluster(ClusterLogEntryType::Addresses(addresses)) => {
                             self.addresses = addresses.clone();
+                            self.apply(committed_log_entry_id).await?;
                         }
                     }
                 }
@@ -535,7 +596,8 @@ impl LeaderTask {
         bytes: Bytes,
         sender: oneshot::Sender<()>,
     ) -> Result<(), Box<dyn Error>> {
-        let log_entry_id = self.replicate(LogEntryType::Client(ClientLogEntryType::Append(id, bytes)))
+        let log_entry_id = self
+            .replicate(LogEntryType::Client(ClientLogEntryType::Append(id, bytes)))
             .await;
 
         self.on_apply_message.insert(
@@ -549,10 +611,7 @@ impl LeaderTask {
         Ok(())
     }
 
-    async fn apply(
-        &mut self,
-        log_entry_id: LogEntryId,
-    ) -> Result<(), Box<dyn Error>> {
+    async fn apply(&mut self, log_entry_id: LogEntryId) -> Result<(), Box<dyn Error>> {
         trace!("Apply {}", log_entry_id);
 
         if let Some(message) = self.on_apply_message.remove(&log_entry_id) {

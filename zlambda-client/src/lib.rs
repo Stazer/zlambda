@@ -57,10 +57,7 @@ impl Client {
             }
 
             self.writer
-                .write(ClientToNodeMessage::Append {
-                    module_id,
-                    bytes,
-                })
+                .write(ClientToNodeMessage::Append { module_id, bytes })
                 .await?;
         }
 

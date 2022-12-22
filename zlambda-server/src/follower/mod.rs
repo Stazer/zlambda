@@ -81,7 +81,8 @@ impl FollowerBuilder {
             tcp_listener,
             registration_address,
             node_id,
-        ).await
+        )
+        .await
     }
 }
 
@@ -120,8 +121,19 @@ impl FollowerTask {
         T: ToSocketAddrs,
     {
         match node_id {
-            None => Self::new_registration(sender, receiver, tcp_listener, registration_address).await,
-            Some(node_id) => Self::new_handshake(sender, receiver, tcp_listener, registration_address, node_id).await,
+            None => {
+                Self::new_registration(sender, receiver, tcp_listener, registration_address).await
+            }
+            Some(node_id) => {
+                Self::new_handshake(
+                    sender,
+                    receiver,
+                    tcp_listener,
+                    registration_address,
+                    node_id,
+                )
+                .await
+            }
         }
     }
 
@@ -163,7 +175,7 @@ impl FollowerTask {
                     addresses,
                     term,
                 })) => (id, leader_id, addresses, term),
-                Some(_) => {
+                Some(message) => {
                     return Err("Expected request response".into());
                 }
             };
@@ -207,10 +219,10 @@ impl FollowerTask {
             );
 
             writer
-                .write(GuestToNodeMessage::RegisterRequest { address })
+                .write(GuestToNodeMessage::HandshakeRequest { address, node_id })
                 .await?;
 
-            let (leader_id, addresses, term) = match reader.read().await? {
+            let leader_id = match reader.read().await? {
                 None => return Err("Expected message".into()),
                 Some(Message::FollowerToGuest(
                     FollowerToGuestMessage::HandshakeNotALeaderResponse { leader_address },
@@ -218,13 +230,16 @@ impl FollowerTask {
                     socket = TcpStream::connect(leader_address).await?;
                     continue;
                 }
+                Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeErrorResponse {
+                    message
+                })) => {
+                    return Err(message.into());
+                }
                 Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeOkResponse {
                     leader_id,
-                    addresses,
-                    term,
-                })) => (leader_id, addresses, term),
-                Some(_) => {
-                    return Err("Expected request response".into());
+                })) => leader_id,
+                Some(message) => {
+                    return Err("Expected response".into());
                 }
             };
 
@@ -233,12 +248,12 @@ impl FollowerTask {
             return Ok(Self {
                 id: node_id,
                 leader_id,
-                term,
+                term: 0,
                 tcp_listener,
                 reader: reader.into(),
                 writer: writer.into(),
                 log: FollowerLog::default(),
-                addresses,
+                addresses: HashMap::default(),
                 sender,
                 receiver,
             });

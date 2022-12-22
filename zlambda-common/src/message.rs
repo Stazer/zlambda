@@ -4,6 +4,7 @@ use crate::module::ModuleId;
 use crate::node::NodeId;
 use crate::term::Term;
 use bytes::Bytes;
+use bytes::BytesMut;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -16,7 +17,6 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
-use bytes::BytesMut;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,10 +76,11 @@ pub enum LeaderToGuestMessage {
         addresses: HashMap<NodeId, SocketAddr>,
         term: Term,
     },
+    HandshakeErrorResponse {
+        message: String,
+    },
     HandshakeOkResponse {
         leader_id: NodeId,
-        addresses: HashMap<NodeId, SocketAddr>,
-        term: Term,
     },
 }
 
@@ -91,6 +92,23 @@ impl From<Message> for Result<LeaderToGuestMessage, MessageError> {
         }
     }
 }
+
+pub type LeaderToGuestMessageStreamReader = BasicMessageStreamReader<LeaderToGuestMessage>;
+pub type LeaderToGuestMessageStreamWriter = BasicMessageStreamWriter<LeaderToGuestMessage>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum GuestToLeaderMessage {}
+
+impl From<Message> for Result<GuestToLeaderMessage, MessageError> {
+    fn from(message: Message) -> Self {
+        Err(MessageError::UnexpectedMessage(message))
+    }
+}
+
+pub type GuestToLeaderMessageStreamReader = BasicMessageStreamReader<GuestToLeaderMessage>;
+pub type GuestToLeaderMessageStreamWriter = BasicMessageStreamWriter<GuestToLeaderMessage>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -114,6 +132,9 @@ impl From<Message> for Result<GuestToNodeMessage, MessageError> {
     }
 }
 
+pub type GuestToNodeMessageStreamReader = BasicMessageStreamReader<GuestToNodeMessage>;
+pub type GuestToNodeMessageStreamWriter = BasicMessageStreamWriter<GuestToNodeMessage>;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -135,7 +156,9 @@ impl From<Message> for Result<FollowerToGuestMessage, MessageError> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum FollowerToLeaderMessage {
-    AppendEntriesResponse { log_entry_ids: Vec<LogEntryId> },
+    AppendEntriesResponse {
+        log_entry_ids: Vec<LogEntryId>,
+    },
 }
 
 impl From<Message> for Result<FollowerToLeaderMessage, MessageError> {
@@ -146,6 +169,9 @@ impl From<Message> for Result<FollowerToLeaderMessage, MessageError> {
         }
     }
 }
+
+pub type FollowerToLeaderMessageStreamReader = BasicMessageStreamReader<FollowerToLeaderMessage>;
+pub type FollowerToLeaderMessageStreamWriter = BasicMessageStreamWriter<FollowerToLeaderMessage>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -166,6 +192,9 @@ impl From<Message> for Result<LeaderToFollowerMessage, MessageError> {
         }
     }
 }
+
+pub type LeaderToFollowerMessageStreamReader = BasicMessageStreamReader<LeaderToFollowerMessage>;
+pub type LeaderToFollowerMessageStreamWriter = BasicMessageStreamWriter<LeaderToFollowerMessage>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -195,6 +224,9 @@ impl From<Message> for Result<ClientToNodeMessage, MessageError> {
     }
 }
 
+pub type ClientToNodeMessageStreamReader = BasicMessageStreamReader<ClientToNodeMessage>;
+pub type ClientToNodeMessageStreamWriter = BasicMessageStreamWriter<ClientToNodeMessage>;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -221,6 +253,9 @@ impl From<Message> for Result<NodeToClientMessage, MessageError> {
     }
 }
 
+pub type NodeToClientMessageStreamReader = BasicMessageStreamReader<NodeToClientMessage>;
+pub type NodeToClientMessageStreamWriter = BasicMessageStreamWriter<NodeToClientMessage>;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -235,10 +270,16 @@ impl From<Message> for Result<CandidateToCandidateMessage, MessageError> {
     }
 }
 
+pub type CandidateToCandidateMessageStreamReader =
+    BasicMessageStreamReader<CandidateToCandidateMessage>;
+pub type CandidateToCandidateMessageStreamWriter =
+    BasicMessageStreamWriter<CandidateToCandidateMessage>;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Message {
+    GuestToLeader(GuestToLeaderMessage),
     LeaderToGuest(LeaderToGuestMessage),
 
     FollowerToGuest(FollowerToGuestMessage),
@@ -260,15 +301,21 @@ impl From<Message> for Result<Message, MessageError> {
     }
 }
 
-impl From<FollowerToGuestMessage> for Message {
-    fn from(message: FollowerToGuestMessage) -> Self {
-        Self::FollowerToGuest(message)
+impl From<GuestToLeaderMessage> for Message {
+    fn from(message: GuestToLeaderMessage) -> Self {
+        Self::GuestToLeader(message)
     }
 }
 
 impl From<LeaderToGuestMessage> for Message {
     fn from(message: LeaderToGuestMessage) -> Self {
         Self::LeaderToGuest(message)
+    }
+}
+
+impl From<FollowerToGuestMessage> for Message {
+    fn from(message: FollowerToGuestMessage) -> Self {
+        Self::FollowerToGuest(message)
     }
 }
 
@@ -322,6 +369,9 @@ impl Message {
         Ok(Bytes::from(self.to_vec()?))
     }
 }
+
+pub type MessageStreamReader = BasicMessageStreamReader<Message>;
+pub type MessageStreamWriter = BasicMessageStreamWriter<Message>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -455,40 +505,3 @@ where
         }
     }
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type GuestToNodeMessageStreamReader = BasicMessageStreamReader<GuestToNodeMessage>;
-pub type GuestToNodeMessageStreamWriter = BasicMessageStreamWriter<GuestToNodeMessage>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type LeaderToFollowerMessageStreamReader = BasicMessageStreamReader<LeaderToFollowerMessage>;
-pub type LeaderToFollowerMessageStreamWriter = BasicMessageStreamWriter<LeaderToFollowerMessage>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type FollowerToLeaderMessageStreamReader = BasicMessageStreamReader<FollowerToLeaderMessage>;
-pub type FollowerToLeaderMessageStreamWriter = BasicMessageStreamWriter<FollowerToLeaderMessage>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type ClientToNodeMessageStreamReader = BasicMessageStreamReader<ClientToNodeMessage>;
-pub type ClientToNodeMessageStreamWriter = BasicMessageStreamWriter<ClientToNodeMessage>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type NodeToClientMessageStreamReader = BasicMessageStreamReader<NodeToClientMessage>;
-pub type NodeToClientMessageStreamWriter = BasicMessageStreamWriter<NodeToClientMessage>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type CandidateToCandidateMessageStreamReader =
-    BasicMessageStreamReader<CandidateToCandidateMessage>;
-pub type CandidateToCandidateMessageStreamWriter =
-    BasicMessageStreamWriter<CandidateToCandidateMessage>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type MessageStreamReader = BasicMessageStreamReader<Message>;
-pub type MessageStreamWriter = BasicMessageStreamWriter<Message>;
