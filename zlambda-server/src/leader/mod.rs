@@ -24,6 +24,7 @@ use zlambda_common::message::{MessageStreamReader, MessageStreamWriter};
 use zlambda_common::module::{DispatchModuleEventInput, ModuleId, ModuleManager};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
+use zlambda_common::channel::{DoSend, DoReceive};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,11 +93,10 @@ impl LeaderHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderMessage::Register(address, handle, sender))
-            .await
-            .expect("");
+            .do_send(LeaderMessage::Register(address, handle, sender))
+            .await;
 
-        receiver.await.expect("")
+        receiver.do_receive().await
     }
 
     pub async fn handshake(
@@ -107,87 +107,78 @@ impl LeaderHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderMessage::Handshake {
+            .do_send(LeaderMessage::Handshake {
                 node_id,
                 address,
                 sender,
             })
-            .await
-            .expect("");
+            .await;
 
-        receiver.await.expect("")
+        receiver.do_receive().await
     }
 
     pub async fn acknowledge(&self, log_entry_ids: Vec<LogEntryId>, node_id: NodeId) {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderMessage::Acknowledge {
+            .do_send(LeaderMessage::Acknowledge {
                 log_entry_ids,
                 node_id,
                 sender: Some(sender),
             })
-            .await
-            .expect("");
+            .await;
 
-        receiver.await.expect("")
+        receiver.do_receive().await
     }
 
     pub async fn replicate(&self, log_entry_type: LogEntryType) -> LogEntryId {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderMessage::Replicate(log_entry_type, sender))
-            .await
-            .expect("");
+            .do_send(LeaderMessage::Replicate(log_entry_type, sender))
+            .await;
 
-        receiver.await.expect("")
+        receiver.do_receive().await
     }
 
     pub async fn initialize(&self) -> ModuleId {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderMessage::Initialize(sender))
-            .await
-            .expect("");
+            .do_send(LeaderMessage::Initialize(sender))
+            .await;
 
-        receiver.await.expect("")
+        receiver.do_receive().await
     }
 
     pub async fn append(&self, module_id: ModuleId, bytes: Bytes) {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderMessage::Append(module_id, bytes, sender))
-            .await
-            .expect("");
+            .do_send(LeaderMessage::Append(module_id, bytes, sender))
+            .await;
 
-        receiver.await.expect("");
+        receiver.do_receive().await
     }
 
     pub async fn load(&self, module_id: ModuleId) -> Result<(), String> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderMessage::Load(module_id, sender))
-            .await
-            .expect("");
+            .do_send(LeaderMessage::Load(module_id, sender))
+            .await;
 
-        receiver.await.expect("")?;
-
-        Ok(())
+        receiver.do_receive().await.map(|_| ())
     }
 
     pub async fn dispatch(&self, module_id: ModuleId, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderMessage::Dispatch(module_id, bytes, sender))
-            .await
-            .expect("");
+            .do_send(LeaderMessage::Dispatch(module_id, bytes, sender))
+            .await;
 
-        receiver.await.expect("")
+        receiver.do_receive().await
     }
 }
 
@@ -618,7 +609,7 @@ impl LeaderTask {
             let sender = self.sender.clone();
 
             spawn(async move {
-                sender.send(message).await.expect("");
+                sender.do_send(message).await;
             });
         }
 
@@ -655,8 +646,9 @@ impl LeaderTask {
             Some(module) => module.clone(),
             None => {
                 sender
-                    .send(Err("Module not found".into()))
-                    .expect("Cannot send");
+                    .do_send(Err("Module not found".into()))
+                    .await;
+
                 return Ok(());
             }
         };
@@ -676,7 +668,7 @@ impl LeaderTask {
                 })
                 .map_err(|e| e.to_string());
 
-            sender.send(result).expect("Cannot send");
+            sender.do_send(result).await;
         });
 
         Ok(())

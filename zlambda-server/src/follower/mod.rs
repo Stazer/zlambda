@@ -22,6 +22,7 @@ use zlambda_common::message::{
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
+use zlambda_common::channel::{DoReceive, DoSend};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -39,11 +40,10 @@ impl FollowerHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(FollowerMessage::ReadLeaderAddress { sender })
-            .await
-            .expect("");
+            .do_send(FollowerMessage::ReadLeaderAddress { sender })
+            .await;
 
-        receiver.await.expect("")
+        receiver.do_receive().await
     }
 }
 
