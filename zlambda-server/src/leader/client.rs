@@ -89,7 +89,7 @@ impl LeaderClientTask {
         match message {
             ClientToNodeMessage::InitializeRequest => self.initialize().await.expect(""),
             ClientToNodeMessage::Append { module_id, bytes } => {
-                self.append(module_id, bytes).await.expect("")
+                //self.append(module_id, bytes).await.expect("")
             }
             ClientToNodeMessage::LoadRequest { module_id } => self.load(module_id).await.expect(""),
             ClientToNodeMessage::DispatchRequest {

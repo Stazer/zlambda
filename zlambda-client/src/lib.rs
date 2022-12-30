@@ -61,6 +61,8 @@ impl Client {
                 .await?;
         }
 
+        println!("Hello World");
+
         self.writer
             .write(ClientToNodeMessage::LoadRequest { module_id })
             .await?;
