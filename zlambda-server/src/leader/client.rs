@@ -6,7 +6,8 @@ use tracing::error;
 use zlambda_common::dispatch::DispatchId;
 use zlambda_common::message::{
     ClientToNodeMessage, ClientToNodeMessageStreamReader, NodeToClientMessage,
-    NodeToClientMessageStreamWriter,
+    NodeToClientMessageStreamWriter, BasicMessageStreamReaderTask,
+    MessageError,
 };
 use zlambda_common::module::ModuleId;
 
@@ -35,7 +36,8 @@ impl LeaderClientBuilder {
 
 #[derive(Debug)]
 pub struct LeaderClientTask {
-    reader: ClientToNodeMessageStreamReader,
+    reader: tokio::sync::mpsc::Receiver<Result<Option<ClientToNodeMessage>, MessageError>>,
+    //BasicMessageStreamReaderTask<ClientToNodeMessage>,
     writer: NodeToClientMessageStreamWriter,
     leader_handle: LeaderHandle,
 }
@@ -48,7 +50,7 @@ impl LeaderClientTask {
         initial_message: ClientToNodeMessage,
     ) -> Self {
         let mut leader_client = Self {
-            reader,
+            reader: BasicMessageStreamReaderTask::new(reader).spawn(),
             writer,
             leader_handle,
         };
@@ -67,8 +69,13 @@ impl LeaderClientTask {
     pub async fn run(mut self) {
         loop {
             select!(
-                read_result = self.reader.read() => {
+                read_result = self.reader.recv() => {
                     let message = match read_result {
+                        None => break,
+                        Some(message) => message,
+                    };
+
+                    let message = match message {
                         Ok(None) => {
                             break
                         }
@@ -89,7 +96,7 @@ impl LeaderClientTask {
         match message {
             ClientToNodeMessage::InitializeRequest => self.initialize().await.expect(""),
             ClientToNodeMessage::Append { module_id, bytes } => {
-                //self.append(module_id, bytes).await.expect("")
+                self.append(module_id, bytes).await.expect("")
             }
             ClientToNodeMessage::LoadRequest { module_id } => self.load(module_id).await.expect(""),
             ClientToNodeMessage::DispatchRequest {

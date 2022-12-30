@@ -6,13 +6,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{BufWriter, AsyncWriteExt};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum ModuleManagerEntry {
     Loaded(Arc<Module>),
-    Loading(NamedTempFile, File, PathBuf),
+    Loading(NamedTempFile, BufWriter<File>, PathBuf),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +39,7 @@ impl ModuleManager {
         let file = File::from_std(tempfile.reopen()?);
 
         self.entries
-            .insert(id, ModuleManagerEntry::Loading(tempfile, file, path));
+            .insert(id, ModuleManagerEntry::Loading(tempfile, BufWriter::new(file), path));
 
         Ok(id)
     }

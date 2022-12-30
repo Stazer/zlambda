@@ -100,3 +100,49 @@ where
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+use tokio::sync::mpsc::{channel, Sender, Receiver};
+
+#[derive(Debug)]
+pub struct BasicMessageStreamReaderTask<T> {
+    reader: BasicMessageStreamReader<T>,
+}
+
+impl<T> BasicMessageStreamReaderTask<T>
+where
+    Result<T, MessageError>: From<Message>,
+    T: Debug + Send + 'static,
+{
+    pub fn new(reader: BasicMessageStreamReader<T>) -> Self {
+        Self {
+            reader,
+        }
+    }
+
+    pub fn spawn(self) -> Receiver<Result<Option<T>, MessageError>> {
+        let (sender, receiver) = channel(16);
+
+        tokio::spawn(async move {
+            self.run(sender).await;
+        });
+
+        receiver
+
+    }
+
+    async fn run(mut self, sender: Sender<Result<Option<T>, MessageError>>) {
+        loop {
+            let message = self.reader.read().await;
+
+            let exit = matches!(message, Ok(None) | Err(_));
+
+            sender.send(message).await.expect("");
+
+            if exit {
+                break
+            }
+        }
+    }
+}
