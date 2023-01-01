@@ -78,19 +78,20 @@ impl LeaderLogEntry {
 
 #[derive(Debug, Default)]
 pub struct LeaderLog {
-    log_entries: HashMap<LogEntryId, LeaderLogEntry>,
+    //log_entries: HashMap<LogEntryId, LeaderLogEntry>,
+    log_entries: Vec<LeaderLogEntry>,
     next_committing_log_entry_id: LogEntryId,
 }
 
 impl LeaderLog {
     fn next_log_entry_id(&self) -> LogEntryId {
-        next_key(self.log_entries.keys())
+        self.log_entries.len() as LogEntryId
     }
 }
 
 impl LeaderLog {
     pub fn get(&self, id: LogEntryId) -> Option<&LeaderLogEntry> {
-        self.log_entries.get(&id)
+        self.log_entries.get(id as usize)
     }
 
     pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
@@ -109,8 +110,7 @@ impl LeaderLog {
     ) -> LogEntryId {
         let id = self.next_log_entry_id();
 
-        self.log_entries.insert(
-            id,
+        self.log_entries.push(
             LeaderLogEntry::new(
                 LogEntryData::new(id, r#type, term),
                 nodes,
@@ -124,7 +124,7 @@ impl LeaderLog {
     pub fn acknowledge(&mut self, log_entry_id: LogEntryId, node_id: NodeId) -> Vec<LogEntryId> {
         let log_entry = self
             .log_entries
-            .get_mut(&log_entry_id)
+            .get_mut(log_entry_id as usize)
             .expect(&format!("Log entry with id {} should exist", log_entry_id));
 
         log_entry.acknowledge(node_id);
@@ -132,7 +132,7 @@ impl LeaderLog {
         let mut committed_log_entry_ids = Vec::default();
 
         loop {
-            let log_entry = match self.log_entries.get(&self.next_committing_log_entry_id) {
+            let log_entry = match self.log_entries.get(self.next_committing_log_entry_id as usize) {
                 None => break,
                 Some(log_entry) => log_entry,
             };
@@ -151,7 +151,7 @@ impl LeaderLog {
 
     pub fn is_applicable(&self, id: LogEntryId) -> bool {
         self.log_entries
-            .get(&id)
+            .get(id as usize)
             .map(|log_entry| log_entry.is_committed())
             .unwrap_or(false)
             && self
