@@ -1,7 +1,6 @@
 use std::collections::hash_map::RandomState;
 use std::collections::hash_set::Difference;
-use std::collections::{HashMap, HashSet};
-use zlambda_common::algorithm::next_key;
+use std::collections::HashSet;
 use zlambda_common::log::{LogEntryData, LogEntryId, LogEntryType};
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
@@ -110,13 +109,11 @@ impl LeaderLog {
     ) -> LogEntryId {
         let id = self.next_log_entry_id();
 
-        self.log_entries.push(
-            LeaderLogEntry::new(
-                LogEntryData::new(id, r#type, term),
-                nodes,
-                HashSet::default(),
-            ),
-        );
+        self.log_entries.push(LeaderLogEntry::new(
+            LogEntryData::new(id, r#type, term),
+            nodes,
+            HashSet::default(),
+        ));
 
         id
     }
@@ -132,7 +129,10 @@ impl LeaderLog {
         let mut committed_log_entry_ids = Vec::default();
 
         loop {
-            let log_entry = match self.log_entries.get(self.next_committing_log_entry_id as usize) {
+            let log_entry = match self
+                .log_entries
+                .get(self.next_committing_log_entry_id as usize)
+            {
                 None => break,
                 Some(log_entry) => log_entry,
             };

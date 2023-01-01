@@ -1,8 +1,6 @@
-use crate::algorithm::next_key;
 use crate::module::{Module, ModuleId};
-use bytes::Bytes;
-use std::collections::HashMap;
 use std::error::Error;
+use std::mem::replace;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
@@ -24,42 +22,39 @@ enum ModuleManagerEntry {
 
 #[derive(Default)]
 pub struct ModuleManager {
-    entries: HashMap<ModuleId, ModuleManagerEntry>,
+    entries: Vec<Option<ModuleManagerEntry>>,
 }
 
 impl ModuleManager {
     pub fn get(&self, id: ModuleId) -> Option<&Arc<Module>> {
-        self.entries.get(&id).and_then(|entry| match entry {
-            ModuleManagerEntry::Loaded(module) => Some(module),
-            ModuleManagerEntry::Loading { .. } => None,
+        self.entries.get(id as usize).and_then(|entry| match entry {
+            Some(ModuleManagerEntry::Loaded(module)) => Some(module),
+            Some(ModuleManagerEntry::Loading { .. }) | None => None,
         })
     }
 
     pub fn initialize(&mut self) -> Result<ModuleId, Box<dyn Error>> {
-        let id = next_key(self.entries.keys());
+        let id = self.entries.len();
 
         let handle = NamedTempFile::new()?;
         let path = handle.path().into();
 
         let writer = BufWriter::new(File::from_std(handle.reopen()?));
 
-        self.entries.insert(
-            id,
-            ModuleManagerEntry::Loading {
-                handle,
-                writer,
-                path,
-            },
-        );
+        self.entries.push(Some(ModuleManagerEntry::Loading {
+            handle,
+            writer,
+            path,
+        }));
 
-        Ok(id)
+        Ok(id as ModuleId)
     }
 
     pub async fn append(&mut self, id: ModuleId, chunk: &[u8]) -> Result<(), Box<dyn Error>> {
-        let writer = match self.entries.get_mut(&id) {
-            None => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading { writer, .. }) => writer,
+        let writer = match self.entries.get_mut(id as usize) {
+            None | Some(None) => return Err("Module not found".into()),
+            Some(Some(ModuleManagerEntry::Loaded(_))) => return Err("Module already loaded".into()),
+            Some(Some(ModuleManagerEntry::Loading { writer, .. })) => writer,
         };
 
         writer.write_all(chunk).await?;
@@ -68,18 +63,25 @@ impl ModuleManager {
     }
 
     pub async fn load(&mut self, id: ModuleId) -> Result<(), Box<dyn Error>> {
-        let (handle, path) = match self.entries.remove(&id) {
+        let entry = match self.entries.get_mut(id as usize) {
             None => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
+            Some(entry) => entry.take(),
+        };
+
+        let (handle, path) = match entry {
+            None => return Err("Module not found".into()),
+            Some(ModuleManagerEntry::Loaded(_)) => return Err("Module already loaded found".into()),
             Some(ModuleManagerEntry::Loading { handle, path, .. }) => (handle, path),
         };
 
-        self.entries.insert(
-            id,
-            ModuleManagerEntry::Loaded(Arc::new(Module::load(id, &path).await?)),
-        );
+        let module = Arc::new(Module::load(id, &path).await?);
 
         handle.close()?;
+
+        match self.entries.get_mut(id as usize) {
+            None => return Err("Module not found".into()),
+            Some(entry) => replace(entry, Some(ModuleManagerEntry::Loaded(module))),
+        };
 
         Ok(())
     }

@@ -11,7 +11,6 @@ pub enum ClientToNodeMessage {
     InitializeRequest,
     Append {
         module_id: ModuleId,
-        chunk_id: u64,
         bytes: Bytes,
     },
     LoadRequest {

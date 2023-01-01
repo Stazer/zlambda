@@ -47,9 +47,9 @@ impl Client {
             Some(_) => return Err("Expected response".into()),
         };
 
-        let mut stream = ReaderStream::with_capacity(file, 4096 * 4).enumerate();
+        let mut stream = ReaderStream::with_capacity(file, 4096 * 4);
 
-        while let Some((chunk_id, bytes)) = stream.next().await {
+        while let Some(bytes) = stream.next().await {
             let bytes = bytes?;
 
             if bytes.is_empty() {
@@ -57,11 +57,7 @@ impl Client {
             }
 
             self.writer
-                .write(ClientToNodeMessage::Append {
-                    module_id,
-                    bytes,
-                    chunk_id: chunk_id as u64,
-                })
+                .write(ClientToNodeMessage::Append { module_id, bytes })
                 .await?;
         }
 
