@@ -658,7 +658,7 @@ impl LeaderTask {
         }
 
         if let Some(sender) = sender {
-            sender.send(()).expect("");
+            sender.do_send(()).await;
         }
 
         Ok(())
