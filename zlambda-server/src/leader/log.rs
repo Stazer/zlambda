@@ -101,13 +101,6 @@ impl LeaderLog {
         }
     }
 
-    pub fn last_appended_log_entry_id(&self) -> Option<LogEntryId> {
-        match self.last_committed_log_entry_id() {
-            Some(log_entry_id) if log_entry_id > 0 => Some(log_entry_id - 1),
-            _ => None,
-        }
-    }
-
     pub fn begin(
         &mut self,
         r#type: LogEntryType,

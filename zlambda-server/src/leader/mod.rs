@@ -486,7 +486,7 @@ impl LeaderTask {
         };
 
         self.module_manager
-            .append(*module_id, &bytes)
+            .append(*module_id, bytes)
             .await
             .expect("");
 
@@ -708,11 +708,7 @@ impl LeaderTask {
         trace!("Apply {}", log_entry_id);
 
         if let Some(message) = self.on_apply_message.remove(&log_entry_id) {
-            let sender = self.sender.clone();
-
-            spawn(async move {
-                sender.do_send(message).await;
-            });
+            self.sender.do_send(message).await;
         }
 
         Ok(())
