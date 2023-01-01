@@ -5,7 +5,7 @@ use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::dispatch::DispatchId;
 use zlambda_common::message::{
-    BasicMessageStreamReaderTask, ClientToNodeMessage, ClientToNodeMessageStreamReader,
+    ClientToNodeMessage, ClientToNodeMessageStreamReader,
     MessageError, NodeToClientMessage, NodeToClientMessageStreamWriter,
 };
 use zlambda_common::module::ModuleId;
@@ -35,8 +35,7 @@ impl LeaderClientBuilder {
 
 #[derive(Debug)]
 pub struct LeaderClientTask {
-    reader: tokio::sync::mpsc::Receiver<Result<Option<ClientToNodeMessage>, MessageError>>,
-    //BasicMessageStreamReaderTask<ClientToNodeMessage>,
+    reader: ClientToNodeMessageStreamReader,
     writer: NodeToClientMessageStreamWriter,
     leader_handle: LeaderHandle,
 }
@@ -48,10 +47,8 @@ impl LeaderClientTask {
         leader_handle: LeaderHandle,
         initial_message: ClientToNodeMessage,
     ) -> Self {
-        let (buffer, reader) = reader.into_inner();
-
         let mut leader_client = Self {
-            reader: BasicMessageStreamReaderTask::new(buffer, reader).spawn(),
+            reader,
             writer,
             leader_handle,
         };
@@ -70,13 +67,8 @@ impl LeaderClientTask {
     pub async fn run(mut self) {
         loop {
             select!(
-                read_result = self.reader.recv() => {
+                read_result = self.reader.read() => {
                     let message = match read_result {
-                        None => break,
-                        Some(message) => message,
-                    };
-
-                    let message = match message {
                         Ok(None) => {
                             break
                         }

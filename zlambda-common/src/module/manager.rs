@@ -17,8 +17,6 @@ enum ModuleManagerEntry {
         handle: NamedTempFile,
         writer: BufWriter<File>,
         path: PathBuf,
-        buffer: HashMap<u64, Bytes>,
-        next_index: u64,
     },
 }
 
@@ -51,46 +49,10 @@ impl ModuleManager {
                 handle,
                 writer,
                 path,
-                buffer: HashMap::default(),
-                next_index: 0,
             },
         );
 
         Ok(id)
-    }
-
-    pub async fn insert(
-        &mut self,
-        id: ModuleId,
-        index: u64,
-        bytes: Bytes,
-    ) -> Result<(), Box<dyn Error>> {
-        let (writer, buffer, next_index) = match self.entries.get_mut(&id) {
-            None => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loaded(_)) => return Err("Module already loaded".into()),
-            Some(ModuleManagerEntry::Loading {
-                writer,
-                buffer,
-                next_index,
-                ..
-            }) => (writer, buffer, next_index),
-        };
-
-
-        buffer.insert(index, bytes);
-
-        if index != *next_index {
-            return Ok(())
-        }
-
-        while let Some(bytes) = buffer.get(&*next_index) {
-            writer.write_all(bytes).await?;
-            buffer.remove(&index);
-
-            *next_index += 1;
-        }
-
-        Ok(())
     }
 
     pub async fn append(&mut self, id: ModuleId, chunk: &[u8]) -> Result<(), Box<dyn Error>> {
@@ -106,13 +68,11 @@ impl ModuleManager {
     }
 
     pub async fn load(&mut self, id: ModuleId) -> Result<(), Box<dyn Error>> {
-        let (handle, path, buffer) = match self.entries.remove(&id) {
+        let (handle, path) = match self.entries.remove(&id) {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading { handle, path, buffer, .. }) => (handle, path, buffer),
+            Some(ModuleManagerEntry::Loading { handle, path, .. }) => (handle, path),
         };
-
-        println!("{} still existing", buffer.len());
 
         self.entries.insert(
             id,

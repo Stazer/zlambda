@@ -48,16 +48,6 @@ enum LeaderMessage {
     Replicate(LogEntryType, oneshot::Sender<LogEntryId>),
     Initialize(oneshot::Sender<ModuleId>),
     Append(ModuleId, Bytes, oneshot::Sender<()>),
-    Insert {
-        module_id: ModuleId,
-        index: u64,
-        bytes: Bytes,
-        sender: oneshot::Sender<()>,
-    },
-    ApplyInsert {
-        log_entry_id: LogEntryId,
-        sender: oneshot::Sender<()>,
-    },
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
     Dispatch(ModuleId, Vec<u8>, oneshot::Sender<Result<Vec<u8>, String>>),
     Handshake {
@@ -188,28 +178,6 @@ impl LeaderHandle {
 
         receiver.do_receive().await
     }
-
-    pub async fn insert(
-        &self,
-        module_id: ModuleId,
-        index: u64,
-        bytes: Bytes,
-    ) -> Result<(), String> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.sender
-            .do_send(LeaderMessage::Insert {
-                module_id,
-                index,
-                bytes,
-                sender,
-            })
-            .await;
-
-        receiver.do_receive().await;
-
-        Ok(())
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -339,16 +307,6 @@ impl LeaderTask {
             LeaderMessage::Dispatch(id, payload, sender) => {
                 self.on_dispatch(id, payload, sender).await
             }
-            LeaderMessage::Insert {
-                module_id,
-                index,
-                bytes,
-                sender,
-            } => self.on_insert(module_id, index, bytes, sender).await,
-            LeaderMessage::ApplyInsert {
-                log_entry_id,
-                sender,
-            } => self.on_apply_insert(log_entry_id, sender).await,
             LeaderMessage::Handshake {
                 node_id,
                 address,
@@ -372,68 +330,6 @@ impl LeaderTask {
             } => self.on_apply_handshake(follower_handle, sender).await,
         }
         .expect("");
-
-        Ok(())
-    }
-
-    async fn on_insert(
-        &mut self,
-        module_id: ModuleId,
-        index: u64,
-        bytes: Bytes,
-        sender: oneshot::Sender<()>,
-    ) -> Result<(), Box<dyn Error>> {
-        let log_entry_id = self
-            .replicate(LogEntryType::Client(ClientLogEntryType::Insert {
-                module_id,
-                index,
-                bytes,
-            }))
-            .await;
-
-        self.on_apply_message.insert(
-            log_entry_id,
-            LeaderMessage::ApplyInsert {
-                log_entry_id,
-                sender,
-            },
-        );
-
-        Ok(())
-    }
-
-    async fn on_apply_insert(
-        &mut self,
-        log_entry_id: LogEntryId,
-        sender: oneshot::Sender<()>,
-    ) -> Result<(), Box<dyn Error>> {
-        let log_entry = match self.log.get(log_entry_id) {
-            None => return Err("Log entry should exist".into()),
-            Some(log_entry) => log_entry,
-        };
-
-        if !matches!(
-            log_entry.data().r#type(),
-            LogEntryType::Client(ClientLogEntryType::Insert { .. })
-        ) {
-            return Err("Log entry type should be Insert".into());
-        }
-
-        let (module_id, index, bytes) = match log_entry.data().r#type() {
-            LogEntryType::Client(ClientLogEntryType::Insert {
-                module_id,
-                index,
-                bytes,
-            }) => (module_id, index, bytes),
-            _ => return Err("Log entry type should be Insert".into()),
-        };
-
-        self.module_manager
-            .insert(*module_id, *index, bytes.clone())
-            .await
-            .expect("");
-
-        sender.do_send(()).await;
 
         Ok(())
     }
