@@ -1,7 +1,7 @@
 use crate::leader::LeaderHandle;
 use std::error::Error;
-use tokio::sync::{mpsc, oneshot};
 use std::mem::take;
+use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::log::{LogEntryData, LogEntryId};
@@ -267,8 +267,13 @@ impl LeaderFollowerTask {
 
     async fn on_registered_follower_to_leader_message(&mut self, message: FollowerToLeaderMessage) {
         match message {
-            FollowerToLeaderMessage::AppendEntriesResponse { appended_log_entry_ids, missing_log_entry_ids } => {
-                self.leader_handle.acknowledge(appended_log_entry_ids, self.id).await;
+            FollowerToLeaderMessage::AppendEntriesResponse {
+                appended_log_entry_ids,
+                missing_log_entry_ids,
+            } => {
+                self.leader_handle
+                    .acknowledge(appended_log_entry_ids, self.id)
+                    .await;
             }
         }
     }
@@ -293,7 +298,7 @@ impl LeaderFollowerTask {
                 if let Err(error) = writer.write(message).await {
                     error!("{}", error);
                     self.writer_message_buffer = iterator.collect();
-                    break
+                    break;
                 }
             }
 

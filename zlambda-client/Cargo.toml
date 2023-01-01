@@ -8,3 +8,4 @@ tokio-util = { version = "0", features = ["full"] }
 tokio-stream  = { version = "0", features = ["net"] }
 tokio = { version = "1", features = ["full"] }
 zlambda-common = { path = "../zlambda-common" }
+futures = "0.3"

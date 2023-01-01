@@ -1,7 +1,7 @@
-use crate::message::{Message, MessageError, BasicMessageStreamReader, BasicMessageStreamWriter};
-use serde::{Deserialize, Serialize};
+use crate::message::{BasicMessageStreamReader, BasicMessageStreamWriter, Message, MessageError};
 use crate::node::NodeId;
 use crate::term::Term;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 

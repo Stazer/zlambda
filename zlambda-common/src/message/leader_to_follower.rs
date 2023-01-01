@@ -1,7 +1,7 @@
-use crate::message::{Message, MessageError, BasicMessageStreamReader, BasicMessageStreamWriter};
+use crate::log::{LogEntryData, LogEntryId};
+use crate::message::{BasicMessageStreamReader, BasicMessageStreamWriter, Message, MessageError};
+use crate::term::Term;
 use serde::{Deserialize, Serialize};
-use crate::log::{LogEntryId, LogEntryData};
-use crate::term::{Term};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

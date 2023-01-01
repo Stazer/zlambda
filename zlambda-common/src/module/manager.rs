@@ -1,18 +1,25 @@
 use crate::algorithm::next_key;
 use crate::module::{Module, ModuleId};
+use bytes::Bytes;
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tokio::fs::File;
-use tokio::io::{BufWriter, AsyncWriteExt};
+use tokio::io::{AsyncWriteExt, BufWriter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum ModuleManagerEntry {
     Loaded(Arc<Module>),
-    Loading(NamedTempFile, BufWriter<File>, PathBuf),
+    Loading {
+        handle: NamedTempFile,
+        writer: BufWriter<File>,
+        path: PathBuf,
+        buffer: HashMap<u64, Bytes>,
+        next_index: u64,
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,42 +40,86 @@ impl ModuleManager {
     pub fn initialize(&mut self) -> Result<ModuleId, Box<dyn Error>> {
         let id = next_key(self.entries.keys());
 
-        let tempfile = NamedTempFile::new()?;
-        let path = tempfile.path().into();
+        let handle = NamedTempFile::new()?;
+        let path = handle.path().into();
 
-        let file = File::from_std(tempfile.reopen()?);
+        let writer = BufWriter::new(File::from_std(handle.reopen()?));
 
-        self.entries
-            .insert(id, ModuleManagerEntry::Loading(tempfile, BufWriter::new(file), path));
+        self.entries.insert(
+            id,
+            ModuleManagerEntry::Loading {
+                handle,
+                writer,
+                path,
+                buffer: HashMap::default(),
+                next_index: 0,
+            },
+        );
 
         Ok(id)
     }
 
-    pub async fn append(&mut self, id: ModuleId, chunk: &[u8]) -> Result<(), Box<dyn Error>> {
-        let file = match self.entries.get_mut(&id) {
+    pub async fn insert(
+        &mut self,
+        id: ModuleId,
+        index: u64,
+        bytes: Bytes,
+    ) -> Result<(), Box<dyn Error>> {
+        let (writer, buffer, next_index) = match self.entries.get_mut(&id) {
             None => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading(_, file, _)) => file,
+            Some(ModuleManagerEntry::Loaded(_)) => return Err("Module already loaded".into()),
+            Some(ModuleManagerEntry::Loading {
+                writer,
+                buffer,
+                next_index,
+                ..
+            }) => (writer, buffer, next_index),
         };
 
-        file.write_all(chunk).await?;
+
+        buffer.insert(index, bytes);
+
+        if index != *next_index {
+            return Ok(())
+        }
+
+        while let Some(bytes) = buffer.get(&*next_index) {
+            writer.write_all(bytes).await?;
+            buffer.remove(&index);
+
+            *next_index += 1;
+        }
+
+        Ok(())
+    }
+
+    pub async fn append(&mut self, id: ModuleId, chunk: &[u8]) -> Result<(), Box<dyn Error>> {
+        let writer = match self.entries.get_mut(&id) {
+            None => return Err("Module not found".into()),
+            Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
+            Some(ModuleManagerEntry::Loading { writer, .. }) => writer,
+        };
+
+        writer.write_all(chunk).await?;
 
         Ok(())
     }
 
     pub async fn load(&mut self, id: ModuleId) -> Result<(), Box<dyn Error>> {
-        let (tempfile, path) = match self.entries.remove(&id) {
+        let (handle, path, buffer) = match self.entries.remove(&id) {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading(tempfile, _file, path)) => (tempfile, path),
+            Some(ModuleManagerEntry::Loading { handle, path, buffer, .. }) => (handle, path, buffer),
         };
+
+        println!("{} still existing", buffer.len());
 
         self.entries.insert(
             id,
             ModuleManagerEntry::Loaded(Arc::new(Module::load(id, &path).await?)),
         );
 
-        tempfile.close()?;
+        handle.close()?;
 
         Ok(())
     }

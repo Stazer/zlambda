@@ -1,6 +1,6 @@
+use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
-use bytes::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -127,4 +127,3 @@ impl Message {
 
 pub type MessageStreamReader = BasicMessageStreamReader<Message>;
 pub type MessageStreamWriter = BasicMessageStreamWriter<Message>;
-

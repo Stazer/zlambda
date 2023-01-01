@@ -1,7 +1,7 @@
+use crate::message::Message;
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io;
-use crate::message::Message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

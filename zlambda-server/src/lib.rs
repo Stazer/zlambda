@@ -11,14 +11,14 @@ pub mod leader;
 use crate::candidate::CandidateHandle;
 use crate::follower::{FollowerBuilder, FollowerHandle};
 use crate::leader::{LeaderBuilder, LeaderHandle};
+use bytes::Bytes;
 use std::error::Error;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
-use zlambda_common::node::NodeId;
+use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::module::ModuleId;
-use bytes::Bytes;
-use zlambda_common::channel::{DoSend, DoReceive};
+use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,9 +69,9 @@ impl ServerHandle {
     pub async fn ping(&self) {
         let (sender, receiver) = oneshot::channel();
 
-        self.sender.do_send(ServerMessage::Ping(ServerPingMessage {
-                sender
-            })).await;
+        self.sender
+            .do_send(ServerMessage::Ping(ServerPingMessage { sender }))
+            .await;
 
         receiver.do_receive().await
     }

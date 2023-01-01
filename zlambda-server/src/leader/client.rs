@@ -5,9 +5,8 @@ use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::dispatch::DispatchId;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClientToNodeMessageStreamReader, NodeToClientMessage,
-    NodeToClientMessageStreamWriter, BasicMessageStreamReaderTask,
-    MessageError,
+    BasicMessageStreamReaderTask, ClientToNodeMessage, ClientToNodeMessageStreamReader,
+    MessageError, NodeToClientMessage, NodeToClientMessageStreamWriter,
 };
 use zlambda_common::module::ModuleId;
 
@@ -49,8 +48,10 @@ impl LeaderClientTask {
         leader_handle: LeaderHandle,
         initial_message: ClientToNodeMessage,
     ) -> Self {
+        let (buffer, reader) = reader.into_inner();
+
         let mut leader_client = Self {
-            reader: BasicMessageStreamReaderTask::new(reader).spawn(),
+            reader: BasicMessageStreamReaderTask::new(buffer, reader).spawn(),
             writer,
             leader_handle,
         };
@@ -95,9 +96,14 @@ impl LeaderClientTask {
     async fn handle_message(&mut self, message: ClientToNodeMessage) {
         match message {
             ClientToNodeMessage::InitializeRequest => self.initialize().await.expect(""),
-            ClientToNodeMessage::Append { module_id, bytes } => {
-                self.append(module_id, bytes).await.expect("")
-            }
+            ClientToNodeMessage::Append {
+                module_id,
+                chunk_id,
+                bytes,
+            } => self
+                .append(module_id, chunk_id, bytes)
+                .await
+                .expect(""),
             ClientToNodeMessage::LoadRequest { module_id } => self.load(module_id).await.expect(""),
             ClientToNodeMessage::DispatchRequest {
                 module_id,
@@ -120,7 +126,12 @@ impl LeaderClientTask {
         Ok(())
     }
 
-    async fn append(&mut self, id: ModuleId, bytes: Bytes) -> Result<(), Box<dyn Error>> {
+    async fn append(
+        &mut self,
+        id: ModuleId,
+        chunk_id: u64,
+        bytes: Bytes,
+    ) -> Result<(), Box<dyn Error>> {
         self.leader_handle.append(id, bytes).await;
 
         Ok(())

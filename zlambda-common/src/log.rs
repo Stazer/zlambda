@@ -1,9 +1,10 @@
+use crate::module::ModuleId;
 use crate::node::NodeId;
+use crate::term::Term;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use crate::term::Term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,6 +23,11 @@ pub enum ClusterLogEntryType {
 pub enum ClientLogEntryType {
     Initialize,
     Append(u64, Bytes),
+    Insert {
+        module_id: ModuleId,
+        index: u64,
+        bytes: Bytes,
+    },
     Load(u64),
 }
 

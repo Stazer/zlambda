@@ -1,7 +1,7 @@
-use std::marker::PhantomData;
-use tokio::net::tcp::{OwnedWriteHalf};
-use tokio::io::AsyncWriteExt;
 use crate::message::{Message, MessageError};
+use std::marker::PhantomData;
+use tokio::io::AsyncWriteExt;
+use tokio::net::tcp::OwnedWriteHalf;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

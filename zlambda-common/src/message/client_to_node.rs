@@ -1,8 +1,8 @@
-use crate::message::{Message, MessageError, BasicMessageStreamReader, BasicMessageStreamWriter};
-use serde::{Deserialize, Serialize};
 use crate::dispatch::DispatchId;
+use crate::message::{BasicMessageStreamReader, BasicMessageStreamWriter, Message, MessageError};
 use crate::module::ModuleId;
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -11,6 +11,7 @@ pub enum ClientToNodeMessage {
     InitializeRequest,
     Append {
         module_id: ModuleId,
+        chunk_id: u64,
         bytes: Bytes,
     },
     LoadRequest {

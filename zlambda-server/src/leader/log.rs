@@ -108,12 +108,21 @@ impl LeaderLog {
         }
     }
 
-    pub fn begin(&mut self, r#type: LogEntryType, term: Term, nodes: HashSet<NodeId>) -> LogEntryId {
+    pub fn begin(
+        &mut self,
+        r#type: LogEntryType,
+        term: Term,
+        nodes: HashSet<NodeId>,
+    ) -> LogEntryId {
         let id = self.next_log_entry_id();
 
         self.log_entries.insert(
             id,
-            LeaderLogEntry::new(LogEntryData::new(id, r#type, term), nodes, HashSet::default()),
+            LeaderLogEntry::new(
+                LogEntryData::new(id, r#type, term),
+                nodes,
+                HashSet::default(),
+            ),
         );
 
         id

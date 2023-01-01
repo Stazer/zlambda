@@ -1,4 +1,4 @@
-use crate::message::{Message, MessageError, BasicMessageStreamReader, BasicMessageStreamWriter};
+use crate::message::{BasicMessageStreamReader, BasicMessageStreamWriter, Message, MessageError};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -21,7 +21,5 @@ impl From<Message> for Result<FollowerToGuestMessage, MessageError> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type FollowerToGuestMessageStreamReader =
-    BasicMessageStreamReader<FollowerToGuestMessage>;
-pub type FollowerToGuestMessageStreamWriter =
-    BasicMessageStreamWriter<FollowerToGuestMessage>;
+pub type FollowerToGuestMessageStreamReader = BasicMessageStreamReader<FollowerToGuestMessage>;
+pub type FollowerToGuestMessageStreamWriter = BasicMessageStreamWriter<FollowerToGuestMessage>;

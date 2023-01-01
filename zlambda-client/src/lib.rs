@@ -1,9 +1,9 @@
+use futures::stream::StreamExt;
 use std::error::Error;
 use std::path::Path;
 use tokio::fs::File;
 use tokio::io::AsyncRead;
 use tokio::net::{TcpStream, ToSocketAddrs};
-use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
 use zlambda_common::dispatch::DispatchId;
 use zlambda_common::message::{
@@ -47,9 +47,9 @@ impl Client {
             Some(_) => return Err("Expected response".into()),
         };
 
-        let mut stream = ReaderStream::with_capacity(file, 4096 * 4);
+        let mut stream = ReaderStream::with_capacity(file, 4096 * 4).enumerate();
 
-        while let Some(bytes) = stream.next().await {
+        while let Some((chunk_id, bytes)) = stream.next().await {
             let bytes = bytes?;
 
             if bytes.is_empty() {
@@ -57,11 +57,13 @@ impl Client {
             }
 
             self.writer
-                .write(ClientToNodeMessage::Append { module_id, bytes })
+                .write(ClientToNodeMessage::Append {
+                    module_id,
+                    bytes,
+                    chunk_id: chunk_id as u64,
+                })
                 .await?;
         }
-
-        println!("Hello World");
 
         self.writer
             .write(ClientToNodeMessage::LoadRequest { module_id })

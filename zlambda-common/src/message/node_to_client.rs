@@ -1,7 +1,7 @@
-use crate::message::{Message, MessageError, BasicMessageStreamReader, BasicMessageStreamWriter};
-use serde::{Deserialize, Serialize};
 use crate::dispatch::DispatchId;
+use crate::message::{BasicMessageStreamReader, BasicMessageStreamWriter, Message, MessageError};
 use crate::module::ModuleId;
+use serde::{Deserialize, Serialize};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -148,11 +148,10 @@ impl LeaderConnectionTask {
             Err(message) => {
                 let mut writer = self.writer.into();
 
-                writer.write(
-                    LeaderToGuestMessage::HandshakeErrorResponse {
-                        message,
-                    }
-                ).await.expect("");
+                writer
+                    .write(LeaderToGuestMessage::HandshakeErrorResponse { message })
+                    .await
+                    .expect("");
             }
         };
 

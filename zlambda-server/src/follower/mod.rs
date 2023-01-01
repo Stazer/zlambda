@@ -13,6 +13,7 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::{error, trace};
+use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
     FollowerToGuestMessage, FollowerToLeaderMessage, FollowerToLeaderMessageStreamWriter,
@@ -22,7 +23,6 @@ use zlambda_common::message::{
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
-use zlambda_common::channel::{DoReceive, DoSend};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -231,7 +231,7 @@ impl FollowerTask {
                     continue;
                 }
                 Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeErrorResponse {
-                    message
+                    message,
                 })) => {
                     return Err(message.into());
                 }

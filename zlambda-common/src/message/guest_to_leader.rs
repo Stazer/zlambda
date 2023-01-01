@@ -1,4 +1,4 @@
-use crate::message::{Message, MessageError, BasicMessageStreamReader, BasicMessageStreamWriter};
+use crate::message::{BasicMessageStreamReader, BasicMessageStreamWriter, Message, MessageError};
 use serde::{Deserialize, Serialize};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
