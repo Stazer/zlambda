@@ -164,7 +164,8 @@ impl ServerTask {
 
                 builder
                     .task(tcp_listener, registration_address, node_id)
-                    .await?;
+                    .await?
+                    .spawn();
 
                 ServerType::Follower(handle)
             }

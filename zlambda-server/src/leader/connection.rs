@@ -13,13 +13,10 @@ use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug, Default)]
 pub struct LeaderConnectionBuilder {}
 
 impl LeaderConnectionBuilder {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     pub fn task(
         self,
         reader: MessageStreamReader,
@@ -71,7 +68,9 @@ impl LeaderConnectionTask {
                     };
 
                     match message {
-                        None => continue,
+                        None => {
+                            break
+                        },
                         Some(Message::GuestToNode(message)) => {
                             self.on_unregistered_to_node_message(message).await;
                             break

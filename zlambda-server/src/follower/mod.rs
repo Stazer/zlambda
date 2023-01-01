@@ -282,7 +282,7 @@ impl FollowerTask {
 
                     let (reader, writer) = stream.into_split();
 
-                    FollowerConnectionBuilder::new().task(
+                    FollowerConnectionBuilder::default().task(
                         MessageStreamReader::new(reader),
                         MessageStreamWriter::new(writer),
                         FollowerHandle::new(self.sender.clone()),

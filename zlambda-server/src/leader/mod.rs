@@ -261,7 +261,7 @@ impl LeaderTask {
 
                     let (reader, writer) = stream.into_split();
 
-                    LeaderConnectionBuilder::new().task(
+                    LeaderConnectionBuilder::default().task(
                         MessageStreamReader::new(reader),
                         MessageStreamWriter::new(writer),
                         LeaderHandle::new(self.sender.clone()),

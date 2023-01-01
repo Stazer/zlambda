@@ -10,14 +10,10 @@ use zlambda_common::message::{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FollowerConnectionBuilder {}
 
 impl FollowerConnectionBuilder {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     pub fn task(
         self,
         reader: MessageStreamReader,
@@ -69,7 +65,7 @@ impl FollowerConnectionTask {
                     };
 
                     match message {
-                        None => continue,
+                        None => break,
                         Some(Message::GuestToNode(message)) => {
                             self.on_unregistered_follower_to_node_message(message).await;
                         }
