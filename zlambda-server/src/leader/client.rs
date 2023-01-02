@@ -97,8 +97,9 @@ impl LeaderClientTask {
                 module_id,
                 dispatch_id,
                 payload,
+                node_id,
             } => self
-                .dispatch(module_id, dispatch_id, payload, None)
+                .dispatch(module_id, dispatch_id, payload, node_id)
                 .await
                 .expect(""),
         }
