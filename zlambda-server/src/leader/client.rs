@@ -89,10 +89,9 @@ impl LeaderClientTask {
     async fn handle_message(&mut self, message: ClientToNodeMessage) {
         match message {
             ClientToNodeMessage::InitializeRequest => self.initialize().await.expect(""),
-            ClientToNodeMessage::Append {
-                module_id,
-                bytes,
-            } => self.append(module_id, bytes).await.expect(""),
+            ClientToNodeMessage::Append { module_id, bytes } => {
+                self.append(module_id, bytes).await.expect("")
+            }
             ClientToNodeMessage::LoadRequest { module_id } => self.load(module_id).await.expect(""),
             ClientToNodeMessage::DispatchRequest {
                 module_id,

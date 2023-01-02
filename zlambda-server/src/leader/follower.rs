@@ -4,6 +4,7 @@ use std::mem::take;
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::error;
+use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
     FollowerToLeaderMessage, FollowerToLeaderMessageStreamReader, GuestToLeaderMessageStreamReader,
@@ -12,7 +13,6 @@ use zlambda_common::message::{
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
-use zlambda_common::channel::{DoReceive, DoSend};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,12 +92,14 @@ impl LeaderFollowerHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .do_send(LeaderFollowerMessage::Replicate(LeaderFollowerReplicateMessage {
-                term,
-                last_committed_log_entry_id,
-                log_entry_data,
-                sender,
-            }))
+            .do_send(LeaderFollowerMessage::Replicate(
+                LeaderFollowerReplicateMessage {
+                    term,
+                    last_committed_log_entry_id,
+                    log_entry_data,
+                    sender,
+                },
+            ))
             .await;
 
         receiver.do_receive().await;
@@ -111,11 +113,13 @@ impl LeaderFollowerHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .do_send(LeaderFollowerMessage::Handshake(LeaderFollowerHandshakeMessage {
-                reader: reader.into(),
-                writer: writer.into(),
-                sender,
-            }))
+            .do_send(LeaderFollowerMessage::Handshake(
+                LeaderFollowerHandshakeMessage {
+                    reader: reader.into(),
+                    writer: writer.into(),
+                    sender,
+                },
+            ))
             .await;
 
         receiver.do_receive().await.expect("");
@@ -258,8 +262,12 @@ impl LeaderFollowerTask {
 
     async fn on_message(&mut self, message: LeaderFollowerMessage) {
         match message {
-            LeaderFollowerMessage::Replicate(message) => self.on_replicate(message).await.expect(""),
-            LeaderFollowerMessage::Handshake(message) => self.on_handshake(message).await.expect(""),
+            LeaderFollowerMessage::Replicate(message) => {
+                self.on_replicate(message).await.expect("")
+            }
+            LeaderFollowerMessage::Handshake(message) => {
+                self.on_handshake(message).await.expect("")
+            }
             LeaderFollowerMessage::Status(message) => self.on_status(message).await,
         }
     }
@@ -282,7 +290,8 @@ impl LeaderFollowerTask {
         mut message: LeaderFollowerHandshakeMessage,
     ) -> Result<(), Box<dyn Error>> {
         if self.reader.is_none() && self.writer.is_none() {
-            message.writer
+            message
+                .writer
                 .write(LeaderToGuestMessage::HandshakeOkResponse { leader_id: 0 })
                 .await
                 .expect("");
@@ -304,14 +313,18 @@ impl LeaderFollowerTask {
 
             message.sender.do_send(Ok(())).await;
         } else {
-            message.sender.do_send(Err("Follower is online".into())).await;
+            message
+                .sender
+                .do_send(Err("Follower is online".into()))
+                .await;
         }
 
         Ok(())
     }
 
     async fn on_status(&mut self, message: LeaderFollowerStatusMessage) {
-        message.sender
+        message
+            .sender
             .do_send(LeaderFollowerStatus::new(
                 self.reader.is_some() && self.writer.is_some(),
             ))
@@ -334,9 +347,7 @@ impl LeaderFollowerTask {
             self.writer_message_buffer.push(request);
         }
 
-        message.sender
-            .do_send(())
-            .await;
+        message.sender.do_send(()).await;
 
         Ok(())
     }
