@@ -34,7 +34,25 @@ enum LeaderResult {}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+struct LeaderPingMessage {
+    sender: oneshot::Sender<()>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct LeaderDispatchMessage {
+    module_id: ModuleId,
+    payload: Vec<u8>,
+    node_id: Option<NodeId>,
+    sender: oneshot::Sender<Result<Vec<u8>, String>>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 enum LeaderMessage {
+    Ping(LeaderPingMessage),
     Register(
         SocketAddr,
         LeaderFollowerHandle,
@@ -49,7 +67,7 @@ enum LeaderMessage {
     Initialize(oneshot::Sender<ModuleId>),
     Append(ModuleId, Bytes, oneshot::Sender<()>),
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
-    Dispatch(ModuleId, Vec<u8>, oneshot::Sender<Result<Vec<u8>, String>>),
+    Dispatch(LeaderDispatchMessage),
     Handshake {
         node_id: NodeId,
         address: SocketAddr,
@@ -83,6 +101,16 @@ pub struct LeaderHandle {
 impl LeaderHandle {
     fn new(sender: mpsc::Sender<LeaderMessage>) -> Self {
         Self { sender }
+    }
+
+    pub async fn ping(&self) {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .do_send(LeaderMessage::Ping(LeaderPingMessage { sender }))
+            .await;
+
+        receiver.do_receive().await
     }
 
     pub async fn register(
@@ -169,11 +197,21 @@ impl LeaderHandle {
         receiver.do_receive().await.map(|_| ())
     }
 
-    pub async fn dispatch(&self, module_id: ModuleId, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
+    pub async fn dispatch(
+        &self,
+        module_id: ModuleId,
+        payload: Vec<u8>,
+        node_id: Option<NodeId>,
+    ) -> Result<Vec<u8>, String> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .do_send(LeaderMessage::Dispatch(module_id, bytes, sender))
+            .do_send(LeaderMessage::Dispatch(LeaderDispatchMessage {
+                module_id,
+                payload,
+                node_id,
+                sender,
+            }))
             .await;
 
         receiver.do_receive().await
@@ -284,6 +322,7 @@ impl LeaderTask {
 
     async fn on_message(&mut self, message: LeaderMessage) -> Result<(), Box<dyn Error>> {
         match message {
+            LeaderMessage::Ping(message) => self.on_ping(message).await,
             LeaderMessage::Register(address, follower_handle, result_sender) => {
                 self.register(address, follower_handle, result_sender).await
             }
@@ -304,9 +343,7 @@ impl LeaderTask {
             LeaderMessage::Initialize(sender) => self.initialize(sender).await,
             LeaderMessage::Append(id, bytes, sender) => self.on_append(id, bytes, sender).await,
             LeaderMessage::Load(id, sender) => self.load(id, sender).await,
-            LeaderMessage::Dispatch(id, payload, sender) => {
-                self.on_dispatch(id, payload, sender).await
-            }
+            LeaderMessage::Dispatch(message) => self.on_dispatch(message).await,
             LeaderMessage::Handshake {
                 node_id,
                 address,
@@ -630,16 +667,17 @@ impl LeaderTask {
         Ok(())
     }
 
-    async fn on_dispatch(
-        &mut self,
-        id: ModuleId,
-        payload: Vec<u8>,
-        sender: oneshot::Sender<Result<Vec<u8>, String>>,
-    ) -> Result<(), Box<dyn Error>> {
-        let module = match self.module_manager.get(id) {
+    async fn on_ping(&mut self, message: LeaderPingMessage) -> Result<(), Box<dyn Error>> {
+        message.sender.do_send(()).await;
+
+        Ok(())
+    }
+
+    async fn on_dispatch(&mut self, message: LeaderDispatchMessage) -> Result<(), Box<dyn Error>> {
+        let module = match self.module_manager.get(message.module_id) {
             Some(module) => module.clone(),
             None => {
-                sender.do_send(Err("Module not found".into())).await;
+                message.sender.do_send(Err("Module not found".into())).await;
 
                 return Ok(());
             }
@@ -650,7 +688,7 @@ impl LeaderTask {
                 .event_handler()
                 .dispatch(
                     tokio::runtime::Handle::current(),
-                    DispatchModuleEventInput::new(payload),
+                    DispatchModuleEventInput::new(message.payload),
                 )
                 .await
                 .map(|output| {
@@ -660,7 +698,7 @@ impl LeaderTask {
                 })
                 .map_err(|e| e.to_string());
 
-            sender.do_send(result).await;
+            message.sender.do_send(result).await;
         });
 
         Ok(())
