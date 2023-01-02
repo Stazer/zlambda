@@ -35,6 +35,13 @@ struct FollowerPingMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+struct FollowerLeaderAddressMessage {
+    sender: oneshot::Sender<SocketAddr>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 struct FollowerDispatchMessage {
     module_id: ModuleId,
     payload: Vec<u8>,
@@ -58,7 +65,9 @@ impl FollowerHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .do_send(FollowerMessage::ReadLeaderAddress { sender })
+            .do_send(FollowerMessage::LeaderAddress(
+                FollowerLeaderAddressMessage { sender },
+            ))
             .await;
 
         receiver.do_receive().await
@@ -138,8 +147,8 @@ impl FollowerBuilder {
 
 #[derive(Debug)]
 enum FollowerMessage {
-    ReadLeaderAddress { sender: oneshot::Sender<SocketAddr> },
     Ping(FollowerPingMessage),
+    LeaderAddress(FollowerLeaderAddressMessage),
     Dispatch(FollowerDispatchMessage),
 }
 
@@ -357,26 +366,9 @@ impl FollowerTask {
                     };
 
                     match message {
-                        FollowerMessage::ReadLeaderAddress { sender } => {
-                            let address = match self.addresses.get(&self.leader_id) {
-                                Some(address) => address,
-                                None => {
-                                    error!("Cannot find address with node id {}", self.leader_id);
-                                    break
-                                }
-                            };
-
-                            if let Err(error) = sender.send(*address) {
-                                error!("{}", error);
-                                break
-                            }
-                        }
-                        FollowerMessage::Ping(message) => {
-                            self.on_ping(message).await;
-                        }
-                        FollowerMessage::Dispatch(message) => {
-                            self.on_dispatch(message).await;
-                        }
+                        FollowerMessage::Ping(message) => self.on_ping(message).await,
+                        FollowerMessage::LeaderAddress(message) => self.on_leader_address(message).await,
+                        FollowerMessage::Dispatch(message) => self.on_dispatch(message).await
                     };
                 }
             )
@@ -432,6 +424,19 @@ impl FollowerTask {
 
     async fn on_ping(&mut self, message: FollowerPingMessage) {
         message.sender.do_send(()).await
+    }
+
+    async fn on_leader_address(&mut self, message: FollowerLeaderAddressMessage) {
+        message
+            .sender
+            .do_send(
+                (*self
+                    .addresses
+                    .get(&self.leader_id)
+                    .expect("Cannot find socket address of leader"))
+                .clone(),
+            )
+            .await
     }
 
     async fn on_dispatch(&mut self, message: FollowerDispatchMessage) {

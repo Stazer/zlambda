@@ -5,13 +5,13 @@
 pub mod candidate;
 pub mod follower;
 pub mod leader;
+pub mod server;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use crate::candidate::CandidateHandle;
 use crate::follower::{FollowerBuilder, FollowerHandle};
 use crate::leader::{LeaderBuilder, LeaderHandle};
-use bytes::Bytes;
 use std::error::Error;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::{mpsc, oneshot};
