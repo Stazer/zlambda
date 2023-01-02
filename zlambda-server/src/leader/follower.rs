@@ -12,6 +12,7 @@ use zlambda_common::message::{
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
+use zlambda_common::channel::{DoReceive, DoSend};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,21 +27,36 @@ enum LeaderFollowerResult {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+struct LeaderFollowerReplicateMessage {
+    term: Term,
+    last_committed_log_entry_id: Option<LogEntryId>,
+    log_entry_data: Vec<LogEntryData>,
+    sender: oneshot::Sender<()>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct LeaderFollowerStatusMessage {
+    sender: oneshot::Sender<LeaderFollowerStatus>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct LeaderFollowerHandshakeMessage {
+    reader: GuestToLeaderMessageStreamReader,
+    writer: LeaderToGuestMessageStreamWriter,
+    sender: oneshot::Sender<Result<(), String>>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 enum LeaderFollowerMessage {
-    Replicate {
-        term: Term,
-        last_committed_log_entry_id: Option<LogEntryId>,
-        log_entry_data: Vec<LogEntryData>,
-        sender: oneshot::Sender<()>,
-    },
-    Status {
-        sender: oneshot::Sender<LeaderFollowerStatus>,
-    },
-    Handshake {
-        reader: GuestToLeaderMessageStreamReader,
-        writer: LeaderToGuestMessageStreamWriter,
-        sender: oneshot::Sender<Result<(), String>>,
-    },
+    Replicate(LeaderFollowerReplicateMessage),
+    Status(LeaderFollowerStatusMessage),
+    Handshake(LeaderFollowerHandshakeMessage),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,11 +75,12 @@ impl LeaderFollowerHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderFollowerMessage::Status { sender })
-            .await
-            .expect("LeaderFollowerMessage::Status should be sent");
+            .do_send(LeaderFollowerMessage::Status(LeaderFollowerStatusMessage {
+                sender,
+            }))
+            .await;
 
-        receiver.await.expect("Value should be received")
+        receiver.do_receive().await
     }
 
     pub async fn replicate(
@@ -75,16 +92,15 @@ impl LeaderFollowerHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderFollowerMessage::Replicate {
+            .do_send(LeaderFollowerMessage::Replicate(LeaderFollowerReplicateMessage {
                 term,
                 last_committed_log_entry_id,
                 log_entry_data,
                 sender,
-            })
-            .await
-            .expect("LeaderFollowerMessage::Replicate should be sent");
+            }))
+            .await;
 
-        receiver.await.expect("Value should be received")
+        receiver.do_receive().await;
     }
 
     pub async fn handshake(
@@ -95,15 +111,14 @@ impl LeaderFollowerHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(LeaderFollowerMessage::Handshake {
+            .do_send(LeaderFollowerMessage::Handshake(LeaderFollowerHandshakeMessage {
                 reader: reader.into(),
                 writer: writer.into(),
                 sender,
-            })
-            .await
-            .expect("");
+            }))
+            .await;
 
-        receiver.await.expect("").expect("");
+        receiver.do_receive().await.expect("");
 
         Ok(())
     }
@@ -243,25 +258,9 @@ impl LeaderFollowerTask {
 
     async fn on_message(&mut self, message: LeaderFollowerMessage) {
         match message {
-            LeaderFollowerMessage::Replicate {
-                term,
-                last_committed_log_entry_id,
-                log_entry_data,
-                sender,
-            } => self
-                .on_replicate(term, last_committed_log_entry_id, log_entry_data, sender)
-                .await
-                .expect(""),
-            LeaderFollowerMessage::Handshake {
-                reader,
-                writer,
-                sender,
-            } => {
-                self.on_handshake(reader, writer, sender).await.expect("");
-            }
-            LeaderFollowerMessage::Status { sender } => {
-                self.on_status(sender).await;
-            }
+            LeaderFollowerMessage::Replicate(message) => self.on_replicate(message).await.expect(""),
+            LeaderFollowerMessage::Handshake(message) => self.on_handshake(message).await.expect(""),
+            LeaderFollowerMessage::Status(message) => self.on_status(message).await,
         }
     }
 
@@ -280,9 +279,7 @@ impl LeaderFollowerTask {
 
     async fn on_handshake(
         &mut self,
-        reader: GuestToLeaderMessageStreamReader,
-        mut writer: LeaderToGuestMessageStreamWriter,
-        sender: oneshot::Sender<Result<(), String>>,
+        message: LeaderFollowerHandshakeMessage,
     ) -> Result<(), Box<dyn Error>> {
         if self.reader.is_none() && self.writer.is_none() {
             writer
@@ -317,36 +314,33 @@ impl LeaderFollowerTask {
         Ok(())
     }
 
-    async fn on_status(&mut self, sender: oneshot::Sender<LeaderFollowerStatus>) {
-        sender
-            .send(LeaderFollowerStatus::new(
+    async fn on_status(&mut self, message: LeaderFollowerStatusMessage) {
+        message.sender
+            .do_send(LeaderFollowerStatus::new(
                 self.reader.is_some() && self.writer.is_some(),
             ))
-            .expect("");
+            .await
     }
 
     async fn on_replicate(
         &mut self,
-        term: Term,
-        last_committed_log_entry_id: Option<LogEntryId>,
-        log_entry_data: Vec<LogEntryData>,
-        sender: oneshot::Sender<()>,
+        message: LeaderFollowerReplicateMessage,
     ) -> Result<(), Box<dyn Error>> {
-        let message = LeaderToFollowerMessage::AppendEntriesRequest {
-            term,
-            last_committed_log_entry_id,
-            log_entry_data,
+        let request = LeaderToFollowerMessage::AppendEntriesRequest {
+            term: message.term,
+            last_committed_log_entry_id: message.last_committed_log_entry_id,
+            log_entry_data: message.log_entry_data,
         };
 
         if let Some(ref mut writer) = &mut self.writer {
-            writer.write(message.clone()).await?;
+            writer.write(request).await?;
         } else {
-            self.writer_message_buffer.push(message);
+            self.writer_message_buffer.push(request);
         }
 
-        sender
-            .send(())
-            .map_err(|_| Box::<dyn Error>::from("Cannot send message"))?;
+        message.sender
+            .do_send(())
+            .await;
 
         Ok(())
     }

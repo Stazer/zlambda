@@ -21,12 +21,30 @@ use zlambda_common::message::{
     LeaderToFollowerMessageStreamReader, LeaderToGuestMessage, Message, MessageStreamReader,
     MessageStreamWriter,
 };
+use zlambda_common::module::ModuleId;
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+struct FollowerPingMessage {
+    sender: oneshot::Sender<()>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct FollowerDispatchMessage {
+    module_id: ModuleId,
+    payload: Vec<u8>,
+    node_id: Option<NodeId>,
+    sender: oneshot::Sender<Result<Vec<u8>, String>>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
 pub struct FollowerHandle {
     sender: mpsc::Sender<FollowerMessage>,
 }
@@ -41,6 +59,36 @@ impl FollowerHandle {
 
         self.sender
             .do_send(FollowerMessage::ReadLeaderAddress { sender })
+            .await;
+
+        receiver.do_receive().await
+    }
+
+    pub async fn ping(&self) {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .do_send(FollowerMessage::Ping(FollowerPingMessage { sender }))
+            .await;
+
+        receiver.do_receive().await
+    }
+
+    pub async fn dispatch(
+        &self,
+        module_id: ModuleId,
+        payload: Vec<u8>,
+        node_id: Option<NodeId>,
+    ) -> Result<Vec<u8>, String> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .do_send(FollowerMessage::Dispatch(FollowerDispatchMessage {
+                module_id,
+                payload,
+                node_id,
+                sender,
+            }))
             .await;
 
         receiver.do_receive().await
@@ -91,6 +139,8 @@ impl FollowerBuilder {
 #[derive(Debug)]
 enum FollowerMessage {
     ReadLeaderAddress { sender: oneshot::Sender<SocketAddr> },
+    Ping(FollowerPingMessage),
+    Dispatch(FollowerDispatchMessage),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -321,6 +371,12 @@ impl FollowerTask {
                                 break
                             }
                         }
+                        FollowerMessage::Ping(message) => {
+                            self.on_ping(message).await;
+                        }
+                        FollowerMessage::Dispatch(message) => {
+                            self.on_dispatch(message).await;
+                        }
                     };
                 }
             )
@@ -372,5 +428,13 @@ impl FollowerTask {
         if let Err(error) = result {
             todo!("Switch to candidate {} {} {}", error, self.id, self.term);
         }
+    }
+
+    async fn on_ping(&mut self, message: FollowerPingMessage) {
+        message.sender.do_send(()).await
+    }
+
+    async fn on_dispatch(&mut self, message: FollowerDispatchMessage) {
+        message.sender.do_send(Err("Unimplemented".into())).await
     }
 }

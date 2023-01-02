@@ -9,6 +9,7 @@ use zlambda_common::message::{
     MessageError, NodeToClientMessage, NodeToClientMessageStreamWriter,
 };
 use zlambda_common::module::ModuleId;
+use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -100,17 +101,14 @@ impl LeaderClientTask {
                 module_id,
                 chunk_id,
                 bytes,
-            } => self
-                .append(module_id, chunk_id, bytes)
-                .await
-                .expect(""),
+            } => self.append(module_id, chunk_id, bytes).await.expect(""),
             ClientToNodeMessage::LoadRequest { module_id } => self.load(module_id).await.expect(""),
             ClientToNodeMessage::DispatchRequest {
                 module_id,
                 dispatch_id,
                 payload,
             } => self
-                .dispatch(module_id, dispatch_id, payload)
+                .dispatch(module_id, dispatch_id, payload, None)
                 .await
                 .expect(""),
         }
@@ -155,8 +153,12 @@ impl LeaderClientTask {
         module_id: ModuleId,
         dispatch_id: DispatchId,
         payload: Vec<u8>,
+        node_id: Option<NodeId>,
     ) -> Result<(), Box<dyn Error>> {
-        let result = self.leader_handle.dispatch(module_id, payload).await;
+        let result = self
+            .leader_handle
+            .dispatch(module_id, payload, node_id)
+            .await;
 
         self.writer
             .write(NodeToClientMessage::DispatchResponse {

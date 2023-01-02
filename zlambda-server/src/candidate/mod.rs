@@ -1,12 +1,20 @@
 use std::error::Error;
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
+use zlambda_common::channel::{DoReceive, DoSend};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct CandidatePingMessage {
+    sender: oneshot::Sender<()>,
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 enum CandidateMessage {
-    Ping { sender: oneshot::Sender<()> },
+    Ping(CandidatePingMessage),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,11 +33,10 @@ impl CandidateHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(CandidateMessage::Ping { sender })
-            .await
-            .expect("");
+            .do_send(CandidateMessage::Ping(CandidatePingMessage { sender }))
+            .await;
 
-        receiver.await.expect("");
+        receiver.do_receive().await;
     }
 }
 
@@ -93,11 +100,11 @@ impl CandidateTask {
 
     async fn on_message(&mut self, message: CandidateMessage) {
         match message {
-            CandidateMessage::Ping { sender } => self.on_ping(sender).await,
+            CandidateMessage::Ping(message) => self.on_ping(message).await,
         }
     }
 
-    async fn on_ping(&mut self, sender: oneshot::Sender<()>) {
-        sender.send(()).expect("");
+    async fn on_ping(&mut self, message: CandidatePingMessage) {
+        message.sender.do_send(()).await
     }
 }

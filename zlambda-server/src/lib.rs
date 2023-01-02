@@ -32,9 +32,9 @@ struct ServerPingMessage {
 #[derive(Debug)]
 struct ServerDispatchMessage {
     module_id: ModuleId,
-    payload: Bytes,
+    payload: Vec<u8>,
     node_id: Option<NodeId>,
-    sender: oneshot::Sender<Bytes>,
+    sender: oneshot::Sender<Result<Vec<u8>, String>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,9 +79,9 @@ impl ServerHandle {
     pub async fn dispatch(
         &self,
         module_id: ModuleId,
-        payload: Bytes,
+        payload: Vec<u8>,
         node_id: Option<NodeId>,
-    ) -> Bytes {
+    ) -> Result<Vec<u8>, String> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
@@ -125,7 +125,7 @@ impl ServerBuilder {
         S: ToSocketAddrs,
         T: ToSocketAddrs,
     {
-        ServerTask::new(self.receiver, listener_address, follower_data).await
+        ServerTask::new(self.sender, self.receiver, listener_address, follower_data).await
     }
 }
 
@@ -134,11 +134,13 @@ impl ServerBuilder {
 #[derive(Debug)]
 pub struct ServerTask {
     r#type: ServerType,
+    sender: mpsc::Sender<ServerMessage>,
     receiver: mpsc::Receiver<ServerMessage>,
 }
 
 impl ServerTask {
     async fn new<S, T>(
+        sender: mpsc::Sender<ServerMessage>,
         receiver: mpsc::Receiver<ServerMessage>,
         listener_address: S,
         follower_data: Option<(T, Option<NodeId>)>,
@@ -170,7 +172,11 @@ impl ServerTask {
             }
         };
 
-        Ok(Self { r#type, receiver })
+        Ok(Self {
+            r#type,
+            sender,
+            receiver,
+        })
     }
 
     pub fn spawn(self) {
@@ -207,6 +213,38 @@ impl ServerTask {
     }
 
     async fn on_dispatch(&mut self, message: ServerDispatchMessage) {
-        message.sender.do_send(Bytes::default()).await
+        match &self.r#type {
+            ServerType::Leader(leader) => {
+                let leader = leader.clone();
+
+                spawn(async move {
+                    message
+                        .sender
+                        .do_send(
+                            leader
+                                .dispatch(message.module_id, message.payload, message.node_id)
+                                .await,
+                        )
+                        .await;
+                });
+            }
+            ServerType::Follower(follower) => {
+                let follower = follower.clone();
+
+                spawn(async move {
+                    message
+                        .sender
+                        .do_send(
+                            follower
+                                .dispatch(message.module_id, message.payload, message.node_id)
+                                .await,
+                        )
+                        .await;
+                });
+            }
+            ServerType::Candidate(_) => {
+                self.sender.do_send(ServerMessage::Dispatch(message)).await;
+            }
+        };
     }
 }

@@ -76,11 +76,10 @@ impl ModuleManager {
             }) => (writer, buffer, next_index),
         };
 
-
         buffer.insert(index, bytes);
 
         if index != *next_index {
-            return Ok(())
+            return Ok(());
         }
 
         while let Some(bytes) = buffer.get(&*next_index) {
@@ -109,7 +108,12 @@ impl ModuleManager {
         let (handle, path, buffer) = match self.entries.remove(&id) {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module not found".into()),
-            Some(ModuleManagerEntry::Loading { handle, path, buffer, .. }) => (handle, path, buffer),
+            Some(ModuleManagerEntry::Loading {
+                handle,
+                path,
+                buffer,
+                ..
+            }) => (handle, path, buffer),
         };
 
         println!("{} still existing", buffer.len());
