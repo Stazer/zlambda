@@ -3,6 +3,7 @@ use crate::message::{BasicMessageStreamReader, BasicMessageStreamWriter, Message
 use crate::module::ModuleId;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use crate::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,10 +21,10 @@ pub enum ClientToNodeMessage {
         module_id: ModuleId,
     },*/
     DispatchRequest {
-        //node_id: Option<NodeId>,
-        module_id: ModuleId,
         dispatch_id: DispatchId,
+        module_id: ModuleId,
         payload: Vec<u8>,
+        node_id: Option<NodeId>,
     },
 }
 

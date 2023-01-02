@@ -103,6 +103,7 @@ impl Client {
                 module_id,
                 dispatch_id: self.next_dispatch_id,
                 payload,
+                node_id: None,
             })
             .await?;
 

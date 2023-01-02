@@ -125,7 +125,7 @@ impl ServerBuilder {
         S: ToSocketAddrs,
         T: ToSocketAddrs,
     {
-        ServerTask::new(self.sender, self.receiver, listener_address, follower_data).await
+        ServerTask::new(self.receiver, listener_address, follower_data).await
     }
 }
 
@@ -134,13 +134,12 @@ impl ServerBuilder {
 #[derive(Debug)]
 pub struct ServerTask {
     r#type: ServerType,
-    sender: mpsc::Sender<ServerMessage>,
     receiver: mpsc::Receiver<ServerMessage>,
+    buffer: Vec<ServerMessage>,
 }
 
 impl ServerTask {
     async fn new<S, T>(
-        sender: mpsc::Sender<ServerMessage>,
         receiver: mpsc::Receiver<ServerMessage>,
         listener_address: S,
         follower_data: Option<(T, Option<NodeId>)>,
@@ -175,8 +174,8 @@ impl ServerTask {
 
         Ok(Self {
             r#type,
-            sender,
             receiver,
+            buffer: Vec::default(),
         })
     }
 
@@ -244,7 +243,7 @@ impl ServerTask {
                 });
             }
             ServerType::Candidate(_) => {
-                self.sender.do_send(ServerMessage::Dispatch(message)).await;
+                self.buffer.push(ServerMessage::Dispatch(message));
             }
         };
     }
