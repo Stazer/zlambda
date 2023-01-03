@@ -3,10 +3,21 @@ use crate::follower::FollowerHandle;
 use std::error::Error;
 use tokio::{select, spawn};
 use tracing::error;
+use zlambda_common::error::SimpleError;
 use zlambda_common::message::{
     ClientToNodeMessage, FollowerToGuestMessage, GuestToNodeMessage, Message, MessageStreamReader,
     MessageStreamWriter,
 };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+enum FollowerConnectionTaskResult {
+    Ok,
+    SwitchToClient(ClientToNodeMessage),
+    EndOfStream,
+    Error(Box<dyn Error + Send>),
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -54,40 +65,55 @@ impl FollowerConnectionTask {
 
     pub async fn run(mut self) {
         loop {
-            select!(
-                read_result = self.reader.read() => {
-                    let message = match read_result {
-                        Ok(message) => message,
-                        Err(error) => {
-                            error!("{}", error);
-                            break
-                        }
-                    };
-
-                    match message {
-                        None => break,
-                        Some(Message::GuestToNode(message)) => {
-                            self.on_unregistered_follower_to_node_message(message).await;
-                        }
-                        Some(Message::ClientToNode(message)) => {
-                            if let Err(error) = self.register_client(message).await {
-                                error!("{}", error);
-                                break
-                            }
-
-                            break
-                        },
-                        Some(message) => {
-                            error!("Unhandled message {:?}", message);
-                            break
-                        }
-                    };
+            match self.select().await {
+                FollowerConnectionTaskResult::Ok => {}
+                FollowerConnectionTaskResult::SwitchToClient(message) => {
+                    self.switch_to_client(message).await;
+                    break;
                 }
-            )
+                FollowerConnectionTaskResult::EndOfStream => break,
+                FollowerConnectionTaskResult::Error(error) => {
+                    error!("{}", error);
+                    break;
+                }
+            }
         }
     }
 
-    async fn on_unregistered_follower_to_node_message(&mut self, message: GuestToNodeMessage) {
+    async fn select(&mut self) -> FollowerConnectionTaskResult {
+        select!(
+            read_result = self.reader.read() => {
+                let message = match read_result {
+                    Ok(message) => message,
+                    Err(error) => return FollowerConnectionTaskResult::Error(Box::new(error)),
+                };
+
+                match message {
+                    None => return FollowerConnectionTaskResult::EndOfStream,
+                    Some(Message::GuestToNode(message)) =>
+                        self.on_guest_to_node_message(message).await,
+                    Some(Message::ClientToNode(message)) =>
+                        self.on_client_to_node_message(message).await,
+                    Some(message) =>
+                        FollowerConnectionTaskResult::Error(
+                            Box::new(SimpleError::new(format!("Unhandled message {:?}", message)))
+                        ),
+                }
+            }
+        )
+    }
+
+    async fn on_client_to_node_message(
+        &mut self,
+        message: ClientToNodeMessage,
+    ) -> FollowerConnectionTaskResult {
+        FollowerConnectionTaskResult::SwitchToClient(message)
+    }
+
+    async fn on_guest_to_node_message(
+        &mut self,
+        message: GuestToNodeMessage,
+    ) -> FollowerConnectionTaskResult {
         match message {
             GuestToNodeMessage::RegisterRequest { .. } => {
                 let leader_address = self.follower_handle.leader_address().await;
@@ -117,13 +143,12 @@ impl FollowerConnectionTask {
                     error!("{}", error);
                 }
             }
-        }
+        };
+
+        FollowerConnectionTaskResult::Ok
     }
 
-    async fn register_client(
-        self,
-        initial_message: ClientToNodeMessage,
-    ) -> Result<(), Box<dyn Error>> {
+    async fn switch_to_client(self, initial_message: ClientToNodeMessage) {
         FollowerClientBuilder::new()
             .task(
                 self.reader.into(),
@@ -132,8 +157,6 @@ impl FollowerConnectionTask {
                 initial_message,
             )
             .await
-            .spawn();
-
-        Ok(())
+            .spawn()
     }
 }

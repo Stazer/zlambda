@@ -14,12 +14,12 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::{error, trace};
 use zlambda_common::channel::{DoReceive, DoSend};
-use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
-    FollowerToGuestMessage, FollowerToLeaderMessage, FollowerToLeaderMessageStreamWriter,
-    GuestToNodeMessage, GuestToNodeMessageStreamWriter, LeaderToFollowerMessage,
-    LeaderToFollowerMessageStreamReader, LeaderToGuestMessage, Message, MessageStreamReader,
-    MessageStreamWriter,
+    FollowerToGuestMessage, FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderMessage,
+    FollowerToLeaderMessageStreamWriter, GuestToNodeMessage, GuestToNodeMessageStreamWriter,
+    LeaderToFollowerAppendEntriesRequestMessage, LeaderToFollowerDispatchResponseMessage,
+    LeaderToFollowerMessage, LeaderToFollowerMessageStreamReader, LeaderToGuestMessage, Message,
+    MessageStreamReader, MessageStreamWriter,
 };
 use zlambda_common::module::ModuleId;
 use zlambda_common::node::NodeId;
@@ -365,35 +365,41 @@ impl FollowerTask {
                         Some(message) => message,
                     };
 
-                    match message {
-                        FollowerMessage::Ping(message) => self.on_ping(message).await,
-                        FollowerMessage::LeaderAddress(message) => self.on_leader_address(message).await,
-                        FollowerMessage::Dispatch(message) => self.on_dispatch(message).await
-                    };
+                    self.on_follower_message(message).await
                 }
             )
         }
     }
 
+    async fn on_follower_message(&mut self, message: FollowerMessage) {
+        match message {
+            FollowerMessage::Ping(message) => self.on_follower_ping_message(message).await,
+            FollowerMessage::LeaderAddress(message) => {
+                self.on_follower_leader_address_message(message).await
+            }
+            FollowerMessage::Dispatch(message) => self.on_follower_dispatch_message(message).await,
+        }
+    }
+
     async fn on_leader_to_follower_message(&mut self, message: LeaderToFollowerMessage) {
         match message {
-            LeaderToFollowerMessage::AppendEntriesRequest {
-                term,
-                last_committed_log_entry_id,
-                log_entry_data,
-            } => {
-                self.on_append_entries(term, last_committed_log_entry_id, log_entry_data)
+            LeaderToFollowerMessage::AppendEntriesRequest(message) => {
+                self.on_leader_to_follower_append_entries_request_message(message)
+                    .await
+            }
+            LeaderToFollowerMessage::DispatchResponse(message) => {
+                self.on_leader_to_follower_dispatch_response_message(message)
                     .await
             }
         };
     }
 
-    async fn on_append_entries(
+    async fn on_leader_to_follower_append_entries_request_message(
         &mut self,
-        _term: Term,
-        last_committed_log_entry_id: Option<LogEntryId>,
-        log_entry_data: Vec<LogEntryData>,
+        message: LeaderToFollowerAppendEntriesRequestMessage,
     ) {
+        let (term, last_committed_log_entry_id, log_entry_data) = message.into();
+
         let appended_log_entry_ids = log_entry_data
             .iter()
             .map(|log_entry_data| log_entry_data.id())
@@ -403,18 +409,18 @@ impl FollowerTask {
             self.log.append(log_entry_data);
         }
 
-        if let Some(last_committed_log_entry_id) = last_committed_log_entry_id {
-            self.log.commit(last_committed_log_entry_id)
-        }
-
-        let missing_log_entry_ids = Vec::default();
+        let missing_log_entry_ids = last_committed_log_entry_id
+            .map(|last_committed_log_entry_id| self.log.commit(last_committed_log_entry_id, term))
+            .unwrap_or_default();
 
         let result = self
             .writer
-            .write(FollowerToLeaderMessage::AppendEntriesResponse {
-                appended_log_entry_ids,
-                missing_log_entry_ids,
-            })
+            .write(FollowerToLeaderMessage::AppendEntriesResponse(
+                FollowerToLeaderAppendEntriesResponseMessage::new(
+                    appended_log_entry_ids,
+                    missing_log_entry_ids,
+                ),
+            ))
             .await;
 
         if let Err(error) = result {
@@ -422,11 +428,18 @@ impl FollowerTask {
         }
     }
 
-    async fn on_ping(&mut self, message: FollowerPingMessage) {
+    async fn on_leader_to_follower_dispatch_response_message(
+        &mut self,
+        message: LeaderToFollowerDispatchResponseMessage,
+    ) {
+        todo!()
+    }
+
+    async fn on_follower_ping_message(&mut self, message: FollowerPingMessage) {
         message.sender.do_send(()).await
     }
 
-    async fn on_leader_address(&mut self, message: FollowerLeaderAddressMessage) {
+    async fn on_follower_leader_address_message(&mut self, message: FollowerLeaderAddressMessage) {
         message
             .sender
             .do_send(
@@ -439,7 +452,7 @@ impl FollowerTask {
             .await
     }
 
-    async fn on_dispatch(&mut self, message: FollowerDispatchMessage) {
+    async fn on_follower_dispatch_message(&mut self, message: FollowerDispatchMessage) {
         message.sender.do_send(Err("Unimplemented".into())).await
     }
 }

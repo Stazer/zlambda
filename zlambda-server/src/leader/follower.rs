@@ -7,9 +7,11 @@ use tracing::error;
 use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::log::{LogEntryData, LogEntryId};
 use zlambda_common::message::{
+    FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderDispatchRequestMessage,
     FollowerToLeaderMessage, FollowerToLeaderMessageStreamReader, GuestToLeaderMessageStreamReader,
-    LeaderToFollowerMessage, LeaderToFollowerMessageStreamWriter, LeaderToGuestMessage,
-    LeaderToGuestMessageStreamWriter, MessageError,
+    LeaderToFollowerAppendEntriesRequestMessage, LeaderToFollowerMessage,
+    LeaderToFollowerMessageStreamWriter, LeaderToGuestMessage, LeaderToGuestMessageStreamWriter,
+    MessageError,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
@@ -274,15 +276,32 @@ impl LeaderFollowerTask {
 
     async fn on_registered_follower_to_leader_message(&mut self, message: FollowerToLeaderMessage) {
         match message {
-            FollowerToLeaderMessage::AppendEntriesResponse {
-                appended_log_entry_ids,
-                missing_log_entry_ids,
-            } => {
-                self.leader_handle
-                    .acknowledge(appended_log_entry_ids, self.id)
-                    .await;
+            FollowerToLeaderMessage::AppendEntriesResponse(message) => {
+                self.on_follower_to_leader_append_entries_response_message(message)
+                    .await
+            }
+            FollowerToLeaderMessage::DispatchRequest(message) => {
+                self.on_follower_to_leader_dispatch_request_message(message)
+                    .await
             }
         }
+    }
+
+    async fn on_follower_to_leader_append_entries_response_message(
+        &mut self,
+        message: FollowerToLeaderAppendEntriesResponseMessage,
+    ) {
+        let (appended_log_entry_ids, _) = message.into();
+
+        self.leader_handle
+            .acknowledge(appended_log_entry_ids, self.id)
+            .await
+    }
+
+    async fn on_follower_to_leader_dispatch_request_message(
+        &mut self,
+        message: FollowerToLeaderDispatchRequestMessage,
+    ) {
     }
 
     async fn on_handshake(
@@ -335,11 +354,13 @@ impl LeaderFollowerTask {
         &mut self,
         message: LeaderFollowerReplicateMessage,
     ) -> Result<(), Box<dyn Error>> {
-        let request = LeaderToFollowerMessage::AppendEntriesRequest {
-            term: message.term,
-            last_committed_log_entry_id: message.last_committed_log_entry_id,
-            log_entry_data: message.log_entry_data,
-        };
+        let request = LeaderToFollowerMessage::AppendEntriesRequest(
+            LeaderToFollowerAppendEntriesRequestMessage::new(
+                message.term,
+                message.last_committed_log_entry_id,
+                message.log_entry_data,
+            ),
+        );
 
         if let Some(ref mut writer) = &mut self.writer {
             writer.write(request).await?;

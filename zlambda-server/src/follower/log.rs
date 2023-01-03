@@ -1,6 +1,5 @@
-use std::cmp::max;
-use std::collections::HashMap;
 use zlambda_common::log::{LogEntryData, LogEntryId};
+use zlambda_common::term::Term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -10,13 +9,16 @@ pub type FollowerLogEntry = LogEntryData;
 
 #[derive(Debug, Default)]
 pub struct FollowerLog {
-    log_entries: HashMap<LogEntryId, FollowerLogEntry>,
+    log_entries: Vec<Option<FollowerLogEntry>>,
     last_committed_log_entry_id: Option<LogEntryId>,
 }
 
 impl FollowerLog {
     pub fn get(&self, id: LogEntryId) -> Option<&FollowerLogEntry> {
-        self.log_entries.get(&id)
+        match self.log_entries.get(id) {
+            Some(None) | None => None,
+            Some(Some(entry)) => Some(entry),
+        }
     }
 
     pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
@@ -24,13 +26,28 @@ impl FollowerLog {
     }
 
     pub fn append(&mut self, log_entry_data: LogEntryData) {
-        self.log_entries.insert(log_entry_data.id(), log_entry_data);
+        let log_entry_id = log_entry_data.id();
+
+        if self.log_entries.len() < log_entry_id {
+            self.log_entries.reserve(log_entry_id);
+        }
+
+        *self.log_entries.get_mut(log_entry_id).expect("to exist") = Some(log_entry_data);
     }
 
-    pub fn commit(&mut self, log_entry_id: LogEntryId) {
-        self.last_committed_log_entry_id = Some(max(
-            log_entry_id,
-            self.last_committed_log_entry_id.unwrap_or_default(),
-        ));
+    pub fn commit(&mut self, log_entry_id: LogEntryId, term: Term) -> Vec<LogEntryId> {
+        let mut missing_log_entry_ids = Vec::default();
+
+        for log_entry_id in self.last_committed_log_entry_id.unwrap_or_default()..log_entry_id + 1 {
+            match self.log_entries.get(log_entry_id) {
+                Some(None) | None => missing_log_entry_ids.push(log_entry_id),
+                Some(&Some(ref log_entry)) if log_entry.term() < term => {
+                    missing_log_entry_ids.push(log_entry.id())
+                }
+                _ => {}
+            }
+        }
+
+        missing_log_entry_ids
     }
 }

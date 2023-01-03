@@ -1,9 +1,9 @@
 use crate::dispatch::DispatchId;
 use crate::message::{BasicMessageStreamReader, BasicMessageStreamWriter, Message, MessageError};
 use crate::module::ModuleId;
+use crate::node::NodeId;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use crate::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

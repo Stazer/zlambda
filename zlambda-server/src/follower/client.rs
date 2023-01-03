@@ -48,7 +48,9 @@ impl FollowerClientTask {
             _follower_handle: follower_handle,
         };
 
-        follower_client.handle_message(initial_message).await;
+        follower_client
+            .on_client_to_node_message(initial_message)
+            .await;
 
         follower_client
     }
@@ -61,26 +63,30 @@ impl FollowerClientTask {
 
     pub async fn run(mut self) {
         loop {
-            select!(
-                read_result = self.reader.read() => {
-                    let message = match read_result {
-                        Ok(None) => {
-                            break
-                        }
-                        Ok(Some(message)) => message,
-                        Err(error) => {
-                            error!("{}", error);
-                            break
-                        }
-                    };
-
-                    self.handle_message(message).await;
-                }
-            )
+            self.select().await
         }
     }
 
-    async fn handle_message(&mut self, message: ClientToNodeMessage) {
+    async fn select(&mut self) {
+        select!(
+            read_result = self.reader.read() => {
+                let message = match read_result {
+                    Ok(None) => {
+                        return
+                    }
+                    Ok(Some(message)) => message,
+                    Err(error) => {
+                        error!("{}", error);
+                        return
+                    }
+                };
+
+                self.on_client_to_node_message(message).await
+            }
+        )
+    }
+
+    async fn on_client_to_node_message(&mut self, message: ClientToNodeMessage) {
         error!("Unhandled message {:?}", message);
     }
 }
