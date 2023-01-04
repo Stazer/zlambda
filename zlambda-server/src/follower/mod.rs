@@ -155,6 +155,16 @@ enum FollowerMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+enum FollowerTaskResult {
+    Ok,
+    SwitchToCandidate,
+    LeaderConnectionClosed,
+    Error(Box<dyn Error>),
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct FollowerTask {
     id: NodeId,
     leader_id: NodeId,
@@ -327,48 +337,48 @@ impl FollowerTask {
 
     pub async fn run(mut self) {
         loop {
-            select!(
-                accept_result = self.tcp_listener.accept() => {
-                    let (stream, address) = match accept_result {
-                        Err(error) => {
-                            error!("{}", error);
-                            break
-                        }
-                        Ok(values) => values,
-                    };
-
-                    trace!("Connection {} created", address);
-
-                    let (reader, writer) = stream.into_split();
-
-                    FollowerConnectionBuilder::default().task(
-                        MessageStreamReader::new(reader),
-                        MessageStreamWriter::new(writer),
-                        FollowerHandle::new(self.sender.clone()),
-                    ).spawn();
-                }
-                read_result = self.reader.read() => {
-                    let message = match read_result {
-                        Err(error) => {
-                            error!("{}", error);
-                            break
-                        }
-                        Ok(None) => continue,
-                        Ok(Some(message)) => message,
-                    };
-
-                    self.on_leader_to_follower_message(message).await;
-                }
-                receive_result = self.receiver.recv() => {
-                    let message = match receive_result {
-                        None => continue,
-                        Some(message) => message,
-                    };
-
-                    self.on_follower_message(message).await
-                }
-            )
+            self.select().await;
         }
+    }
+
+    async fn select(&mut self) -> FollowerTaskResult {
+        select!(
+            accept_result = self.tcp_listener.accept() => {
+                let (stream, address) = match accept_result {
+                    Err(error) => return FollowerTaskResult::Error(error.into()),
+                    Ok(values) => values,
+                };
+
+                trace!("Connection {} created", address);
+
+                let (reader, writer) = stream.into_split();
+
+                FollowerConnectionBuilder::default().task(
+                    MessageStreamReader::new(reader),
+                    MessageStreamWriter::new(writer),
+                    FollowerHandle::new(self.sender.clone()),
+                ).spawn();
+            }
+            read_result = self.reader.read() => {
+                let message = match read_result {
+                    Err(error) => return FollowerTaskResult::Error(error.into()),
+                    Ok(None) => return FollowerTaskResult::LeaderConnectionClosed,
+                    Ok(Some(message)) => message,
+                };
+
+                self.on_leader_to_follower_message(message).await;
+            }
+            receive_result = self.receiver.recv() => {
+                let message = match receive_result {
+                    None => return FollowerTaskResult::Ok,
+                    Some(message) => message,
+                };
+
+                self.on_follower_message(message).await;
+            }
+        );
+
+        FollowerTaskResult::Ok
     }
 
     async fn on_follower_message(&mut self, message: FollowerMessage) {

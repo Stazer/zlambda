@@ -15,7 +15,7 @@ use zlambda_common::message::{
 enum FollowerConnectionTaskResult {
     Ok,
     SwitchToClient(ClientToNodeMessage),
-    EndOfStream,
+    ConnectionClosed,
     Error(Box<dyn Error + Send>),
 }
 
@@ -71,7 +71,7 @@ impl FollowerConnectionTask {
                     self.switch_to_client(message).await;
                     break;
                 }
-                FollowerConnectionTaskResult::EndOfStream => break,
+                FollowerConnectionTaskResult::ConnectionClosed => break,
                 FollowerConnectionTaskResult::Error(error) => {
                     error!("{}", error);
                     break;
@@ -89,7 +89,7 @@ impl FollowerConnectionTask {
                 };
 
                 match message {
-                    None => return FollowerConnectionTaskResult::EndOfStream,
+                    None => return FollowerConnectionTaskResult::ConnectionClosed,
                     Some(Message::GuestToNode(message)) =>
                         self.on_guest_to_node_message(message).await,
                     Some(Message::ClientToNode(message)) =>

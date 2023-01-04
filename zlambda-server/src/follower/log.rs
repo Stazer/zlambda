@@ -27,9 +27,10 @@ impl FollowerLog {
 
     pub fn append(&mut self, log_entry_data: LogEntryData) {
         let log_entry_id = log_entry_data.id();
+        let minimum_length = log_entry_id + 1;
 
-        if self.log_entries.len() < log_entry_id {
-            self.log_entries.reserve(log_entry_id);
+        if self.log_entries.len() < minimum_length {
+            self.log_entries.resize(minimum_length, None);
         }
 
         *self.log_entries.get_mut(log_entry_id).expect("to exist") = Some(log_entry_data);
