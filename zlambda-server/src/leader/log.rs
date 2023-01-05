@@ -77,20 +77,19 @@ impl LeaderLogEntry {
 
 #[derive(Debug, Default)]
 pub struct LeaderLog {
-    //log_entries: HashMap<LogEntryId, LeaderLogEntry>,
     log_entries: Vec<LeaderLogEntry>,
     next_committing_log_entry_id: LogEntryId,
 }
 
 impl LeaderLog {
     fn next_log_entry_id(&self) -> LogEntryId {
-        self.log_entries.len() as LogEntryId
+        self.log_entries.len()
     }
 }
 
 impl LeaderLog {
     pub fn get(&self, id: LogEntryId) -> Option<&LeaderLogEntry> {
-        self.log_entries.get(id as usize)
+        self.log_entries.get(id)
     }
 
     pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
@@ -121,7 +120,7 @@ impl LeaderLog {
     pub fn acknowledge(&mut self, log_entry_id: LogEntryId, node_id: NodeId) -> Vec<LogEntryId> {
         let log_entry = self
             .log_entries
-            .get_mut(log_entry_id as usize)
+            .get_mut(log_entry_id)
             .expect(&format!("Log entry with id {} should exist", log_entry_id));
 
         log_entry.acknowledge(node_id);
@@ -131,7 +130,7 @@ impl LeaderLog {
         loop {
             let log_entry = match self
                 .log_entries
-                .get(self.next_committing_log_entry_id as usize)
+                .get(self.next_committing_log_entry_id)
             {
                 None => break,
                 Some(log_entry) => log_entry,
@@ -151,7 +150,7 @@ impl LeaderLog {
 
     pub fn is_applicable(&self, id: LogEntryId) -> bool {
         self.log_entries
-            .get(id as usize)
+            .get(id)
             .map(|log_entry| log_entry.is_committed())
             .unwrap_or(false)
             && self

@@ -49,6 +49,8 @@ struct LeaderFollowerStatusMessage {
 struct LeaderFollowerHandshakeMessage {
     reader: GuestToLeaderMessageStreamReader,
     writer: LeaderToGuestMessageStreamWriter,
+    term: Term,
+    last_committed_log_entry_id: Option<LogEntryId>,
     sender: oneshot::Sender<Result<(), String>>,
 }
 
@@ -111,6 +113,8 @@ impl LeaderFollowerHandle {
         &self,
         reader: GuestToLeaderMessageStreamReader,
         writer: LeaderToGuestMessageStreamWriter,
+        term: Term,
+        last_committed_log_entry_id: Option<LogEntryId>,
     ) -> Result<(), Box<dyn Error>> {
         let (sender, receiver) = oneshot::channel();
 
@@ -119,6 +123,8 @@ impl LeaderFollowerHandle {
                 LeaderFollowerHandshakeMessage {
                     reader: reader.into(),
                     writer: writer.into(),
+                    term,
+                    last_committed_log_entry_id,
                     sender,
                 },
             ))
@@ -211,6 +217,8 @@ impl LeaderFollowerTask {
     }
 
     async fn run(mut self) {
+        self.on_initialize().await;
+
         loop {
             self.select().await;
         }
@@ -236,6 +244,22 @@ impl LeaderFollowerTask {
                 );
             }
         };
+    }
+
+    async fn on_initialize(&mut self) {
+        if let Some(ref mut writer) = &mut self.writer {
+            let status = self.leader_handle.replication_status().await;
+
+            writer
+                .write(LeaderToFollowerMessage::AppendEntriesRequest(
+                    LeaderToFollowerAppendEntriesRequestMessage::new(
+                        status.term(),
+                        *status.last_committed_log_entry_id(),
+                        Vec::default(),
+                    ),
+                ))
+                .await;
+        }
     }
 
     async fn on_read_result(
@@ -291,11 +315,35 @@ impl LeaderFollowerTask {
         &mut self,
         message: FollowerToLeaderAppendEntriesResponseMessage,
     ) {
-        let (appended_log_entry_ids, _) = message.into();
+        let (appended_log_entry_ids, missing_log_entry_ids) = message.into();
 
-        self.leader_handle
-            .acknowledge(appended_log_entry_ids, self.id)
-            .await
+        let mut missing_log_entry_data = self
+            .leader_handle
+            .acknowledge(self.id, appended_log_entry_ids, missing_log_entry_ids)
+            .await;
+
+        if missing_log_entry_data.is_empty() {
+            return;
+        }
+
+        let writer = match &mut self.writer {
+            Some(ref mut writer) => writer,
+            None => return,
+        };
+
+        let status = self.leader_handle.replication_status().await;
+
+        missing_log_entry_data.truncate(16);
+
+        writer
+            .write(LeaderToFollowerMessage::AppendEntriesRequest(
+                LeaderToFollowerAppendEntriesRequestMessage::new(
+                    status.term(),
+                    *status.last_committed_log_entry_id(),
+                    missing_log_entry_data,
+                ),
+            ))
+            .await.expect("");
     }
 
     async fn on_follower_to_leader_dispatch_request_message(
@@ -317,15 +365,15 @@ impl LeaderFollowerTask {
 
             let mut writer = message.writer.into();
 
-            let mut iterator = take(&mut self.writer_message_buffer).into_iter();
-
-            while let Some(message) = iterator.next() {
-                if let Err(error) = writer.write(message).await {
-                    error!("{}", error);
-                    self.writer_message_buffer = iterator.collect();
-                    break;
-                }
-            }
+            writer
+                .write(LeaderToFollowerMessage::AppendEntriesRequest(
+                    LeaderToFollowerAppendEntriesRequestMessage::new(
+                        message.term,
+                        message.last_committed_log_entry_id,
+                        Vec::default(),
+                    ),
+                ))
+                .await;
 
             self.reader = Some(message.reader.into());
             self.writer = Some(writer);

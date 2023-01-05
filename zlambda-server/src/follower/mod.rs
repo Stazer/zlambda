@@ -416,6 +416,7 @@ impl FollowerTask {
             .collect();
 
         for log_entry_data in log_entry_data.into_iter() {
+            trace!("Appended {}", log_entry_data.id());
             self.log.append(log_entry_data);
         }
 
