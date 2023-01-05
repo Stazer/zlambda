@@ -15,7 +15,7 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
-use tracing::{error, trace};
+use tracing::{error, trace, info, debug};
 use zlambda_common::algorithm::next_key;
 use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::log::{
@@ -368,7 +368,7 @@ impl LeaderTask {
                         Ok(values) => values,
                     };
 
-                    trace!("Connection {} created", address);
+                    info!("Connection {} created", address);
 
                     let (reader, writer) = stream.into_split();
 
@@ -394,7 +394,7 @@ impl LeaderTask {
     }
 
     async fn on_leader_message(&mut self, message: LeaderMessage) -> Result<(), Box<dyn Error>> {
-        //trace!("{:?}", message);
+        trace!("{:?}", message);
 
         match message {
             LeaderMessage::Ping(message) => self.on_ping(message).await,
@@ -616,7 +616,7 @@ impl LeaderTask {
 
         self.follower_handles.insert(id, follower_handle);
 
-        trace!("Node {} registered", id);
+        info!("Node {} registered", id);
 
         if result_sender
             .send((id, self.id, self.term, self.addresses.clone()))
@@ -749,7 +749,7 @@ impl LeaderTask {
     }
 
     async fn apply(&mut self, log_entry_id: LogEntryId) -> Result<(), Box<dyn Error>> {
-        trace!("Apply {}", log_entry_id);
+        debug!("Apply {}", log_entry_id);
 
         if let Some(message) = self.on_apply_message.remove(&log_entry_id) {
             self.sender.do_send(message).await;

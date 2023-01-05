@@ -356,6 +356,7 @@ impl LeaderFollowerTask {
         &mut self,
         mut message: LeaderFollowerHandshakeMessage,
     ) -> Result<(), Box<dyn Error>> {
+        println!("on_handshake");
         if self.reader.is_none() && self.writer.is_none() {
             message
                 .writer

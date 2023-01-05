@@ -12,7 +12,7 @@ use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
-use tracing::{error, trace};
+use tracing::{error, debug, trace, info};
 use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::message::{
     FollowerToGuestMessage, FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderMessage,
@@ -249,7 +249,7 @@ impl FollowerTask {
                 }
             };
 
-            trace!("Registered");
+            info!("Registered at leader {} with term {} as node {}", leader_id, term, id);
 
             return Ok(Self {
                 id,
@@ -312,7 +312,7 @@ impl FollowerTask {
                 }
             };
 
-            trace!("Handshaked");
+            info!("Handshaked with leader {}", leader_id);
 
             return Ok(Self {
                 id: node_id,
@@ -416,7 +416,7 @@ impl FollowerTask {
             .collect();
 
         for log_entry_data in log_entry_data.into_iter() {
-            trace!("Appended {}", log_entry_data.id());
+            debug!("Appended {}", log_entry_data.id());
             self.log.append(log_entry_data);
         }
 
