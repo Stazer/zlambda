@@ -40,6 +40,13 @@ struct ServerDispatchMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+struct ServerSwitchToCandidateMessage {
+    sender: oneshot::Sender<()>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 enum ServerType {
     Leader(LeaderHandle),
     Follower(FollowerHandle),
@@ -52,6 +59,7 @@ enum ServerType {
 enum ServerMessage {
     Ping(ServerPingMessage),
     Dispatch(ServerDispatchMessage),
+    SwitchToCandidate(ServerSwitchToCandidateMessage),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,6 +99,18 @@ impl ServerHandle {
                 node_id,
                 sender,
             }))
+            .await;
+
+        receiver.do_receive().await
+    }
+
+    pub async fn switch_to_candidate(&self) {
+        let (sender, receiver) = oneshot::channel();
+
+        self.sender
+            .do_send(ServerMessage::SwitchToCandidate(
+                ServerSwitchToCandidateMessage { sender },
+            ))
             .await;
 
         receiver.do_receive().await
@@ -203,16 +223,19 @@ impl ServerTask {
 
     async fn on_message(&mut self, message: ServerMessage) {
         match message {
-            ServerMessage::Ping(message) => self.on_ping(message).await,
-            ServerMessage::Dispatch(message) => self.on_dispatch(message).await,
+            ServerMessage::Ping(message) => self.on_server_ping_message(message).await,
+            ServerMessage::Dispatch(message) => self.on_server_dispatch_message(message).await,
+            ServerMessage::SwitchToCandidate(message) => {
+                self.on_server_switch_to_candidate_message(message).await
+            }
         }
     }
 
-    async fn on_ping(&mut self, message: ServerPingMessage) {
+    async fn on_server_ping_message(&mut self, message: ServerPingMessage) {
         message.sender.do_send(()).await
     }
 
-    async fn on_dispatch(&mut self, message: ServerDispatchMessage) {
+    async fn on_server_dispatch_message(&mut self, message: ServerDispatchMessage) {
         match &self.r#type {
             ServerType::Leader(leader) => {
                 let leader = leader.clone();
@@ -246,5 +269,13 @@ impl ServerTask {
                 self.buffer.push(ServerMessage::Dispatch(message));
             }
         };
+    }
+
+    async fn on_server_switch_to_candidate_message(
+        &mut self,
+        message: ServerSwitchToCandidateMessage,
+    ) {
+        message.sender.do_send(()).await;
+        self.r#type = ServerType::Candidate(unimplemented!());
     }
 }

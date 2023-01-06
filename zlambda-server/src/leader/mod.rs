@@ -15,7 +15,7 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
-use tracing::{error, trace, info, debug};
+use tracing::{debug, error, info, trace};
 use zlambda_common::algorithm::next_key;
 use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::log::{
@@ -69,7 +69,7 @@ struct LeaderPingMessage {
 struct LeaderDispatchMessage {
     module_id: ModuleId,
     payload: Vec<u8>,
-    node_id: Option<NodeId>,
+    _node_id: Option<NodeId>,
     sender: oneshot::Sender<Result<Vec<u8>, String>>,
 }
 
@@ -253,7 +253,9 @@ impl LeaderHandle {
 
         self.sender
             .do_send(LeaderMessage::Append(LeaderAppendMessage {
-                module_id, bytes, sender,
+                module_id,
+                bytes,
+                sender,
             }))
             .await;
 
@@ -282,7 +284,7 @@ impl LeaderHandle {
             .do_send(LeaderMessage::Dispatch(LeaderDispatchMessage {
                 module_id,
                 payload,
-                node_id,
+                _node_id: node_id,
                 sender,
             }))
             .await;
@@ -653,11 +655,7 @@ impl LeaderTask {
                 let log_entry_data = LogEntryData::new(id, log_entry_type.clone(), term);
 
                 follower_handle
-                    .replicate(
-                        term,
-                        last_committed_log_entry_id,
-                        vec![log_entry_data],
-                    )
+                    .replicate(term, last_committed_log_entry_id, vec![log_entry_data])
                     .await;
             }
         });
@@ -671,12 +669,15 @@ impl LeaderTask {
     ) -> Result<(), Box<dyn Error>> {
         for log_entry_id in message.acknowledged_log_entry_ids.into_iter() {
             let acknowledgable = match self.log.get(log_entry_id) {
-                Some(log_entry) => log_entry.acknowledging_nodes().contains(&message.node_id) && !log_entry.acknowledged_nodes().contains(&message.node_id),
+                Some(log_entry) => {
+                    log_entry.acknowledging_nodes().contains(&message.node_id)
+                        && !log_entry.acknowledged_nodes().contains(&message.node_id)
+                }
                 None => false,
             };
 
             if !acknowledgable {
-                continue
+                continue;
             }
 
             for committed_log_entry_id in self.log.acknowledge(log_entry_id, message.node_id) {
@@ -734,7 +735,10 @@ impl LeaderTask {
         message: LeaderAppendMessage,
     ) -> Result<(), Box<dyn Error>> {
         let log_entry_id = self
-            .replicate(LogEntryType::Client(ClientLogEntryType::Append(message.module_id, message.bytes)))
+            .replicate(LogEntryType::Client(ClientLogEntryType::Append(
+                message.module_id,
+                message.bytes,
+            )))
             .await;
 
         self.on_apply_message.insert(

@@ -128,10 +128,7 @@ impl LeaderLog {
         let mut committed_log_entry_ids = Vec::default();
 
         loop {
-            let log_entry = match self
-                .log_entries
-                .get(self.next_committing_log_entry_id)
-            {
+            let log_entry = match self.log_entries.get(self.next_committing_log_entry_id) {
                 None => break,
                 Some(log_entry) => log_entry,
             };

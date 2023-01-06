@@ -14,27 +14,6 @@ use zlambda_common::node::NodeId;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct LeaderClientBuilder {}
-
-impl LeaderClientBuilder {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub async fn task(
-        self,
-        reader: ClientToNodeMessageStreamReader,
-        writer: NodeToClientMessageStreamWriter,
-        leader_handle: LeaderHandle,
-        initial_message: ClientToNodeMessage,
-    ) -> LeaderClientTask {
-        LeaderClientTask::new(reader, writer, leader_handle, initial_message).await
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
 pub struct LeaderClientTask {
     reader: ClientToNodeMessageStreamReader,
     writer: NodeToClientMessageStreamWriter,
@@ -42,7 +21,7 @@ pub struct LeaderClientTask {
 }
 
 impl LeaderClientTask {
-    async fn new(
+    pub async fn new(
         reader: ClientToNodeMessageStreamReader,
         writer: NodeToClientMessageStreamWriter,
         leader_handle: LeaderHandle,

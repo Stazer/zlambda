@@ -13,22 +13,6 @@ use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Default)]
-pub struct LeaderConnectionBuilder {}
-
-impl LeaderConnectionBuilder {
-    pub fn task(
-        self,
-        reader: MessageStreamReader,
-        writer: MessageStreamWriter,
-        leader_handle: LeaderHandle,
-    ) -> LeaderConnectionTask {
-        LeaderConnectionTask::new(reader, writer, leader_handle)
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #[derive(Debug)]
 pub struct LeaderConnectionTask {
     reader: MessageStreamReader,
@@ -37,7 +21,7 @@ pub struct LeaderConnectionTask {
 }
 
 impl LeaderConnectionTask {
-    fn new(
+    pub fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
         leader_handle: LeaderHandle,

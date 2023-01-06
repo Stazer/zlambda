@@ -8,6 +8,25 @@ use std::net::SocketAddr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LeaderToGuestHandshakeOkResponseMessage {
+    leader_id: NodeId,
+}
+
+impl From<LeaderToGuestHandshakeOkResponseMessage> for (NodeId,) {
+    fn from(message: LeaderToGuestHandshakeOkResponseMessage) -> Self {
+        (message.leader_id,)
+    }
+}
+
+impl LeaderToGuestHandshakeOkResponseMessage {
+    pub fn new(leader_id: NodeId) -> Self {
+        Self { leader_id }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum LeaderToGuestMessage {
     RegisterOkResponse {
         id: NodeId,

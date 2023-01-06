@@ -12,7 +12,7 @@ use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
-use tracing::{error, debug, trace, info};
+use tracing::{debug, error, info, trace};
 use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::message::{
     FollowerToGuestMessage, FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderMessage,
@@ -157,7 +157,6 @@ enum FollowerMessage {
 #[derive(Debug)]
 enum FollowerTaskResult {
     Ok,
-    SwitchToCandidate,
     LeaderConnectionClosed,
     Error(Box<dyn Error>),
 }
@@ -249,7 +248,10 @@ impl FollowerTask {
                 }
             };
 
-            info!("Registered at leader {} with term {} as node {}", leader_id, term, id);
+            info!(
+                "Registered at leader {} with term {} as node {}",
+                leader_id, term, id
+            );
 
             return Ok(Self {
                 id,
@@ -307,7 +309,7 @@ impl FollowerTask {
                 Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeOkResponse {
                     leader_id,
                 })) => leader_id,
-                Some(message) => {
+                Some(_) => {
                     return Err("Expected response".into());
                 }
             };
@@ -441,7 +443,7 @@ impl FollowerTask {
 
     async fn on_leader_to_follower_dispatch_response_message(
         &mut self,
-        message: LeaderToFollowerDispatchResponseMessage,
+        _message: LeaderToFollowerDispatchResponseMessage,
     ) {
         todo!()
     }
@@ -464,6 +466,10 @@ impl FollowerTask {
     }
 
     async fn on_follower_dispatch_message(&mut self, message: FollowerDispatchMessage) {
+        error!(
+            "{:?} {} {:?}",
+            message.node_id, message.module_id, message.payload
+        );
         message.sender.do_send(Err("Unimplemented".into())).await
     }
 }
