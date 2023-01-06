@@ -102,14 +102,6 @@ struct LeaderAcknowledgeMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-struct LeaderApplyHandshakeMessage {
-    follower_handle: LeaderFollowerHandle,
-    sender: oneshot::Sender<Result<(Term, Option<LogEntryId>, LeaderFollowerHandle), String>>,
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
 enum LeaderMessage {
     Ping(LeaderPingMessage),
     Register(
@@ -140,7 +132,6 @@ enum LeaderMessage {
         log_entry_id: LogEntryId,
         sender: oneshot::Sender<Result<ModuleId, String>>,
     },
-    ApplyHandshake(LeaderApplyHandshakeMessage),
     ReplicationStatus(LeaderReplicationStatusMessage),
 }
 
@@ -436,9 +427,6 @@ impl LeaderTask {
                 log_entry_id,
                 sender,
             } => self.on_apply_load(log_entry_id, sender).await,
-            LeaderMessage::ApplyHandshake(message) => {
-                self.on_leader_apply_handshake_message(message).await
-            }
             LeaderMessage::ReplicationStatus(message) => {
                 self.on_leader_replication_status_message(message).await
             }
@@ -546,7 +534,7 @@ impl LeaderTask {
         };
 
         if follower_handle.status().await.available() {
-            sender.send(Err("Follower not found".into())).expect("");
+            sender.send(Err("Follower available".into())).expect("");
 
             return Ok(());
         }
@@ -554,19 +542,19 @@ impl LeaderTask {
         let mut addresses = self.addresses.clone();
         addresses.insert(node_id, address);
 
-        let log_entry_id = self
+        self
             .replicate(LogEntryType::Cluster(ClusterLogEntryType::Addresses(
                 addresses,
             )))
             .await;
 
-        self.on_apply_message.insert(
-            log_entry_id,
-            LeaderMessage::ApplyHandshake(LeaderApplyHandshakeMessage {
+        sender
+            .do_send(Ok((
+                self.term,
+                self.log.last_committed_log_entry_id(),
                 follower_handle,
-                sender,
-            }),
-        );
+            )))
+            .await;
 
         Ok(())
     }
@@ -581,22 +569,6 @@ impl LeaderTask {
                 self.term,
                 self.log.last_committed_log_entry_id(),
             ))
-            .await;
-
-        Ok(())
-    }
-
-    async fn on_leader_apply_handshake_message(
-        &mut self,
-        message: LeaderApplyHandshakeMessage,
-    ) -> Result<(), Box<dyn Error>> {
-        message
-            .sender
-            .do_send(Ok((
-                self.term,
-                self.log.last_committed_log_entry_id(),
-                message.follower_handle,
-            )))
             .await;
 
         Ok(())
@@ -617,8 +589,6 @@ impl LeaderTask {
         .await;
 
         self.follower_handles.insert(id, follower_handle);
-
-        info!("Node {} registered", id);
 
         if result_sender
             .send((id, self.id, self.term, self.addresses.clone()))

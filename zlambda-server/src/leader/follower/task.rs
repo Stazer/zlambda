@@ -5,13 +5,13 @@ use crate::leader::follower::{
 use crate::leader::LeaderHandle;
 use tokio::sync::mpsc;
 use tokio::{select, spawn};
-use tracing::error;
+use tracing::{info, error};
 use zlambda_common::channel::DoSend;
 use zlambda_common::message::{
     FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderDispatchRequestMessage,
     FollowerToLeaderMessage, FollowerToLeaderMessageStreamReader,
     LeaderToFollowerAppendEntriesRequestMessage, LeaderToFollowerMessage,
-    LeaderToFollowerMessageStreamWriter, LeaderToGuestMessage, MessageError,
+    LeaderToFollowerMessageStreamWriter, LeaderToGuestMessage,
 };
 use zlambda_common::node::NodeId;
 
@@ -51,7 +51,14 @@ impl LeaderFollowerTask {
         self.on_initialize().await;
 
         loop {
-            self.select().await;
+            self.select().await
+            /*{
+                LeaderFollowerResult::Continue => continue,
+                LeaderFollowerResult::ConnectionClosed => {
+                    self.writer = None;
+                    self.reader = None;
+                }*
+            }*/
         }
     }
 
@@ -59,18 +66,34 @@ impl LeaderFollowerTask {
         match self.reader {
             Some(ref mut reader) => {
                 select!(
-                    read_result = reader.read() => {
-                        self.on_read_result(read_result).await;
+                    result = reader.read() => {
+                        match result {
+                            Ok(None) => {
+                                info!("Node {} disconnected", self.id);
+                                self.reader = None;
+                                self.writer = None;
+                            }
+                            Ok(Some(message)) => {
+                                self.on_registered_follower_to_leader_message(message).await;
+                            }
+                            Err(error) => {
+                                error!("{}", error);
+                            }
+                        }
                     }
-                    receive_result = self.receiver.recv() => {
-                        self.on_receive_result(receive_result).await;
+                    result = self.receiver.recv() => {
+                        if let Some(message) = result {
+                            self.on_leader_follower_message(message).await;
+                        }
                     }
                 );
             }
             None => {
                 select!(
-                    receive_result = self.receiver.recv() => {
-                        self.on_receive_result(receive_result).await;
+                    result = self.receiver.recv() => {
+                        if let Some(message) = result {
+                            self.on_leader_follower_message(message).await;
+                        }
                     }
                 );
             }
@@ -78,6 +101,8 @@ impl LeaderFollowerTask {
     }
 
     async fn on_initialize(&mut self) {
+        info!("Node {} registered", self.id);
+
         if let Some(ref mut writer) = &mut self.writer {
             let status = self.leader_handle.replication_status().await;
 
@@ -91,30 +116,6 @@ impl LeaderFollowerTask {
                 ))
                 .await
                 .expect("");
-        }
-    }
-
-    async fn on_read_result(
-        &mut self,
-        result: Result<Option<FollowerToLeaderMessage>, MessageError>,
-    ) {
-        match result {
-            Ok(None) => {
-                self.reader = None;
-                self.writer = None;
-            }
-            Ok(Some(message)) => {
-                self.on_registered_follower_to_leader_message(message).await;
-            }
-            Err(error) => {
-                error!("{}", error);
-            }
-        };
-    }
-
-    async fn on_receive_result(&mut self, result: Option<LeaderFollowerMessage>) {
-        if let Some(message) = result {
-            self.on_leader_follower_message(message).await;
         }
     }
 
@@ -178,15 +179,12 @@ impl LeaderFollowerTask {
         message: LeaderFollowerMessage,
     ) -> LeaderFollowerResult {
         match message {
-            LeaderFollowerMessage::Replicate(message) => {
-                self.on_leader_follower_replicate_message(message).await
-            }
-            LeaderFollowerMessage::Handshake(message) => {
-                self.on_leader_follower_handshake_message(message).await
-            }
-            LeaderFollowerMessage::Status(message) => {
-                self.on_leader_follower_status_message(message).await
-            }
+            LeaderFollowerMessage::Replicate(message) =>
+                self.on_leader_follower_replicate_message(message).await,
+            LeaderFollowerMessage::Handshake(message) =>
+                self.on_leader_follower_handshake_message(message).await,
+            LeaderFollowerMessage::Status(message) =>
+                self.on_leader_follower_status_message(message).await,
         }
     }
 
@@ -196,7 +194,10 @@ impl LeaderFollowerTask {
     ) -> LeaderFollowerResult {
         let (reader, mut writer, term, last_committed_log_entry_id, sender) = message.into();
 
+        println!("HANDSHAKE");
+
         if self.reader.is_none() && self.writer.is_none() {
+            println!("INNER {}", self.id);
             if writer
                 .write(LeaderToGuestMessage::HandshakeOkResponse { leader_id: 0 })
                 .await
@@ -225,6 +226,8 @@ impl LeaderFollowerTask {
             self.writer = Some(writer);
 
             sender.do_send(Ok(())).await;
+
+            info!("Node {} recovered", self.id);
         } else {
             sender.do_send(Err("Follower is online".into())).await;
         }

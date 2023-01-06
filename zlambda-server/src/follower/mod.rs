@@ -249,8 +249,9 @@ impl FollowerTask {
             };
 
             info!(
-                "Registered at leader {} with term {} as node {}",
-                leader_id, term, id
+                "Registered as node {} at leader {} with term {}",
+                id,
+                leader_id, term
             );
 
             return Ok(Self {
