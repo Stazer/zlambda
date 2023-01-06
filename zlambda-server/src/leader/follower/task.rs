@@ -100,13 +100,13 @@ impl LeaderFollowerTask {
         };
     }
 
-    async fn on_initialize(&mut self) {
+    async fn on_initialize(&mut self) -> LeaderFollowerResult {
         info!("Node {} registered", self.id);
 
         if let Some(ref mut writer) = &mut self.writer {
             let status = self.leader_handle.replication_status().await;
 
-            writer
+            if writer
                 .write(LeaderToFollowerMessage::AppendEntriesRequest(
                     LeaderToFollowerAppendEntriesRequestMessage::new(
                         status.term(),
@@ -115,8 +115,12 @@ impl LeaderFollowerTask {
                     ),
                 ))
                 .await
-                .expect("");
+                .is_err() {
+                    return LeaderFollowerResult::ConnectionClosed
+                }
         }
+
+        LeaderFollowerResult::Continue
     }
 
     async fn on_registered_follower_to_leader_message(&mut self, message: FollowerToLeaderMessage) {
@@ -192,12 +196,9 @@ impl LeaderFollowerTask {
         &mut self,
         message: LeaderFollowerHandshakeMessage,
     ) -> LeaderFollowerResult {
-        let (reader, mut writer, term, last_committed_log_entry_id, sender) = message.into();
-
-        println!("HANDSHAKE");
+        let (reader, mut writer, sender) = message.into();
 
         if self.reader.is_none() && self.writer.is_none() {
-            println!("INNER {}", self.id);
             if writer
                 .write(LeaderToGuestMessage::HandshakeOkResponse { leader_id: 0 })
                 .await
@@ -208,19 +209,22 @@ impl LeaderFollowerTask {
 
             let mut writer = writer.into();
 
+            let status = self.leader_handle.replication_status().await;
+
+            println!("{} {:?}", status.term(), *status.last_committed_log_entry_id());
+
             if writer
                 .write(LeaderToFollowerMessage::AppendEntriesRequest(
                     LeaderToFollowerAppendEntriesRequestMessage::new(
-                        term,
-                        last_committed_log_entry_id,
+                        status.term(),
+                        *status.last_committed_log_entry_id(),
                         Vec::default(),
                     ),
                 ))
                 .await
-                .is_err()
-            {
-                return LeaderFollowerResult::ConnectionClosed;
-            }
+                .is_err() {
+                    return LeaderFollowerResult::ConnectionClosed
+                }
 
             self.reader = Some(reader.into());
             self.writer = Some(writer);

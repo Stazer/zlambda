@@ -419,13 +419,15 @@ impl FollowerTask {
             .collect();
 
         for log_entry_data in log_entry_data.into_iter() {
-            debug!("Appended {}", log_entry_data.id());
+            debug!("Appended log entry {}", log_entry_data.id());
             self.log.append(log_entry_data);
         }
 
         let missing_log_entry_ids = last_committed_log_entry_id
             .map(|last_committed_log_entry_id| self.log.commit(last_committed_log_entry_id, term))
             .unwrap_or_default();
+
+        debug!("{:?}", missing_log_entry_ids);
 
         let result = self
             .writer

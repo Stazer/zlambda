@@ -59,8 +59,6 @@ impl LeaderFollowerHandle {
         &self,
         reader: GuestToLeaderMessageStreamReader,
         writer: LeaderToGuestMessageStreamWriter,
-        term: Term,
-        last_committed_log_entry_id: Option<LogEntryId>,
     ) -> Result<(), Box<dyn Error>> {
         let (sender, receiver) = oneshot::channel();
 
@@ -69,8 +67,6 @@ impl LeaderFollowerHandle {
                 LeaderFollowerHandshakeMessage::new(
                     reader.into(),
                     writer.into(),
-                    term,
-                    last_committed_log_entry_id,
                     sender,
                 ),
             ))

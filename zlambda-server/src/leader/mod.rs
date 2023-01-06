@@ -54,6 +54,15 @@ impl LeaderReplicationStatus {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct LeaderHandshakeMessage {
+    node_id: NodeId,
+    address: SocketAddr,
+    sender: oneshot::Sender<Result<LeaderFollowerHandle, String>>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 enum LeaderResult {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,11 +124,7 @@ enum LeaderMessage {
     Append(LeaderAppendMessage),
     Load(ModuleId, oneshot::Sender<Result<ModuleId, String>>),
     Dispatch(LeaderDispatchMessage),
-    Handshake {
-        node_id: NodeId,
-        address: SocketAddr,
-        sender: oneshot::Sender<Result<(Term, Option<LogEntryId>, LeaderFollowerHandle), String>>,
-    },
+    Handshake(LeaderHandshakeMessage),
     ApplyInitialize {
         log_entry_id: LogEntryId,
         sender: oneshot::Sender<ModuleId>,
@@ -175,15 +180,15 @@ impl LeaderHandle {
         &self,
         node_id: NodeId,
         address: SocketAddr,
-    ) -> Result<(Term, Option<LogEntryId>, LeaderFollowerHandle), String> {
+    ) -> Result<LeaderFollowerHandle, String> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .do_send(LeaderMessage::Handshake {
+            .do_send(LeaderMessage::Handshake(LeaderHandshakeMessage {
                 node_id,
                 address,
                 sender,
-            })
+            }))
             .await;
 
         receiver.do_receive().await
@@ -410,11 +415,7 @@ impl LeaderTask {
             LeaderMessage::Append(message) => self.on_leader_append_message(message).await,
             LeaderMessage::Load(id, sender) => self.load(id, sender).await,
             LeaderMessage::Dispatch(message) => self.on_dispatch(message).await,
-            LeaderMessage::Handshake {
-                node_id,
-                address,
-                sender,
-            } => self.on_handshake(node_id, address, sender).await,
+            LeaderMessage::Handshake(message) => self.on_leader_handshake_message(message).await,
             LeaderMessage::ApplyInitialize {
                 log_entry_id,
                 sender,
@@ -518,42 +519,38 @@ impl LeaderTask {
         Ok(())
     }
 
-    async fn on_handshake(
+    async fn on_leader_handshake_message(
         &mut self,
-        node_id: NodeId,
-        address: SocketAddr,
-        sender: oneshot::Sender<Result<(Term, Option<LogEntryId>, LeaderFollowerHandle), String>>,
+        message: LeaderHandshakeMessage,
     ) -> Result<(), Box<dyn Error>> {
-        let follower_handle = match self.follower_handles.get(&node_id) {
+        let follower_handle = match self.follower_handles.get(&message.node_id) {
             Some(follower_handle) => follower_handle.clone(),
             None => {
-                sender.send(Err("Follower not found".into())).expect("");
+                message.sender.send(Err("Follower not found".into())).expect("");
 
                 return Ok(());
             }
         };
 
         if follower_handle.status().await.available() {
-            sender.send(Err("Follower available".into())).expect("");
+            message.sender.send(Err("Follower available".into())).expect("");
 
             return Ok(());
         }
 
-        let mut addresses = self.addresses.clone();
-        addresses.insert(node_id, address);
+        /*let mut addresses = self.addresses.clone();
+        addresses.insert(message.node_id, message.address);
 
         self
             .replicate(LogEntryType::Cluster(ClusterLogEntryType::Addresses(
                 addresses,
             )))
-            .await;
+            .await;*/
 
-        sender
-            .do_send(Ok((
-                self.term,
-                self.log.last_committed_log_entry_id(),
+        message.sender
+            .do_send(Ok(
                 follower_handle,
-            )))
+            ))
             .await;
 
         Ok(())
@@ -638,17 +635,22 @@ impl LeaderTask {
         message: LeaderAcknowledgeMessage,
     ) -> Result<(), Box<dyn Error>> {
         for log_entry_id in message.acknowledged_log_entry_ids.into_iter() {
-            let acknowledgable = match self.log.get(log_entry_id) {
+            let log_entry = self.log.get(log_entry_id).expect("valid log entry");
+
+            /*let acknowledgable = match self.log.get(log_entry_id) {
                 Some(log_entry) => {
                     log_entry.acknowledging_nodes().contains(&message.node_id)
                         && !log_entry.acknowledged_nodes().contains(&message.node_id)
                 }
                 None => false,
-            };
+            };*/
 
-            if !acknowledgable {
+            if !(log_entry.acknowledging_nodes().contains(&message.node_id)
+                        && !log_entry.acknowledged_nodes().contains(&message.node_id)) {
                 continue;
             }
+
+            let _ = log_entry;
 
             for committed_log_entry_id in self.log.acknowledge(log_entry_id, message.node_id) {
                 if let Some(log_entry) = self.log.get(committed_log_entry_id) {
@@ -663,6 +665,17 @@ impl LeaderTask {
                     }
                 }
             }
+
+            let log_entry = self.log.get(log_entry_id).expect("valid log entry");
+
+            debug!(
+                "Log entry {} acknowledged by node {} ({}/{})",
+                log_entry_id,
+                message.node_id,
+                log_entry.acknowledged_nodes().len(),
+                log_entry.acknowledging_nodes().len(),
+            );
+
         }
 
         if let Some(sender) = message.sender {
@@ -723,7 +736,7 @@ impl LeaderTask {
     }
 
     async fn apply(&mut self, log_entry_id: LogEntryId) -> Result<(), Box<dyn Error>> {
-        debug!("Apply {}", log_entry_id);
+        debug!("Apply log entry {}", log_entry_id);
 
         if let Some(message) = self.on_apply_message.remove(&log_entry_id) {
             self.sender.do_send(message).await;

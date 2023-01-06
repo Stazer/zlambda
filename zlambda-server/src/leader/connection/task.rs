@@ -122,13 +122,11 @@ impl LeaderConnectionTask {
         node_id: NodeId,
     ) -> Result<(), Box<dyn Error>> {
         match self.leader_handle.handshake(node_id, address).await {
-            Ok((term, last_committed_log_entry_id, follower_handle)) => {
+            Ok(follower_handle) => {
                 follower_handle
                     .handshake(
                         self.reader.into(),
                         self.writer.into(),
-                        term,
-                        last_committed_log_entry_id,
                     )
                     .await
                     .expect("");
