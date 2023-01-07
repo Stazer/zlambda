@@ -89,6 +89,9 @@ impl LeaderFollowerStatusMessage {
 pub struct LeaderFollowerHandshakeMessage {
     reader: GuestToLeaderMessageStreamReader,
     writer: LeaderToGuestMessageStreamWriter,
+    term: Term,
+    acknowledging_log_entry_data: Vec<LogEntryData>,
+    last_committed_log_entry_id: Option<LogEntryId>,
     sender: oneshot::Sender<Result<(), String>>,
 }
 
@@ -96,6 +99,9 @@ impl From<LeaderFollowerHandshakeMessage>
     for (
         GuestToLeaderMessageStreamReader,
         LeaderToGuestMessageStreamWriter,
+        Term,
+        Vec<LogEntryData>,
+        Option<LogEntryId>,
         oneshot::Sender<Result<(), String>>,
     )
 {
@@ -103,6 +109,9 @@ impl From<LeaderFollowerHandshakeMessage>
         (
             message.reader,
             message.writer,
+            message.term,
+            message.acknowledging_log_entry_data,
+            message.last_committed_log_entry_id,
             message.sender,
         )
     }
@@ -112,11 +121,17 @@ impl LeaderFollowerHandshakeMessage {
     pub fn new(
         reader: GuestToLeaderMessageStreamReader,
         writer: LeaderToGuestMessageStreamWriter,
+        term: Term,
+        acknowledging_log_entry_data: Vec<LogEntryData>,
+        last_committed_log_entry_id: Option<LogEntryId>,
         sender: oneshot::Sender<Result<(), String>>,
     ) -> Self {
         Self {
             reader,
             writer,
+            term,
+            acknowledging_log_entry_data,
+            last_committed_log_entry_id,
             sender,
         }
     }

@@ -250,8 +250,7 @@ impl FollowerTask {
 
             info!(
                 "Registered as node {} at leader {} with term {}",
-                id,
-                leader_id, term
+                id, leader_id, term
             );
 
             return Ok(Self {
@@ -427,7 +426,16 @@ impl FollowerTask {
             .map(|last_committed_log_entry_id| self.log.commit(last_committed_log_entry_id, term))
             .unwrap_or_default();
 
-        debug!("{:?}", missing_log_entry_ids);
+        if !missing_log_entry_ids.is_empty() {
+            debug!(
+                "{} log {} missing",
+                missing_log_entry_ids.len(),
+                match missing_log_entry_ids.len() {
+                    1 => "entry is",
+                    _ => "entries are",
+                }
+            );
+        }
 
         let result = self
             .writer

@@ -5,7 +5,7 @@ use crate::leader::follower::{
 use crate::leader::LeaderHandle;
 use tokio::sync::mpsc;
 use tokio::{select, spawn};
-use tracing::{info, error};
+use tracing::{error, info};
 use zlambda_common::channel::DoSend;
 use zlambda_common::message::{
     FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderDispatchRequestMessage,
@@ -115,9 +115,10 @@ impl LeaderFollowerTask {
                     ),
                 ))
                 .await
-                .is_err() {
-                    return LeaderFollowerResult::ConnectionClosed
-                }
+                .is_err()
+            {
+                return LeaderFollowerResult::ConnectionClosed;
+            }
         }
 
         LeaderFollowerResult::Continue
@@ -142,7 +143,7 @@ impl LeaderFollowerTask {
     ) {
         let (appended_log_entry_ids, missing_log_entry_ids) = message.into();
 
-        let mut missing_log_entry_data = self
+        let missing_log_entry_data = self
             .leader_handle
             .acknowledge(self.id, appended_log_entry_ids, missing_log_entry_ids)
             .await;
@@ -157,8 +158,6 @@ impl LeaderFollowerTask {
         };
 
         let status = self.leader_handle.replication_status().await;
-
-        missing_log_entry_data.truncate(16);
 
         writer
             .write(LeaderToFollowerMessage::AppendEntriesRequest(
@@ -183,12 +182,15 @@ impl LeaderFollowerTask {
         message: LeaderFollowerMessage,
     ) -> LeaderFollowerResult {
         match message {
-            LeaderFollowerMessage::Replicate(message) =>
-                self.on_leader_follower_replicate_message(message).await,
-            LeaderFollowerMessage::Handshake(message) =>
-                self.on_leader_follower_handshake_message(message).await,
-            LeaderFollowerMessage::Status(message) =>
-                self.on_leader_follower_status_message(message).await,
+            LeaderFollowerMessage::Replicate(message) => {
+                self.on_leader_follower_replicate_message(message).await
+            }
+            LeaderFollowerMessage::Handshake(message) => {
+                self.on_leader_follower_handshake_message(message).await
+            }
+            LeaderFollowerMessage::Status(message) => {
+                self.on_leader_follower_status_message(message).await
+            }
         }
     }
 
@@ -196,7 +198,14 @@ impl LeaderFollowerTask {
         &mut self,
         message: LeaderFollowerHandshakeMessage,
     ) -> LeaderFollowerResult {
-        let (reader, mut writer, sender) = message.into();
+        let (
+            reader,
+            mut writer,
+            term,
+            last_committed_log_entry_id,
+            acknowledging_log_entry_data,
+            sender,
+        ) = message.into();
 
         if self.reader.is_none() && self.writer.is_none() {
             if writer
@@ -209,22 +218,19 @@ impl LeaderFollowerTask {
 
             let mut writer = writer.into();
 
-            let status = self.leader_handle.replication_status().await;
-
-            println!("{} {:?}", status.term(), *status.last_committed_log_entry_id());
-
             if writer
                 .write(LeaderToFollowerMessage::AppendEntriesRequest(
                     LeaderToFollowerAppendEntriesRequestMessage::new(
-                        status.term(),
-                        *status.last_committed_log_entry_id(),
-                        Vec::default(),
+                        term,
+                        acknowledging_log_entry_data,
+                        last_committed_log_entry_id,
                     ),
                 ))
                 .await
-                .is_err() {
-                    return LeaderFollowerResult::ConnectionClosed
-                }
+                .is_err()
+            {
+                return LeaderFollowerResult::ConnectionClosed;
+            }
 
             self.reader = Some(reader.into());
             self.writer = Some(writer);

@@ -155,6 +155,20 @@ impl LeaderLog {
                 .map(|log_entry_id| log_entry_id >= id)
                 .unwrap_or(false)
     }
+
+    pub fn acknowledging_log_entries(&self, node_id: NodeId) -> Vec<LogEntryData> {
+        let mut result = Vec::default();
+
+        for log_entry in self.log_entries.iter() {
+            if log_entry.acknowledging_nodes().contains(&node_id)
+                && !log_entry.acknowledged_nodes().contains(&node_id)
+            {
+                result.push(log_entry.data().clone());
+            }
+        }
+
+        result
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

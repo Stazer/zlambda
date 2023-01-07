@@ -57,7 +57,17 @@ impl LeaderReplicationStatus {
 pub struct LeaderHandshakeMessage {
     node_id: NodeId,
     address: SocketAddr,
-    sender: oneshot::Sender<Result<LeaderFollowerHandle, String>>,
+    sender: oneshot::Sender<
+        Result<
+            (
+                Term,
+                Vec<LogEntryData>,
+                Option<LogEntryId>,
+                LeaderFollowerHandle,
+            ),
+            String,
+        >,
+    >,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -180,7 +190,15 @@ impl LeaderHandle {
         &self,
         node_id: NodeId,
         address: SocketAddr,
-    ) -> Result<LeaderFollowerHandle, String> {
+    ) -> Result<
+        (
+            Term,
+            Vec<LogEntryData>,
+            Option<LogEntryId>,
+            LeaderFollowerHandle,
+        ),
+        String,
+    > {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
@@ -526,31 +544,32 @@ impl LeaderTask {
         let follower_handle = match self.follower_handles.get(&message.node_id) {
             Some(follower_handle) => follower_handle.clone(),
             None => {
-                message.sender.send(Err("Follower not found".into())).expect("");
+                message
+                    .sender
+                    .send(Err("Follower not found".into()))
+                    .expect("");
 
                 return Ok(());
             }
         };
 
         if follower_handle.status().await.available() {
-            message.sender.send(Err("Follower available".into())).expect("");
+            message
+                .sender
+                .send(Err("Follower available".into()))
+                .expect("");
 
             return Ok(());
         }
 
-        /*let mut addresses = self.addresses.clone();
-        addresses.insert(message.node_id, message.address);
-
-        self
-            .replicate(LogEntryType::Cluster(ClusterLogEntryType::Addresses(
-                addresses,
-            )))
-            .await;*/
-
-        message.sender
-            .do_send(Ok(
+        message
+            .sender
+            .do_send(Ok((
+                self.term,
+                self.log.acknowledging_log_entries(message.node_id),
+                self.log.last_committed_log_entry_id(),
                 follower_handle,
-            ))
+            )))
             .await;
 
         Ok(())
@@ -578,10 +597,12 @@ impl LeaderTask {
         result_sender: oneshot::Sender<(NodeId, NodeId, Term, HashMap<NodeId, SocketAddr>)>,
     ) -> Result<(), Box<dyn Error>> {
         let id = next_key(self.addresses.keys());
-        self.addresses.insert(id, address);
+
+        let mut addresses = self.addresses.clone();
+        addresses.insert(id, address);
 
         self.replicate(LogEntryType::Cluster(ClusterLogEntryType::Addresses(
-            self.addresses.clone(),
+            addresses,
         )))
         .await;
 
@@ -637,16 +658,9 @@ impl LeaderTask {
         for log_entry_id in message.acknowledged_log_entry_ids.into_iter() {
             let log_entry = self.log.get(log_entry_id).expect("valid log entry");
 
-            /*let acknowledgable = match self.log.get(log_entry_id) {
-                Some(log_entry) => {
-                    log_entry.acknowledging_nodes().contains(&message.node_id)
-                        && !log_entry.acknowledged_nodes().contains(&message.node_id)
-                }
-                None => false,
-            };*/
-
-            if !(log_entry.acknowledging_nodes().contains(&message.node_id)
-                        && !log_entry.acknowledged_nodes().contains(&message.node_id)) {
+            if !log_entry.acknowledging_nodes().contains(&message.node_id)
+                || log_entry.acknowledged_nodes().contains(&message.node_id)
+            {
                 continue;
             }
 
@@ -675,7 +689,6 @@ impl LeaderTask {
                 log_entry.acknowledged_nodes().len(),
                 log_entry.acknowledging_nodes().len(),
             );
-
         }
 
         if let Some(sender) = message.sender {
