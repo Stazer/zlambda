@@ -356,7 +356,7 @@ impl FollowerTask {
                     Ok(values) => values,
                 };
 
-                trace!("Connection {} created", address);
+                info!("Connection {} created", address);
 
                 let (reader, writer) = stream.into_split();
 
@@ -389,6 +389,8 @@ impl FollowerTask {
     }
 
     async fn on_follower_message(&mut self, message: FollowerMessage) {
+        trace!("{:?}", message);
+
         match message {
             FollowerMessage::Ping(message) => self.on_follower_ping_message(message).await,
             FollowerMessage::LeaderAddress(message) => {
@@ -399,6 +401,8 @@ impl FollowerTask {
     }
 
     async fn on_leader_to_follower_message(&mut self, message: LeaderToFollowerMessage) {
+        trace!("{:?}", message);
+
         match message {
             LeaderToFollowerMessage::AppendEntriesRequest(message) => {
                 self.on_leader_to_follower_append_entries_request_message(message)

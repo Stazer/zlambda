@@ -68,11 +68,13 @@ impl ModuleManager {
             Some(entry) => entry.take(),
         };
 
-        let (handle, path) = match entry {
+        let (handle, path, writer) = match entry {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module already loaded found".into()),
-            Some(ModuleManagerEntry::Loading { handle, path, .. }) => (handle, path),
+            Some(ModuleManagerEntry::Loading { handle, path, writer }) => (handle, path, writer),
         };
+
+        writer.into_inner().sync_all().await?;
 
         let module = Arc::new(Module::load(id, &path).await?);
 

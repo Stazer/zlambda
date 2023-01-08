@@ -1,3 +1,4 @@
+use crate::leader::connection::LeaderConnectionResult;
 use crate::leader::client::LeaderClientBuilder;
 use crate::leader::follower::LeaderFollowerBuilder;
 use crate::leader::LeaderHandle;
@@ -76,6 +77,44 @@ impl LeaderConnectionTask {
             )
         }
     }
+
+    /*async fn select(&mut self) -> LeaderConnectionResult {
+        select!(
+            result = self.reader.read() => {
+                let message = match result {
+                    Err(_) | Ok(None) => {
+                        return LeaderConnectionResult::ConnectionClosed;
+                    }
+                    Ok(Some(message)) => message,
+                };
+
+                match message {
+                    None => {
+                        break
+                    },
+                    Some(Message::GuestToNode(message)) => {
+                        self.on_guest_to_node_message(message).await;
+                        break
+                    },
+                    Some(Message::ClientToNode(message)) => {
+                        if let Err(error) = self.register_client(message).await {
+                            error!("{}", error);
+                        }
+
+                        break
+                    }
+                    Some(message) => {
+                        error!("Unhandled message {:?}", message);
+                        break
+                    }
+                };
+            }
+        )
+    }
+
+    async fn on_message(&mut self, message: Message) {
+
+    }*/
 
     async fn on_guest_to_node_message(self, message: GuestToNodeMessage) {
         match message {

@@ -77,7 +77,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             listener_address,
             command,
         } => {
-            tracing_subscriber::fmt::init();
+            //tracing_subscriber::fmt::init();
+
+            if matches!(command, ServerCommand::Leader) {
+                console_subscriber::init();
+            }
 
             ServerBuilder::new()
                 .task(

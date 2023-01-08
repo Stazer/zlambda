@@ -3,11 +3,10 @@ name = "zlambda-cli"
 version = "0.0.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
+console-subscriber = { version = "*" }
 tracing-subscriber = { version = "0", features = ["fmt"] }
 zlambda-client = { path = "../zlambda-client" }
 zlambda-common = { path = "../zlambda-common" }
