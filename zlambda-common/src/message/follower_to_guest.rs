@@ -5,9 +5,55 @@ use std::net::SocketAddr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FollowerToGuestRegisterNotALeaderResponseMessage {
+    leader_address: SocketAddr,
+}
+
+impl From<FollowerToGuestRegisterNotALeaderResponseMessage> for (SocketAddr,) {
+    fn from(message: FollowerToGuestRegisterNotALeaderResponseMessage) -> Self {
+        (message.leader_address,)
+    }
+}
+
+impl FollowerToGuestRegisterNotALeaderResponseMessage {
+    pub fn new(leader_address: SocketAddr) -> Self {
+        Self { leader_address }
+    }
+
+    pub fn leader_address(&self) -> &SocketAddr {
+        &self.leader_address
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FollowerToGuestHandshakeNotALeaderResponseMessage {
+    leader_address: SocketAddr,
+}
+
+impl From<FollowerToGuestHandshakeNotALeaderResponseMessage> for (SocketAddr,) {
+    fn from(message: FollowerToGuestHandshakeNotALeaderResponseMessage) -> Self {
+        (message.leader_address,)
+    }
+}
+
+impl FollowerToGuestHandshakeNotALeaderResponseMessage {
+    pub fn new(leader_address: SocketAddr) -> Self {
+        Self { leader_address }
+    }
+
+    pub fn leader_address(&self) -> &SocketAddr {
+        &self.leader_address
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum FollowerToGuestMessage {
-    RegisterNotALeaderResponse { leader_address: SocketAddr },
-    HandshakeNotALeaderResponse { leader_address: SocketAddr },
+    RegisterNotALeaderResponse(FollowerToGuestRegisterNotALeaderResponseMessage),
+    HandshakeNotALeaderResponse(FollowerToGuestHandshakeNotALeaderResponseMessage),
 }
 
 impl From<Message> for Result<FollowerToGuestMessage, MessageError> {

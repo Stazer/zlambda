@@ -13,20 +13,6 @@ pub struct LeaderToFollowerAppendEntriesRequestMessage {
     log_entry_data: Vec<LogEntryData>,
 }
 
-impl LeaderToFollowerAppendEntriesRequestMessage {
-    pub fn new(
-        term: Term,
-        last_committed_log_entry_id: Option<LogEntryId>,
-        log_entry_data: Vec<LogEntryData>,
-    ) -> Self {
-        Self {
-            term,
-            last_committed_log_entry_id,
-            log_entry_data,
-        }
-    }
-}
-
 impl From<LeaderToFollowerAppendEntriesRequestMessage>
     for (Term, Option<LogEntryId>, Vec<LogEntryData>)
 {
@@ -39,23 +25,60 @@ impl From<LeaderToFollowerAppendEntriesRequestMessage>
     }
 }
 
+impl LeaderToFollowerAppendEntriesRequestMessage {
+    pub fn new(
+        term: Term,
+        last_committed_log_entry_id: Option<LogEntryId>,
+        log_entry_data: Vec<LogEntryData>,
+    ) -> Self {
+        Self {
+            term,
+            last_committed_log_entry_id,
+            log_entry_data,
+        }
+    }
+
+    pub fn term(&self) -> Term {
+        self.term
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
+        self.last_committed_log_entry_id
+    }
+
+    pub fn log_entry_data(&self) -> &Vec<LogEntryData> {
+        &self.log_entry_data
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LeaderToFollowerDispatchResponseMessage {
-    id: DispatchId,
+    dispatch_id: DispatchId,
     result: Result<Vec<u8>, String>,
-}
-
-impl LeaderToFollowerDispatchResponseMessage {
-    pub fn new(id: DispatchId, result: Result<Vec<u8>, String>) -> Self {
-        Self { id, result }
-    }
 }
 
 impl From<LeaderToFollowerDispatchResponseMessage> for (DispatchId, Result<Vec<u8>, String>) {
     fn from(message: LeaderToFollowerDispatchResponseMessage) -> Self {
-        (message.id, message.result)
+        (message.dispatch_id, message.result)
+    }
+}
+
+impl LeaderToFollowerDispatchResponseMessage {
+    pub fn new(dispatch_id: DispatchId, result: Result<Vec<u8>, String>) -> Self {
+        Self {
+            dispatch_id,
+            result,
+        }
+    }
+
+    pub fn dispatch_id(&self) -> DispatchId {
+        self.dispatch_id
+    }
+
+    pub fn result(&self) -> &Result<Vec<u8>, String> {
+        &self.result
     }
 }
 

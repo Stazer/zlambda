@@ -19,6 +19,7 @@ use tokio::{select, spawn};
 use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::module::ModuleId;
 use zlambda_common::node::NodeId;
+use zlambda_common::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,9 +33,9 @@ struct ServerPingMessage {
 #[derive(Debug)]
 struct ServerDispatchMessage {
     module_id: ModuleId,
-    payload: Vec<u8>,
+    payload: Bytes,
     node_id: Option<NodeId>,
-    sender: oneshot::Sender<Result<Vec<u8>, String>>,
+    sender: oneshot::Sender<Result<Bytes, String>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,9 +88,9 @@ impl ServerHandle {
     pub async fn dispatch(
         &self,
         module_id: ModuleId,
-        payload: Vec<u8>,
+        payload: Bytes,
         node_id: Option<NodeId>,
-    ) -> Result<Vec<u8>, String> {
+    ) -> Result<Bytes, String> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender

@@ -6,7 +6,8 @@ use std::net::SocketAddr;
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, GuestToNodeMessage, LeaderToGuestMessage, Message, MessageStreamReader,
+    ClientToNodeMessage, GuestToNodeMessage, LeaderToGuestHandshakeErrorResponseMessage,
+    LeaderToGuestMessage, LeaderToGuestRegisterOkResponseMessage, Message, MessageStreamReader,
     MessageStreamWriter,
 };
 use zlambda_common::node::NodeId;
@@ -56,7 +57,7 @@ impl LeaderConnectionTask {
                             break
                         },
                         Some(Message::GuestToNode(message)) => {
-                            self.on_unregistered_to_node_message(message).await;
+                            self.on_guest_to_node_message(message).await;
                             break
                         },
                         Some(Message::ClientToNode(message)) => {
@@ -76,13 +77,15 @@ impl LeaderConnectionTask {
         }
     }
 
-    async fn on_unregistered_to_node_message(self, message: GuestToNodeMessage) {
+    async fn on_guest_to_node_message(self, message: GuestToNodeMessage) {
         match message {
-            GuestToNodeMessage::RegisterRequest { address } => {
-                self.register_follower(address).await.expect("");
+            GuestToNodeMessage::RegisterRequest(message) => {
+                self.register_follower(*message.address()).await.expect("");
             }
-            GuestToNodeMessage::HandshakeRequest { address, node_id } => {
-                self.handshake_follower(address, node_id).await.expect("");
+            GuestToNodeMessage::HandshakeRequest(message) => {
+                self.handshake_follower(*message.address(), message.node_id())
+                    .await
+                    .expect("");
             }
         }
     }
@@ -96,12 +99,9 @@ impl LeaderConnectionTask {
         let mut writer = self.writer.into();
 
         writer
-            .write(LeaderToGuestMessage::RegisterOkResponse {
-                id,
-                leader_id,
-                term,
-                addresses,
-            })
+            .write(LeaderToGuestMessage::RegisterOkResponse(
+                LeaderToGuestRegisterOkResponseMessage::new(id, leader_id, addresses, term),
+            ))
             .await?;
 
         builder
@@ -143,7 +143,9 @@ impl LeaderConnectionTask {
                 let mut writer = self.writer.into();
 
                 writer
-                    .write(LeaderToGuestMessage::HandshakeErrorResponse { message })
+                    .write(LeaderToGuestMessage::HandshakeErrorResponse(
+                        LeaderToGuestHandshakeErrorResponseMessage::new(message),
+                    ))
                     .await
                     .expect("");
             }

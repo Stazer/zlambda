@@ -5,8 +5,9 @@ use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::error::SimpleError;
 use zlambda_common::message::{
-    ClientToNodeMessage, FollowerToGuestMessage, GuestToNodeMessage, Message, MessageStreamReader,
-    MessageStreamWriter,
+    ClientToNodeMessage, FollowerToGuestHandshakeNotALeaderResponseMessage, FollowerToGuestMessage,
+    FollowerToGuestRegisterNotALeaderResponseMessage, GuestToNodeMessage, Message,
+    MessageStreamReader, MessageStreamWriter,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,28 +117,32 @@ impl FollowerConnectionTask {
     ) -> FollowerConnectionTaskResult {
         match message {
             GuestToNodeMessage::RegisterRequest { .. } => {
-                let leader_address = self.follower_handle.leader_address().await;
-
-                let message =
-                    Message::FollowerToGuest(FollowerToGuestMessage::RegisterNotALeaderResponse {
-                        leader_address,
-                    });
-
-                let result = self.writer.write(message).await;
+                let result = self
+                    .writer
+                    .write(Message::FollowerToGuest(
+                        FollowerToGuestMessage::RegisterNotALeaderResponse(
+                            FollowerToGuestRegisterNotALeaderResponseMessage::new(
+                                self.follower_handle.leader_address().await,
+                            ),
+                        ),
+                    ))
+                    .await;
 
                 if let Err(error) = result {
                     error!("{}", error);
                 }
             }
             GuestToNodeMessage::HandshakeRequest { .. } => {
-                let leader_address = self.follower_handle.leader_address().await;
-
-                let message =
-                    Message::FollowerToGuest(FollowerToGuestMessage::HandshakeNotALeaderResponse {
-                        leader_address,
-                    });
-
-                let result = self.writer.write(message).await;
+                let result = self
+                    .writer
+                    .write(Message::FollowerToGuest(
+                        FollowerToGuestMessage::HandshakeNotALeaderResponse(
+                            FollowerToGuestHandshakeNotALeaderResponseMessage::new(
+                                self.follower_handle.leader_address().await,
+                            ),
+                        ),
+                    ))
+                    .await;
 
                 if let Err(error) = result {
                     error!("{}", error);

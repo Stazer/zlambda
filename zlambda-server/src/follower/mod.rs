@@ -14,9 +14,11 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::{select, spawn};
 use tracing::{debug, error, info, trace};
 use zlambda_common::channel::{DoReceive, DoSend};
+use zlambda_common::error::SimpleError;
 use zlambda_common::message::{
     FollowerToGuestMessage, FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderMessage,
-    FollowerToLeaderMessageStreamWriter, GuestToNodeMessage, GuestToNodeMessageStreamWriter,
+    FollowerToLeaderMessageStreamWriter, GuestToNodeHandshakeRequestMessage, GuestToNodeMessage,
+    GuestToNodeMessageStreamWriter, GuestToNodeRegisterRequestMessage,
     LeaderToFollowerAppendEntriesRequestMessage, LeaderToFollowerDispatchResponseMessage,
     LeaderToFollowerMessage, LeaderToFollowerMessageStreamReader, LeaderToGuestMessage, Message,
     MessageStreamReader, MessageStreamWriter,
@@ -24,6 +26,7 @@ use zlambda_common::message::{
 use zlambda_common::module::ModuleId;
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
+use zlambda_common::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,9 +47,9 @@ struct FollowerLeaderAddressMessage {
 #[derive(Debug)]
 struct FollowerDispatchMessage {
     module_id: ModuleId,
-    payload: Vec<u8>,
+    payload: Bytes,
     node_id: Option<NodeId>,
-    sender: oneshot::Sender<Result<Vec<u8>, String>>,
+    sender: oneshot::Sender<Result<Bytes, String>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,9 +89,9 @@ impl FollowerHandle {
     pub async fn dispatch(
         &self,
         module_id: ModuleId,
-        payload: Vec<u8>,
+        payload: Bytes,
         node_id: Option<NodeId>,
-    ) -> Result<Vec<u8>, String> {
+    ) -> Result<Bytes, String> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
@@ -226,23 +229,22 @@ impl FollowerTask {
             );
 
             writer
-                .write(GuestToNodeMessage::RegisterRequest { address })
+                .write(GuestToNodeMessage::RegisterRequest(
+                    GuestToNodeRegisterRequestMessage::new(address),
+                ))
                 .await?;
 
             let (id, leader_id, addresses, term) = match reader.read().await? {
                 None => return Err("Expected message".into()),
                 Some(Message::FollowerToGuest(
-                    FollowerToGuestMessage::RegisterNotALeaderResponse { leader_address },
+                    FollowerToGuestMessage::RegisterNotALeaderResponse(message),
                 )) => {
-                    socket = TcpStream::connect(leader_address).await?;
+                    socket = TcpStream::connect(message.leader_address()).await?;
                     continue;
                 }
-                Some(Message::LeaderToGuest(LeaderToGuestMessage::RegisterOkResponse {
-                    id,
-                    leader_id,
-                    addresses,
-                    term,
-                })) => (id, leader_id, addresses, term),
+                Some(Message::LeaderToGuest(LeaderToGuestMessage::RegisterOkResponse(message))) => {
+                    message.into()
+                }
                 Some(_) => {
                     return Err("Expected request response".into());
                 }
@@ -290,25 +292,28 @@ impl FollowerTask {
             );
 
             writer
-                .write(GuestToNodeMessage::HandshakeRequest { address, node_id })
+                .write(GuestToNodeMessage::HandshakeRequest(
+                    GuestToNodeHandshakeRequestMessage::new(address, node_id),
+                ))
                 .await?;
 
             let leader_id = match reader.read().await? {
                 None => return Err("Expected message".into()),
                 Some(Message::FollowerToGuest(
-                    FollowerToGuestMessage::HandshakeNotALeaderResponse { leader_address },
+                    FollowerToGuestMessage::HandshakeNotALeaderResponse(message),
                 )) => {
-                    socket = TcpStream::connect(leader_address).await?;
+                    socket = TcpStream::connect(message.leader_address()).await?;
                     continue;
                 }
-                Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeErrorResponse {
+                Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeErrorResponse(
                     message,
-                })) => {
-                    return Err(message.into());
+                ))) => {
+                    let (message,) = message.into();
+                    return Err(SimpleError::new(message).into());
                 }
-                Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeOkResponse {
-                    leader_id,
-                })) => leader_id,
+                Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeOkResponse(
+                    message,
+                ))) => message.leader_node_id(),
                 Some(_) => {
                     return Err("Expected response".into());
                 }

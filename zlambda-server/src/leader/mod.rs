@@ -2,6 +2,11 @@ pub mod client;
 pub mod connection;
 pub mod follower;
 pub mod log;
+mod message;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub use message::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -82,14 +87,26 @@ struct LeaderPingMessage {
     sender: oneshot::Sender<()>,
 }
 
+impl From<LeaderPingMessage> for (oneshot::Sender<()>,) {
+    fn from(message: LeaderPingMessage) -> Self {
+        (message.sender,)
+    }
+}
+
+impl LeaderPingMessage {
+    pub fn new(sender: oneshot::Sender<()>) -> Self {
+        Self { sender }
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 struct LeaderDispatchMessage {
     module_id: ModuleId,
-    payload: Vec<u8>,
+    payload: Bytes,
     _node_id: Option<NodeId>,
-    sender: oneshot::Sender<Result<Vec<u8>, String>>,
+    sender: oneshot::Sender<Result<Bytes, String>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -289,9 +306,9 @@ impl LeaderHandle {
     pub async fn dispatch(
         &self,
         module_id: ModuleId,
-        payload: Vec<u8>,
+        payload: Bytes,
         node_id: Option<NodeId>,
-    ) -> Result<Vec<u8>, String> {
+    ) -> Result<Bytes, String> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender

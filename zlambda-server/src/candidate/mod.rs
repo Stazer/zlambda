@@ -92,19 +92,19 @@ impl CandidateTask {
         select!(
             result = self.receiver.recv() => {
                 if let Some(message) = result {
-                    self.on_message(message).await;
+                    self.on_candidate_message(message).await;
                 }
             }
         )
     }
 
-    async fn on_message(&mut self, message: CandidateMessage) {
+    async fn on_candidate_message(&mut self, message: CandidateMessage) {
         match message {
-            CandidateMessage::Ping(message) => self.on_ping(message).await,
+            CandidateMessage::Ping(message) => self.on_candidate_ping_message(message).await,
         }
     }
 
-    async fn on_ping(&mut self, message: CandidatePingMessage) {
+    async fn on_candidate_ping_message(&mut self, message: CandidatePingMessage) {
         message.sender.do_send(()).await
     }
 }

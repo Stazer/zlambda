@@ -8,6 +8,7 @@ async-ffi = "*"
 async-trait = "*"
 bytes = { version = "1", features = ["serde"] }
 libloading = "0.7"
+futures = "0.3"
 postcard = { version = "1", features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }
 tempfile = { version = "3" }

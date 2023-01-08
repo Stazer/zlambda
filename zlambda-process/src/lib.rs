@@ -47,7 +47,7 @@ impl ModuleEventListener for EventListener {
             .unwrap()
             .stdout;
 
-        Ok(DispatchModuleEventOutput::new(stdout))
+        Ok(DispatchModuleEventOutput::new(stdout.into()))
     }
 }
 

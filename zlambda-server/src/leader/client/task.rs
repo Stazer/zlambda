@@ -1,15 +1,12 @@
+use crate::leader::client::LeaderClientResult;
 use crate::leader::LeaderHandle;
-use bytes::Bytes;
-use std::error::Error;
 use tokio::{select, spawn};
 use tracing::error;
-use zlambda_common::dispatch::DispatchId;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClientToNodeMessageStreamReader, NodeToClientMessage,
-    NodeToClientMessageStreamWriter,
+    ClientToNodeAppendMessage, ClientToNodeDispatchRequestMessage,
+    ClientToNodeInitializeRequestMessage, ClientToNodeLoadRequestMessage, ClientToNodeMessage,
+    ClientToNodeMessageStreamReader, NodeToClientMessage, NodeToClientMessageStreamWriter, NodeToClientInitializeResponseMessage, NodeToClientLoadResponseMessage,
 };
-use zlambda_common::module::ModuleId;
-use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -33,7 +30,9 @@ impl LeaderClientTask {
             leader_handle,
         };
 
-        leader_client.handle_message(initial_message).await;
+        leader_client
+            .on_client_to_node_message(initial_message)
+            .await;
 
         leader_client
     }
@@ -59,79 +58,108 @@ impl LeaderClientTask {
                         }
                     };
 
-                    self.handle_message(message).await;
+                    self.on_client_to_node_message(message).await;
                 }
             )
         }
     }
 
-    async fn handle_message(&mut self, message: ClientToNodeMessage) {
+    async fn on_client_to_node_message(&mut self, message: ClientToNodeMessage) {
         match message {
-            ClientToNodeMessage::InitializeRequest => self.initialize().await.expect(""),
-            ClientToNodeMessage::Append { module_id, bytes } => {
-                self.append(module_id, bytes).await.expect("")
+            ClientToNodeMessage::InitializeRequest(message) => {
+                self.on_client_to_node_initialize_request_message(message)
+                    .await
             }
-            ClientToNodeMessage::LoadRequest { module_id } => self.load(module_id).await.expect(""),
-            ClientToNodeMessage::DispatchRequest {
-                module_id,
-                dispatch_id,
-                payload,
-                node_id,
-            } => self
-                .dispatch(module_id, dispatch_id, payload, node_id)
-                .await
-                .expect(""),
-        }
+            ClientToNodeMessage::Append(message) => {
+                self.on_client_to_node_append_message(message).await
+            }
+            ClientToNodeMessage::LoadRequest(message) => {
+                self.on_client_to_node_load_request_message(message).await
+            }
+            ClientToNodeMessage::DispatchRequest(message) => {
+                self.on_client_to_node_dispatch_request_message(message)
+                    .await
+            }
+        };
     }
 
-    async fn initialize(&mut self) -> Result<(), Box<dyn Error>> {
+    async fn on_client_to_node_initialize_request_message(
+        &mut self,
+        _message: ClientToNodeInitializeRequestMessage,
+    ) -> LeaderClientResult {
         let module_id = self.leader_handle.initialize().await;
 
-        self.writer
-            .write(NodeToClientMessage::InitializeResponse { module_id })
-            .await?;
-
-        Ok(())
-    }
-
-    async fn append(&mut self, id: ModuleId, bytes: Bytes) -> Result<(), Box<dyn Error>> {
-        self.leader_handle.append(id, bytes).await;
-
-        Ok(())
-    }
-
-    async fn load(&mut self, module_id: ModuleId) -> Result<(), Box<dyn Error>> {
-        let result = self.leader_handle.load(module_id).await;
-
-        self.writer
-            .write(NodeToClientMessage::LoadResponse {
+        if self
+            .writer
+            .write(NodeToClientMessage::InitializeResponse(NodeToClientInitializeResponseMessage::new(
                 module_id,
-                result: Ok(result.map(|_x| ())?),
-            })
-            .await?;
+            )))
+            .await
+            .is_err()
+        {
+            return LeaderClientResult::ConnectionClosed;
+        }
 
-        Ok(())
+        LeaderClientResult::Continue
     }
 
-    async fn dispatch(
+    async fn on_client_to_node_append_message(
         &mut self,
-        module_id: ModuleId,
-        dispatch_id: DispatchId,
-        payload: Vec<u8>,
-        node_id: Option<NodeId>,
-    ) -> Result<(), Box<dyn Error>> {
-        let result = self
-            .leader_handle
-            .dispatch(module_id, payload, node_id)
+        message: ClientToNodeAppendMessage,
+    ) -> LeaderClientResult {
+        self.leader_handle
+            .append(message.module_id(), message.bytes().clone())
             .await;
 
-        self.writer
+        LeaderClientResult::Continue
+    }
+
+    async fn on_client_to_node_load_request_message(
+        &mut self,
+        message: ClientToNodeLoadRequestMessage,
+    ) -> LeaderClientResult {
+        let result = self.leader_handle.load(message.module_id()).await;
+
+        if self
+            .writer
+            .write(NodeToClientMessage::LoadResponse(NodeToClientLoadResponseMessage::new(
+                message.module_id(),
+                result.map(|_| ()),
+            )))
+            .await
+            .is_err()
+        {
+            return LeaderClientResult::ConnectionClosed;
+        }
+
+        LeaderClientResult::Continue
+    }
+
+    async fn on_client_to_node_dispatch_request_message(
+        &mut self,
+        message: ClientToNodeDispatchRequestMessage,
+    ) -> LeaderClientResult {
+        let result = self
+            .leader_handle
+            .dispatch(
+                message.module_id(),
+                message.payload().clone(),
+                message.target_node_id(),
+            )
+            .await;
+
+        if self
+            .writer
             .write(NodeToClientMessage::DispatchResponse {
-                dispatch_id,
+                dispatch_id: message.dispatch_id(),
                 result,
             })
-            .await?;
+            .await
+            .is_err()
+        {
+            return LeaderClientResult::ConnectionClosed;
+        }
 
-        Ok(())
+        LeaderClientResult::Continue
     }
 }

@@ -11,7 +11,8 @@ use zlambda_common::message::{
     FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderDispatchRequestMessage,
     FollowerToLeaderMessage, FollowerToLeaderMessageStreamReader,
     LeaderToFollowerAppendEntriesRequestMessage, LeaderToFollowerMessage,
-    LeaderToFollowerMessageStreamWriter, LeaderToGuestMessage,
+    LeaderToFollowerMessageStreamWriter, LeaderToGuestHandshakeOkResponseMessage,
+    LeaderToGuestMessage,
 };
 use zlambda_common::node::NodeId;
 
@@ -209,7 +210,9 @@ impl LeaderFollowerTask {
 
         if self.reader.is_none() && self.writer.is_none() {
             if writer
-                .write(LeaderToGuestMessage::HandshakeOkResponse { leader_id: 0 })
+                .write(LeaderToGuestMessage::HandshakeOkResponse(
+                    LeaderToGuestHandshakeOkResponseMessage::new(0),
+                ))
                 .await
                 .is_err()
             {

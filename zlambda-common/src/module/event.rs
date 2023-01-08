@@ -1,4 +1,5 @@
 use crate::async_trait::async_trait;
+use crate::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -47,15 +48,15 @@ impl From<Box<dyn error::Error>> for ModuleEventError {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub struct ModuleEventDispatchPayload(Vec<u8>);
+pub struct ModuleEventDispatchPayload(Bytes);
 
-impl From<Vec<u8>> for ModuleEventDispatchPayload {
-    fn from(bytes: Vec<u8>) -> Self {
+impl From<Bytes> for ModuleEventDispatchPayload {
+    fn from(bytes: Bytes) -> Self {
         Self(bytes)
     }
 }
 
-impl From<ModuleEventDispatchPayload> for Vec<u8> {
+impl From<ModuleEventDispatchPayload> for Bytes {
     fn from(payload: ModuleEventDispatchPayload) -> Self {
         payload.0
     }
@@ -66,7 +67,7 @@ impl ModuleEventDispatchPayload {
     where
         T: Serialize,
     {
-        Ok(Self(to_allocvec(instance)?))
+        Ok(Self(to_allocvec(instance)?.into()))
     }
 
     pub fn into_inner<T>(self) -> Result<T, postcard::Error>
@@ -81,17 +82,17 @@ impl ModuleEventDispatchPayload {
 
 #[derive(Debug)]
 pub struct DispatchModuleEventInput {
-    payload: Vec<u8>,
+    payload: Bytes,
 }
 
-impl From<DispatchModuleEventInput> for (Vec<u8>,) {
+impl From<DispatchModuleEventInput> for (Bytes,) {
     fn from(input: DispatchModuleEventInput) -> Self {
         (input.payload,)
     }
 }
 
 impl DispatchModuleEventInput {
-    pub fn new(payload: Vec<u8>) -> Self {
+    pub fn new(payload: Bytes) -> Self {
         Self { payload }
     }
 }
@@ -100,17 +101,17 @@ impl DispatchModuleEventInput {
 
 #[derive(Debug)]
 pub struct DispatchModuleEventOutput {
-    payload: Vec<u8>,
+    payload: Bytes,
 }
 
-impl From<DispatchModuleEventOutput> for (Vec<u8>,) {
+impl From<DispatchModuleEventOutput> for (Bytes,) {
     fn from(output: DispatchModuleEventOutput) -> Self {
         (output.payload,)
     }
 }
 
 impl DispatchModuleEventOutput {
-    pub fn new(payload: Vec<u8>) -> Self {
+    pub fn new(payload: Bytes) -> Self {
         Self { payload }
     }
 }

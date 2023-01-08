@@ -7,10 +7,12 @@ use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio_util::io::ReaderStream;
 use zlambda_common::dispatch::DispatchId;
 use zlambda_common::message::{
-    ClientToNodeMessage, ClientToNodeMessageStreamWriter, NodeToClientMessage,
-    NodeToClientMessageStreamReader,
+    ClientToNodeAppendMessage, ClientToNodeDispatchRequestMessage,
+    ClientToNodeInitializeRequestMessage, ClientToNodeLoadRequestMessage, ClientToNodeMessage,
+    ClientToNodeMessageStreamWriter, NodeToClientMessage, NodeToClientMessageStreamReader,
 };
 use zlambda_common::module::ModuleId;
+use zlambda_common::{Bytes, BytesMut};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,12 +40,14 @@ impl Client {
         let file = File::open(path).await?;
 
         self.writer
-            .write(ClientToNodeMessage::InitializeRequest)
+            .write(ClientToNodeMessage::InitializeRequest(
+                ClientToNodeInitializeRequestMessage::new(),
+            ))
             .await?;
 
         let module_id = match self.reader.read().await? {
             None => return Err("Expected response".into()),
-            Some(NodeToClientMessage::InitializeResponse { module_id }) => module_id,
+            Some(NodeToClientMessage::InitializeResponse(message)) => message.module_id(),
             Some(_) => return Err("Expected response".into()),
         };
 
@@ -57,20 +61,25 @@ impl Client {
             }
 
             self.writer
-                .write(ClientToNodeMessage::Append { module_id, bytes })
+                .write(ClientToNodeMessage::Append(ClientToNodeAppendMessage::new(
+                    module_id, bytes,
+                )))
                 .await?;
         }
 
         self.writer
-            .write(ClientToNodeMessage::LoadRequest { module_id })
+            .write(ClientToNodeMessage::LoadRequest(
+                ClientToNodeLoadRequestMessage::new(module_id),
+            ))
             .await?;
 
         match self.reader.read().await? {
             None => return Err("Expected response".into()),
-            Some(NodeToClientMessage::LoadResponse {
-                module_id: _,
-                result,
-            }) => result?,
+            Some(NodeToClientMessage::LoadResponse(message)) => {
+                let (_, result) = message.into();
+
+                result?
+            }
             Some(_) => return Err("Expected response".into()),
         };
 
@@ -81,12 +90,12 @@ impl Client {
         &mut self,
         module_id: ModuleId,
         reader: T,
-    ) -> Result<Vec<u8>, Box<dyn Error>>
+    ) -> Result<Bytes, Box<dyn Error>>
     where
         T: AsyncRead + Unpin,
     {
         let mut stream = ReaderStream::new(reader);
-        let mut payload = Vec::new();
+        let mut payload = BytesMut::new();
 
         while let Some(bytes) = stream.next().await {
             let bytes = bytes?;
@@ -99,12 +108,14 @@ impl Client {
         }
 
         self.writer
-            .write(ClientToNodeMessage::DispatchRequest {
-                module_id,
-                dispatch_id: self.next_dispatch_id,
-                payload,
-                node_id: None,
-            })
+            .write(ClientToNodeMessage::DispatchRequest(
+                ClientToNodeDispatchRequestMessage::new(
+                    module_id,
+                    self.next_dispatch_id,
+                    payload.into(),
+                    None,
+                ),
+            ))
             .await?;
 
         self.next_dispatch_id += 1;
