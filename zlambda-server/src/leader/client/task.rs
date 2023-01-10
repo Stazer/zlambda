@@ -5,7 +5,8 @@ use tracing::error;
 use zlambda_common::message::{
     ClientToNodeAppendMessage, ClientToNodeDispatchRequestMessage,
     ClientToNodeInitializeRequestMessage, ClientToNodeLoadRequestMessage, ClientToNodeMessage,
-    ClientToNodeMessageStreamReader, NodeToClientMessage, NodeToClientMessageStreamWriter, NodeToClientInitializeResponseMessage, NodeToClientLoadResponseMessage,
+    ClientToNodeMessageStreamReader, NodeToClientInitializeResponseMessage,
+    NodeToClientLoadResponseMessage, NodeToClientMessage, NodeToClientMessageStreamWriter,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,9 +92,9 @@ impl LeaderClientTask {
 
         if self
             .writer
-            .write(NodeToClientMessage::InitializeResponse(NodeToClientInitializeResponseMessage::new(
-                module_id,
-            )))
+            .write(NodeToClientMessage::InitializeResponse(
+                NodeToClientInitializeResponseMessage::new(module_id),
+            ))
             .await
             .is_err()
         {
@@ -122,10 +123,9 @@ impl LeaderClientTask {
 
         if self
             .writer
-            .write(NodeToClientMessage::LoadResponse(NodeToClientLoadResponseMessage::new(
-                message.module_id(),
-                result.map(|_| ()),
-            )))
+            .write(NodeToClientMessage::LoadResponse(
+                NodeToClientLoadResponseMessage::new(message.module_id(), result.map(|_| ())),
+            ))
             .await
             .is_err()
         {

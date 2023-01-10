@@ -27,23 +27,14 @@ pub struct LeaderFollowerReplicateMessage {
     term: Term,
     last_committed_log_entry_id: Option<LogEntryId>,
     log_entry_data: Vec<LogEntryData>,
-    sender: oneshot::Sender<()>,
 }
 
-impl From<LeaderFollowerReplicateMessage>
-    for (
-        Term,
-        Option<LogEntryId>,
-        Vec<LogEntryData>,
-        oneshot::Sender<()>,
-    )
-{
+impl From<LeaderFollowerReplicateMessage> for (Term, Option<LogEntryId>, Vec<LogEntryData>) {
     fn from(message: LeaderFollowerReplicateMessage) -> Self {
         (
             message.term,
             message.last_committed_log_entry_id,
             message.log_entry_data,
-            message.sender,
         )
     }
 }
@@ -53,13 +44,11 @@ impl LeaderFollowerReplicateMessage {
         term: Term,
         last_committed_log_entry_id: Option<LogEntryId>,
         log_entry_data: Vec<LogEntryData>,
-        sender: oneshot::Sender<()>,
     ) -> Self {
         Self {
             term,
             last_committed_log_entry_id,
             log_entry_data,
-            sender,
         }
     }
 }
@@ -86,7 +75,7 @@ impl LeaderFollowerStatusMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct LeaderFollowerHandshakeMessage {
+pub struct LeaderFollowerRecoveryMessage {
     reader: GuestToLeaderMessageStreamReader,
     writer: LeaderToGuestMessageStreamWriter,
     term: Term,
@@ -95,7 +84,7 @@ pub struct LeaderFollowerHandshakeMessage {
     sender: oneshot::Sender<Result<(), String>>,
 }
 
-impl From<LeaderFollowerHandshakeMessage>
+impl From<LeaderFollowerRecoveryMessage>
     for (
         GuestToLeaderMessageStreamReader,
         LeaderToGuestMessageStreamWriter,
@@ -105,7 +94,7 @@ impl From<LeaderFollowerHandshakeMessage>
         oneshot::Sender<Result<(), String>>,
     )
 {
-    fn from(message: LeaderFollowerHandshakeMessage) -> Self {
+    fn from(message: LeaderFollowerRecoveryMessage) -> Self {
         (
             message.reader,
             message.writer,
@@ -117,7 +106,7 @@ impl From<LeaderFollowerHandshakeMessage>
     }
 }
 
-impl LeaderFollowerHandshakeMessage {
+impl LeaderFollowerRecoveryMessage {
     pub fn new(
         reader: GuestToLeaderMessageStreamReader,
         writer: LeaderToGuestMessageStreamWriter,
@@ -143,5 +132,5 @@ impl LeaderFollowerHandshakeMessage {
 pub enum LeaderFollowerMessage {
     Replicate(LeaderFollowerReplicateMessage),
     Status(LeaderFollowerStatusMessage),
-    Handshake(LeaderFollowerHandshakeMessage),
+    Recovery(LeaderFollowerRecoveryMessage),
 }

@@ -1,5 +1,6 @@
 pub mod client;
 pub mod connection;
+pub mod follower;
 pub mod log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,7 +18,7 @@ use zlambda_common::channel::{DoReceive, DoSend};
 use zlambda_common::error::SimpleError;
 use zlambda_common::message::{
     FollowerToGuestMessage, FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderMessage,
-    FollowerToLeaderMessageStreamWriter, GuestToNodeHandshakeRequestMessage, GuestToNodeMessage,
+    FollowerToLeaderMessageStreamWriter, GuestToNodeRecoveryRequestMessage, GuestToNodeMessage,
     GuestToNodeMessageStreamWriter, GuestToNodeRegisterRequestMessage,
     LeaderToFollowerAppendEntriesRequestMessage, LeaderToFollowerDispatchResponseMessage,
     LeaderToFollowerMessage, LeaderToFollowerMessageStreamReader, LeaderToGuestMessage, Message,
@@ -196,7 +197,7 @@ impl FollowerTask {
                 Self::new_registration(sender, receiver, tcp_listener, registration_address).await
             }
             Some(node_id) => {
-                Self::new_handshake(
+                Self::new_recovery(
                     sender,
                     receiver,
                     tcp_listener,
@@ -270,7 +271,7 @@ impl FollowerTask {
         }
     }
 
-    async fn new_handshake<T>(
+    async fn new_recovery<T>(
         sender: mpsc::Sender<FollowerMessage>,
         receiver: mpsc::Receiver<FollowerMessage>,
         tcp_listener: TcpListener,
@@ -292,26 +293,26 @@ impl FollowerTask {
             );
 
             writer
-                .write(GuestToNodeMessage::HandshakeRequest(
-                    GuestToNodeHandshakeRequestMessage::new(address, node_id),
+                .write(GuestToNodeMessage::RecoveryRequest(
+                    GuestToNodeRecoveryRequestMessage::new(address, node_id),
                 ))
                 .await?;
 
             let leader_id = match reader.read().await? {
                 None => return Err("Expected message".into()),
                 Some(Message::FollowerToGuest(
-                    FollowerToGuestMessage::HandshakeNotALeaderResponse(message),
+                    FollowerToGuestMessage::RecoveryNotALeaderResponse(message),
                 )) => {
                     socket = TcpStream::connect(message.leader_address()).await?;
                     continue;
                 }
-                Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeErrorResponse(
+                Some(Message::LeaderToGuest(LeaderToGuestMessage::RecoveryErrorResponse(
                     message,
                 ))) => {
                     let (message,) = message.into();
                     return Err(SimpleError::new(message).into());
                 }
-                Some(Message::LeaderToGuest(LeaderToGuestMessage::HandshakeOkResponse(
+                Some(Message::LeaderToGuest(LeaderToGuestMessage::RecoveryOkResponse(
                     message,
                 ))) => message.leader_node_id(),
                 Some(_) => {
@@ -319,7 +320,7 @@ impl FollowerTask {
                 }
             };
 
-            info!("Handshaked with leader {}", leader_id);
+            info!("Recoveryd with leader {}", leader_id);
 
             return Ok(Self {
                 id: node_id,

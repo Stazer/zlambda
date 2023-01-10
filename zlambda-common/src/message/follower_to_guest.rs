@@ -28,17 +28,17 @@ impl FollowerToGuestRegisterNotALeaderResponseMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct FollowerToGuestHandshakeNotALeaderResponseMessage {
+pub struct FollowerToGuestRecoveryNotALeaderResponseMessage {
     leader_address: SocketAddr,
 }
 
-impl From<FollowerToGuestHandshakeNotALeaderResponseMessage> for (SocketAddr,) {
-    fn from(message: FollowerToGuestHandshakeNotALeaderResponseMessage) -> Self {
+impl From<FollowerToGuestRecoveryNotALeaderResponseMessage> for (SocketAddr,) {
+    fn from(message: FollowerToGuestRecoveryNotALeaderResponseMessage) -> Self {
         (message.leader_address,)
     }
 }
 
-impl FollowerToGuestHandshakeNotALeaderResponseMessage {
+impl FollowerToGuestRecoveryNotALeaderResponseMessage {
     pub fn new(leader_address: SocketAddr) -> Self {
         Self { leader_address }
     }
@@ -53,7 +53,7 @@ impl FollowerToGuestHandshakeNotALeaderResponseMessage {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum FollowerToGuestMessage {
     RegisterNotALeaderResponse(FollowerToGuestRegisterNotALeaderResponseMessage),
-    HandshakeNotALeaderResponse(FollowerToGuestHandshakeNotALeaderResponseMessage),
+    RecoveryNotALeaderResponse(FollowerToGuestRecoveryNotALeaderResponseMessage),
 }
 
 impl From<Message> for Result<FollowerToGuestMessage, MessageError> {

@@ -1,8 +1,8 @@
 use crate::message::{Message, MessageError};
 use std::marker::PhantomData;
 use tokio::io::AsyncWriteExt;
-use tokio::net::tcp::OwnedWriteHalf;
 use tokio::io::BufWriter;
+use tokio::net::tcp::OwnedWriteHalf;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,8 +24,7 @@ where
     }
 
     pub async fn write(&mut self, message: T) -> Result<(), MessageError> {
-        self
-            .writer
+        self.writer
             .write_all(&Message::from(message).to_bytes()?)
             .await
             .map(|_| ())?;

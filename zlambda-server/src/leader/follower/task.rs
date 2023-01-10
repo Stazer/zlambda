@@ -1,5 +1,5 @@
 use crate::leader::follower::{
-    LeaderFollowerHandshakeMessage, LeaderFollowerMessage, LeaderFollowerReplicateMessage,
+    LeaderFollowerRecoveryMessage, LeaderFollowerMessage, LeaderFollowerReplicateMessage,
     LeaderFollowerResult, LeaderFollowerStatus, LeaderFollowerStatusMessage,
 };
 use crate::leader::LeaderHandle;
@@ -11,7 +11,7 @@ use zlambda_common::message::{
     FollowerToLeaderAppendEntriesResponseMessage, FollowerToLeaderDispatchRequestMessage,
     FollowerToLeaderMessage, FollowerToLeaderMessageStreamReader,
     LeaderToFollowerAppendEntriesRequestMessage, LeaderToFollowerMessage,
-    LeaderToFollowerMessageStreamWriter, LeaderToGuestHandshakeOkResponseMessage,
+    LeaderToFollowerMessageStreamWriter, LeaderToGuestRecoveryOkResponseMessage,
     LeaderToGuestMessage,
 };
 use zlambda_common::node::NodeId;
@@ -186,8 +186,8 @@ impl LeaderFollowerTask {
             LeaderFollowerMessage::Replicate(message) => {
                 self.on_leader_follower_replicate_message(message).await
             }
-            LeaderFollowerMessage::Handshake(message) => {
-                self.on_leader_follower_handshake_message(message).await
+            LeaderFollowerMessage::Recovery(message) => {
+                self.on_leader_follower_recovery_message(message).await
             }
             LeaderFollowerMessage::Status(message) => {
                 self.on_leader_follower_status_message(message).await
@@ -195,9 +195,9 @@ impl LeaderFollowerTask {
         }
     }
 
-    async fn on_leader_follower_handshake_message(
+    async fn on_leader_follower_recovery_message(
         &mut self,
-        message: LeaderFollowerHandshakeMessage,
+        message: LeaderFollowerRecoveryMessage,
     ) -> LeaderFollowerResult {
         let (
             reader,
@@ -210,8 +210,8 @@ impl LeaderFollowerTask {
 
         if self.reader.is_none() && self.writer.is_none() {
             if writer
-                .write(LeaderToGuestMessage::HandshakeOkResponse(
-                    LeaderToGuestHandshakeOkResponseMessage::new(0),
+                .write(LeaderToGuestMessage::RecoveryOkResponse(
+                    LeaderToGuestRecoveryOkResponseMessage::new(0),
                 ))
                 .await
                 .is_err()
@@ -267,7 +267,7 @@ impl LeaderFollowerTask {
         &mut self,
         message: LeaderFollowerReplicateMessage,
     ) -> LeaderFollowerResult {
-        let (term, last_committed_log_entry_id, log_entry_data, sender) = message.into();
+        let (term, last_committed_log_entry_id, log_entry_data) = message.into();
         let mut result = LeaderFollowerResult::Continue;
 
         if let Some(ref mut writer) = &mut self.writer {
@@ -285,8 +285,6 @@ impl LeaderFollowerTask {
                 result = LeaderFollowerResult::ConnectionClosed;
             }
         }
-
-        sender.do_send(()).await;
 
         result
     }

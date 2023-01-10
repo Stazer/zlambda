@@ -1,15 +1,17 @@
-use crate::leader::connection::LeaderConnectionResult;
 use crate::leader::client::LeaderClientBuilder;
+use crate::leader::connection::{
+    LeaderConnectionClientRegistrationResult, LeaderConnectionFollowerRecoveryResult,
+    LeaderConnectionFollowerRegistrationResult, LeaderConnectionResult,
+};
 use crate::leader::follower::LeaderFollowerBuilder;
 use crate::leader::LeaderHandle;
-use std::error::Error;
-use std::net::SocketAddr;
 use tokio::{select, spawn};
 use tracing::error;
 use zlambda_common::message::{
-    ClientToNodeMessage, GuestToNodeMessage, LeaderToGuestHandshakeErrorResponseMessage,
-    LeaderToGuestMessage, LeaderToGuestRegisterOkResponseMessage, Message, MessageStreamReader,
-    MessageStreamWriter,
+    ClientToNodeMessage, GuestToNodeRecoveryRequestMessage, GuestToNodeMessage,
+    GuestToNodeRegisterRequestMessage, LeaderToGuestRecoveryErrorResponseMessage,
+    LeaderToGuestMessage, LeaderToGuestRegisterOkResponseMessage, Message, MessageError,
+    MessageStreamReader, MessageStreamWriter,
 };
 use zlambda_common::node::NodeId;
 
@@ -42,171 +44,174 @@ impl LeaderConnectionTask {
     }
 
     async fn main(mut self) {
-        loop {
-            select!(
-                read_result = self.reader.read() => {
-                    let message = match read_result {
-                        Ok(message) => message,
-                        Err(error) => {
-                            error!("{}", error);
-                            break
-                        }
-                    };
+        match self.select().await {
+            LeaderConnectionResult::Stop | LeaderConnectionResult::ConnectionClosed => {}
+            LeaderConnectionResult::Error(error) => error!("{:?}", error),
+            LeaderConnectionResult::ClientRegistration(message) => {
+                let (message,) = message.into();
 
-                    match message {
-                        None => {
-                            break
-                        },
-                        Some(Message::GuestToNode(message)) => {
-                            self.on_guest_to_node_message(message).await;
-                            break
-                        },
-                        Some(Message::ClientToNode(message)) => {
-                            if let Err(error) = self.register_client(message).await {
-                                error!("{}", error);
-                            }
-
-                            break
-                        }
-                        Some(message) => {
-                            error!("Unhandled message {:?}", message);
-                            break
-                        }
-                    };
-                }
-            )
-        }
-    }
-
-    /*async fn select(&mut self) -> LeaderConnectionResult {
-        select!(
-            result = self.reader.read() => {
-                let message = match result {
-                    Err(_) | Ok(None) => {
-                        return LeaderConnectionResult::ConnectionClosed;
-                    }
-                    Ok(Some(message)) => message,
-                };
-
-                match message {
-                    None => {
-                        break
-                    },
-                    Some(Message::GuestToNode(message)) => {
-                        self.on_guest_to_node_message(message).await;
-                        break
-                    },
-                    Some(Message::ClientToNode(message)) => {
-                        if let Err(error) = self.register_client(message).await {
-                            error!("{}", error);
-                        }
-
-                        break
-                    }
-                    Some(message) => {
-                        error!("Unhandled message {:?}", message);
-                        break
-                    }
-                };
-            }
-        )
-    }
-
-    async fn on_message(&mut self, message: Message) {
-
-    }*/
-
-    async fn on_guest_to_node_message(self, message: GuestToNodeMessage) {
-        match message {
-            GuestToNodeMessage::RegisterRequest(message) => {
-                self.register_follower(*message.address()).await.expect("");
-            }
-            GuestToNodeMessage::HandshakeRequest(message) => {
-                self.handshake_follower(*message.address(), message.node_id())
+                LeaderClientBuilder::new()
+                    .task(
+                        self.reader.into(),
+                        self.writer.into(),
+                        self.leader_handle,
+                        message,
+                    )
                     .await
-                    .expect("");
+                    .spawn()
             }
-        }
-    }
+            LeaderConnectionResult::FollowerRecovery(message) => {
+                let (
+                    term,
+                    acknowledging_log_entry_data,
+                    last_committed_log_entry_id,
+                    follower_handle,
+                ) = message.into();
 
-    async fn register_follower(self, address: SocketAddr) -> Result<(), Box<dyn Error>> {
-        let builder = LeaderFollowerBuilder::new();
-
-        let (id, leader_id, term, addresses) =
-            self.leader_handle.register(address, builder.handle()).await;
-
-        let mut writer = self.writer.into();
-
-        writer
-            .write(LeaderToGuestMessage::RegisterOkResponse(
-                LeaderToGuestRegisterOkResponseMessage::new(id, leader_id, addresses, term),
-            ))
-            .await?;
-
-        builder
-            .build(
-                id,
-                Some(self.reader.into()),
-                Some(writer.into()),
-                self.leader_handle,
-            )
-            .spawn();
-
-        Ok(())
-    }
-
-    async fn handshake_follower(
-        self,
-        address: SocketAddr,
-        node_id: NodeId,
-    ) -> Result<(), Box<dyn Error>> {
-        match self.leader_handle.handshake(node_id, address).await {
-            Ok((
-                term,
-                acknowledging_log_entry_data,
-                last_committed_log_entry_id,
-                follower_handle,
-            )) => {
-                follower_handle
-                    .handshake(
+                let result = follower_handle
+                    .recovery(
                         self.reader.into(),
                         self.writer.into(),
                         term,
                         acknowledging_log_entry_data,
                         last_committed_log_entry_id,
                     )
-                    .await
-                    .expect("");
-            }
-            Err(message) => {
-                let mut writer = self.writer.into();
+                    .await;
 
-                writer
-                    .write(LeaderToGuestMessage::HandshakeErrorResponse(
-                        LeaderToGuestHandshakeErrorResponseMessage::new(message),
-                    ))
-                    .await
-                    .expect("");
+                if let Err(error) = result {
+                    error!("{:?}", error);
+                }
             }
-        };
+            LeaderConnectionResult::FollowerRegistration(message) => {
+                let (node_id, builder) = message.into();
 
-        Ok(())
+                builder
+                    .build(
+                        node_id,
+                        Some(self.reader.into()),
+                        Some(self.writer.into()),
+                        self.leader_handle,
+                    )
+                    .spawn()
+            }
+        }
     }
 
-    async fn register_client(
-        self,
-        initial_message: ClientToNodeMessage,
-    ) -> Result<(), Box<dyn Error>> {
-        LeaderClientBuilder::new()
-            .task(
-                self.reader.into(),
-                self.writer.into(),
-                self.leader_handle,
-                initial_message,
-            )
-            .await
-            .spawn();
+    async fn select(&mut self) -> LeaderConnectionResult {
+        select!(
+            result = self.reader.read() => {
+                let message = match result {
+                    Ok(None) => return LeaderConnectionResult::ConnectionClosed,
+                    Ok(Some(message)) => message,
+                    Err(error) => return error.into(),
+                };
 
-        Ok(())
+                self.on_message(message).await
+            }
+        )
+    }
+
+    async fn on_message(&mut self, message: Message) -> LeaderConnectionResult {
+        match message {
+            Message::GuestToNode(message) => self.on_guest_to_node_message(message).await,
+            Message::ClientToNode(message) => self.on_client_to_node_message(message).await,
+            message => MessageError::UnexpectedMessage(message).into(),
+        }
+    }
+
+    async fn on_guest_to_node_message(
+        &mut self,
+        message: GuestToNodeMessage,
+    ) -> LeaderConnectionResult {
+        match message {
+            GuestToNodeMessage::RegisterRequest(message) => {
+                self.on_guest_to_node_register_request_message(message)
+                    .await
+            }
+            GuestToNodeMessage::RecoveryRequest(message) => {
+                self.on_guest_to_node_recovery_request_message(message)
+                    .await
+            }
+        }
+    }
+
+    async fn on_guest_to_node_register_request_message(
+        &mut self,
+        message: GuestToNodeRegisterRequestMessage,
+    ) -> LeaderConnectionResult {
+        let builder = LeaderFollowerBuilder::new();
+
+        let (node_id, leader_node_id, term, addresses) = self
+            .leader_handle
+            .register(*message.address(), builder.handle())
+            .await;
+
+        let result = self
+            .writer
+            .write(Message::LeaderToGuest(
+                LeaderToGuestMessage::RegisterOkResponse(
+                    LeaderToGuestRegisterOkResponseMessage::new(
+                        node_id,
+                        leader_node_id,
+                        addresses,
+                        term,
+                    ),
+                ),
+            ))
+            .await;
+
+        if let Err(error) = result {
+            return error.into();
+        }
+
+        LeaderConnectionResult::FollowerRegistration(
+            LeaderConnectionFollowerRegistrationResult::new(node_id, builder),
+        )
+    }
+
+    async fn on_guest_to_node_recovery_request_message(
+        &mut self,
+        message: GuestToNodeRecoveryRequestMessage,
+    ) -> LeaderConnectionResult {
+        let (term, acknowledging_log_entry_data, last_committed_log_entry_id, follower_handle) =
+            match self
+                .leader_handle
+                .recovery(message.node_id(), *message.address())
+                .await
+            {
+                Ok(result) => result,
+                Err(message) => {
+                    let result = self
+                        .writer
+                        .write(Message::LeaderToGuest(
+                            LeaderToGuestMessage::RecoveryErrorResponse(
+                                LeaderToGuestRecoveryErrorResponseMessage::new(message),
+                            ),
+                        ))
+                        .await;
+
+                    if let Err(error) = result {
+                        return error.into();
+                    }
+
+                    return LeaderConnectionResult::Stop;
+                }
+            };
+
+        LeaderConnectionResult::FollowerRecovery(LeaderConnectionFollowerRecoveryResult::new(
+            term,
+            acknowledging_log_entry_data,
+            last_committed_log_entry_id,
+            follower_handle,
+        ))
+    }
+
+    async fn on_client_to_node_message(
+        &mut self,
+        message: ClientToNodeMessage,
+    ) -> LeaderConnectionResult {
+        LeaderConnectionResult::ClientRegistration(LeaderConnectionClientRegistrationResult::new(
+            message,
+        ))
     }
 }

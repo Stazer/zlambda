@@ -63,17 +63,17 @@ impl LeaderToGuestRegisterOkResponseMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct LeaderToGuestHandshakeErrorResponseMessage {
+pub struct LeaderToGuestRecoveryErrorResponseMessage {
     message: String,
 }
 
-impl From<LeaderToGuestHandshakeErrorResponseMessage> for (String,) {
-    fn from(message: LeaderToGuestHandshakeErrorResponseMessage) -> Self {
+impl From<LeaderToGuestRecoveryErrorResponseMessage> for (String,) {
+    fn from(message: LeaderToGuestRecoveryErrorResponseMessage) -> Self {
         (message.message,)
     }
 }
 
-impl LeaderToGuestHandshakeErrorResponseMessage {
+impl LeaderToGuestRecoveryErrorResponseMessage {
     pub fn new(message: String) -> Self {
         Self { message }
     }
@@ -86,17 +86,17 @@ impl LeaderToGuestHandshakeErrorResponseMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct LeaderToGuestHandshakeOkResponseMessage {
+pub struct LeaderToGuestRecoveryOkResponseMessage {
     leader_node_id: NodeId,
 }
 
-impl From<LeaderToGuestHandshakeOkResponseMessage> for (NodeId,) {
-    fn from(message: LeaderToGuestHandshakeOkResponseMessage) -> Self {
+impl From<LeaderToGuestRecoveryOkResponseMessage> for (NodeId,) {
+    fn from(message: LeaderToGuestRecoveryOkResponseMessage) -> Self {
         (message.leader_node_id,)
     }
 }
 
-impl LeaderToGuestHandshakeOkResponseMessage {
+impl LeaderToGuestRecoveryOkResponseMessage {
     pub fn new(leader_node_id: NodeId) -> Self {
         Self { leader_node_id }
     }
@@ -111,8 +111,8 @@ impl LeaderToGuestHandshakeOkResponseMessage {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum LeaderToGuestMessage {
     RegisterOkResponse(LeaderToGuestRegisterOkResponseMessage),
-    HandshakeErrorResponse(LeaderToGuestHandshakeErrorResponseMessage),
-    HandshakeOkResponse(LeaderToGuestHandshakeOkResponseMessage),
+    RecoveryErrorResponse(LeaderToGuestRecoveryErrorResponseMessage),
+    RecoveryOkResponse(LeaderToGuestRecoveryOkResponseMessage),
 }
 
 impl From<Message> for Result<LeaderToGuestMessage, MessageError> {

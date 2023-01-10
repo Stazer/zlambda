@@ -71,7 +71,11 @@ impl ModuleManager {
         let (handle, path, writer) = match entry {
             None => return Err("Module not found".into()),
             Some(ModuleManagerEntry::Loaded(_)) => return Err("Module already loaded found".into()),
-            Some(ModuleManagerEntry::Loading { handle, path, writer }) => (handle, path, writer),
+            Some(ModuleManagerEntry::Loading {
+                handle,
+                path,
+                writer,
+            }) => (handle, path, writer),
         };
 
         writer.into_inner().sync_all().await?;

@@ -1,5 +1,5 @@
 use crate::leader::follower::{
-    LeaderFollowerHandshakeMessage, LeaderFollowerMessage, LeaderFollowerReplicateMessage,
+    LeaderFollowerRecoveryMessage, LeaderFollowerMessage, LeaderFollowerReplicateMessage,
     LeaderFollowerStatus, LeaderFollowerStatusMessage,
 };
 use std::error::Error;
@@ -39,23 +39,18 @@ impl LeaderFollowerHandle {
         last_committed_log_entry_id: Option<LogEntryId>,
         log_entry_data: Vec<LogEntryData>,
     ) {
-        let (sender, receiver) = oneshot::channel();
-
         self.sender
             .do_send(LeaderFollowerMessage::Replicate(
                 LeaderFollowerReplicateMessage::new(
                     term,
                     last_committed_log_entry_id,
                     log_entry_data,
-                    sender,
                 ),
             ))
             .await;
-
-        receiver.do_receive().await;
     }
 
-    pub async fn handshake(
+    pub async fn recovery(
         &self,
         reader: GuestToLeaderMessageStreamReader,
         writer: LeaderToGuestMessageStreamWriter,
@@ -66,8 +61,8 @@ impl LeaderFollowerHandle {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .do_send(LeaderFollowerMessage::Handshake(
-                LeaderFollowerHandshakeMessage::new(
+            .do_send(LeaderFollowerMessage::Recovery(
+                LeaderFollowerRecoveryMessage::new(
                     reader.into(),
                     writer.into(),
                     term,

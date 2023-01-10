@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+mod follower_to_follower;
 mod candidate_to_candidate;
 mod client_to_node;
 mod error;
@@ -17,6 +18,7 @@ mod node_to_client;
 mod reader;
 mod writer;
 
+pub use follower_to_follower::*;
 pub use candidate_to_candidate::*;
 pub use client_to_node::*;
 pub use error::*;
@@ -48,6 +50,8 @@ pub enum Message {
     NodeToClient(NodeToClientMessage),
 
     CandidateToCandidate(CandidateToCandidateMessage),
+
+    FollowerToFollower(FollowerToFollowerMessage),
 }
 
 impl From<Message> for Result<Message, MessageError> {
@@ -107,6 +111,12 @@ impl From<ClientToNodeMessage> for Message {
 impl From<CandidateToCandidateMessage> for Message {
     fn from(message: CandidateToCandidateMessage) -> Self {
         Self::CandidateToCandidate(message)
+    }
+}
+
+impl From<FollowerToFollowerMessage> for Message {
+    fn from(message: FollowerToFollowerMessage) -> Self {
+        Self::FollowerToFollower(message)
     }
 }
 

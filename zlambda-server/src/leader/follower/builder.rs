@@ -8,6 +8,7 @@ use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct LeaderFollowerBuilder {
     sender: mpsc::Sender<LeaderFollowerMessage>,
     receiver: mpsc::Receiver<LeaderFollowerMessage>,

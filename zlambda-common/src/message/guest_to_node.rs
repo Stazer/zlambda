@@ -29,18 +29,18 @@ impl GuestToNodeRegisterRequestMessage {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GuestToNodeHandshakeRequestMessage {
+pub struct GuestToNodeRecoveryRequestMessage {
     address: SocketAddr,
     node_id: NodeId,
 }
 
-impl From<GuestToNodeHandshakeRequestMessage> for (SocketAddr, NodeId) {
-    fn from(message: GuestToNodeHandshakeRequestMessage) -> Self {
+impl From<GuestToNodeRecoveryRequestMessage> for (SocketAddr, NodeId) {
+    fn from(message: GuestToNodeRecoveryRequestMessage) -> Self {
         (message.address, message.node_id)
     }
 }
 
-impl GuestToNodeHandshakeRequestMessage {
+impl GuestToNodeRecoveryRequestMessage {
     pub fn new(address: SocketAddr, node_id: NodeId) -> Self {
         Self { address, node_id }
     }
@@ -59,7 +59,7 @@ impl GuestToNodeHandshakeRequestMessage {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum GuestToNodeMessage {
     RegisterRequest(GuestToNodeRegisterRequestMessage),
-    HandshakeRequest(GuestToNodeHandshakeRequestMessage),
+    RecoveryRequest(GuestToNodeRecoveryRequestMessage),
 }
 
 impl From<Message> for Result<GuestToNodeMessage, MessageError> {

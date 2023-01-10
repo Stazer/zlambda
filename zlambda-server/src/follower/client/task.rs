@@ -8,27 +8,6 @@ use zlambda_common::message::{
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct FollowerClientBuilder {}
-
-impl FollowerClientBuilder {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub async fn task(
-        self,
-        reader: ClientToNodeMessageStreamReader,
-        writer: NodeToClientMessageStreamWriter,
-        follower_handle: FollowerHandle,
-        initial_message: ClientToNodeMessage,
-    ) -> FollowerClientTask {
-        FollowerClientTask::new(reader, writer, follower_handle, initial_message).await
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
 pub struct FollowerClientTask {
     reader: ClientToNodeMessageStreamReader,
     _writer: NodeToClientMessageStreamWriter,
@@ -36,7 +15,7 @@ pub struct FollowerClientTask {
 }
 
 impl FollowerClientTask {
-    async fn new(
+    pub async fn new(
         reader: ClientToNodeMessageStreamReader,
         writer: NodeToClientMessageStreamWriter,
         follower_handle: FollowerHandle,
@@ -57,11 +36,11 @@ impl FollowerClientTask {
 
     pub fn spawn(self) {
         spawn(async move {
-            self.run().await;
+            self.main().await;
         });
     }
 
-    pub async fn run(mut self) {
+    async fn main(mut self) {
         loop {
             self.select().await
         }
@@ -69,8 +48,8 @@ impl FollowerClientTask {
 
     async fn select(&mut self) {
         select!(
-            read_result = self.reader.read() => {
-                let message = match read_result {
+            result = self.reader.read() => {
+                let message = match result {
                     Ok(None) => {
                         return
                     }
