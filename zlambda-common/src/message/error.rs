@@ -8,6 +8,7 @@ use std::io;
 pub enum MessageError {
     UnexpectedEnd,
     UnexpectedMessage(Message),
+    ExpectedMessage,
     PostcardError(postcard::Error),
     IoError(io::Error),
 }
@@ -17,6 +18,7 @@ impl Debug for MessageError {
         match self {
             Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
             Self::UnexpectedMessage(_) => write!(formatter, "Unexpected message"),
+            Self::ExpectedMessage => write!(formatter, "Expected message"),
             Self::PostcardError(error) => Debug::fmt(error, formatter),
             Self::IoError(error) => Debug::fmt(error, formatter),
         }
@@ -28,6 +30,7 @@ impl Display for MessageError {
         match self {
             Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
             Self::UnexpectedMessage(_) => write!(formatter, "Unexpected message"),
+            Self::ExpectedMessage => write!(formatter, "Expected message"),
             Self::PostcardError(error) => Display::fmt(error, formatter),
             Self::IoError(error) => Display::fmt(error, formatter),
         }

@@ -4,6 +4,7 @@ use crate::term::Term;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use crate::error::RecoveryError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -11,7 +12,7 @@ use std::net::SocketAddr;
 pub struct LeaderToGuestRegisterOkResponseMessage {
     node_id: NodeId,
     leader_node_id: NodeId,
-    addresses: HashMap<NodeId, SocketAddr>,
+    node_addresses: HashMap<NodeId, SocketAddr>,
     term: Term,
 }
 
@@ -22,7 +23,7 @@ impl From<LeaderToGuestRegisterOkResponseMessage>
         (
             message.node_id,
             message.leader_node_id,
-            message.addresses,
+            message.node_addresses,
             message.term,
         )
     }
@@ -32,13 +33,13 @@ impl LeaderToGuestRegisterOkResponseMessage {
     pub fn new(
         node_id: NodeId,
         leader_node_id: NodeId,
-        addresses: HashMap<NodeId, SocketAddr>,
+        node_addresses: HashMap<NodeId, SocketAddr>,
         term: Term,
     ) -> Self {
         Self {
             node_id,
             leader_node_id,
-            addresses,
+            node_addresses,
             term,
         }
     }
@@ -51,8 +52,8 @@ impl LeaderToGuestRegisterOkResponseMessage {
         self.leader_node_id
     }
 
-    pub fn addresses(&self) -> &HashMap<NodeId, SocketAddr> {
-        &self.addresses
+    pub fn node_addresses(&self) -> &HashMap<NodeId, SocketAddr> {
+        &self.node_addresses
     }
 
     pub fn term(&self) -> Term {
@@ -64,22 +65,22 @@ impl LeaderToGuestRegisterOkResponseMessage {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LeaderToGuestRecoveryErrorResponseMessage {
-    message: String,
+    error: RecoveryError,
 }
 
-impl From<LeaderToGuestRecoveryErrorResponseMessage> for (String,) {
+impl From<LeaderToGuestRecoveryErrorResponseMessage> for (RecoveryError,) {
     fn from(message: LeaderToGuestRecoveryErrorResponseMessage) -> Self {
-        (message.message,)
+        (message.error,)
     }
 }
 
 impl LeaderToGuestRecoveryErrorResponseMessage {
-    pub fn new(message: String) -> Self {
-        Self { message }
+    pub fn new(error: RecoveryError) -> Self {
+        Self { error }
     }
 
-    pub fn message(&self) -> &String {
-        &self.message
+    pub fn error(&self) -> &RecoveryError {
+        &self.error
     }
 }
 
@@ -87,24 +88,57 @@ impl LeaderToGuestRecoveryErrorResponseMessage {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LeaderToGuestRecoveryOkResponseMessage {
+    node_id: NodeId,
     leader_node_id: NodeId,
+    node_addresses: HashMap<NodeId, SocketAddr>,
+    term: Term,
 }
 
-impl From<LeaderToGuestRecoveryOkResponseMessage> for (NodeId,) {
+impl From<LeaderToGuestRecoveryOkResponseMessage>
+    for (NodeId, NodeId, HashMap<NodeId, SocketAddr>, Term)
+{
     fn from(message: LeaderToGuestRecoveryOkResponseMessage) -> Self {
-        (message.leader_node_id,)
+        (
+            message.node_id,
+            message.leader_node_id,
+            message.node_addresses,
+            message.term,
+        )
     }
 }
 
 impl LeaderToGuestRecoveryOkResponseMessage {
-    pub fn new(leader_node_id: NodeId) -> Self {
-        Self { leader_node_id }
+    pub fn new(
+        node_id: NodeId,
+        leader_node_id: NodeId,
+        node_addresses: HashMap<NodeId, SocketAddr>,
+        term: Term,
+    ) -> Self {
+        Self {
+            node_id,
+            leader_node_id,
+            node_addresses,
+            term,
+        }
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.node_id
     }
 
     pub fn leader_node_id(&self) -> NodeId {
         self.leader_node_id
     }
+
+    pub fn node_addresses(&self) -> &HashMap<NodeId, SocketAddr> {
+        &self.node_addresses
+    }
+
+    pub fn term(&self) -> Term {
+        self.term
+    }
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

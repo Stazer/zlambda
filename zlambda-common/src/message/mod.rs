@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-mod follower_to_follower;
 mod candidate_to_candidate;
 mod client_to_node;
 mod error;
+mod follower_to_follower;
 mod follower_to_guest;
 mod follower_to_leader;
 mod guest_to_leader;
@@ -18,10 +18,10 @@ mod node_to_client;
 mod reader;
 mod writer;
 
-pub use follower_to_follower::*;
 pub use candidate_to_candidate::*;
 pub use client_to_node::*;
 pub use error::*;
+pub use follower_to_follower::*;
 pub use follower_to_guest::*;
 pub use follower_to_leader::*;
 pub use guest_to_leader::*;

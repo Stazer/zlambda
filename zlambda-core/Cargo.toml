@@ -1,0 +1,14 @@
+[package]
+name = "zlambda-core"
+version = "0.1.0"
+authors = [ "Justus Flerlage <justus@sutsuj.com>" ]
+edition = "2021"
+
+[dependencies]
+bytes = { version = "1", features = ["serde"] }
+tokio = { version = "1", features = ["full"] }
+tokio-stream  = { version = "0", features = ["net"] }
+tokio-util = { version = "0", features = ["full"] }
+tracing = { version = "0" }
+zlambda-common = { path = "../zlambda-common" }
+futures = { version = "0" }

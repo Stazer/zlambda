@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub struct ClientToNodeInitializeRequestMessage {}
 
 impl From<ClientToNodeInitializeRequestMessage> for () {
-    fn from(message: ClientToNodeInitializeRequestMessage) -> Self {
+    fn from(_message: ClientToNodeInitializeRequestMessage) -> Self {
         ()
     }
 }

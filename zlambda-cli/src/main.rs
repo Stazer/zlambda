@@ -83,7 +83,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 console_subscriber::init();
             }
 
-            ServerBuilder::new()
+            /*NodeTask::new(
+                listener_address,
+                match command {
+                    ServerCommand::Leader => None,
+                    ServerCommand::Follower {
+                        leader_address,
+                        node_id,
+                    } => Some((leader_address, node_id)),
+                },
+            )*/
+
+            /*ServerBuilder::new()
                 .task(
                     listener_address,
                     match command {
@@ -96,7 +107,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 )
                 .await?
                 .run()
-                .await;
+                .await;*/
         }
         MainCommand::Client { address, command } => {
             let mut client = match Client::new(address).await {

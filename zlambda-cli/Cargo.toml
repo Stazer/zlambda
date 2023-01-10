@@ -8,6 +8,7 @@ clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 console-subscriber = { version = "*" }
 tracing-subscriber = { version = "0", features = ["fmt"] }
+zlambda-core = { path = "../zlambda-core" }
 zlambda-client = { path = "../zlambda-client" }
 zlambda-common = { path = "../zlambda-common" }
-zlambda-server = { path = "../zlambda-server" }
+#zlambda-server = { path = "../zlambda-server" }
