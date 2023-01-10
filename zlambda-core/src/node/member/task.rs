@@ -1,13 +1,13 @@
-use crate::node::sibling::NodeSiblingAction;
+use crate::node::member::NodeMemberAction;
 use tokio::{select, spawn};
 use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct NodeSiblingTask {}
+pub struct NodeMemberTask {}
 
-impl NodeSiblingTask {
+impl NodeMemberTask {
     pub fn new() -> Self {
         Self {}
     }
@@ -21,9 +21,9 @@ impl NodeSiblingTask {
     pub async fn run(mut self) {
         loop {
             match self.select().await {
-                NodeSiblingAction::Continue => {}
-                NodeSiblingAction::Stop => break,
-                NodeSiblingAction::Error(error) => {
+                NodeMemberAction::Continue => {}
+                NodeMemberAction::Stop => break,
+                NodeMemberAction::Error(error) => {
                     error!("{}", error);
                     break;
                 }
@@ -31,7 +31,7 @@ impl NodeSiblingTask {
         }
     }
 
-    async fn select(&mut self) -> NodeSiblingAction {
-        NodeSiblingAction::Continue
+    async fn select(&mut self) -> NodeMemberAction {
+        NodeMemberAction::Continue
     }
 }

@@ -208,7 +208,7 @@ impl NodeTask {
     async fn on_node_socket_accept_message(&mut self, message: NodeSocketAcceptMessage) -> NodeAction {
         let (socket_address, stream) = message.into();
         let (reader, writer) = stream.into_split();
-        let (mut reader, mut writer) = (
+        let (reader, writer) = (
             MessageStreamReader::new(reader),
             MessageStreamWriter::new(writer),
         );
