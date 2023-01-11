@@ -1,5 +1,9 @@
 use crate::node::connection::NodeConnectionTask;
-use crate::node::{NodeAction, CreateNodeError, NodeSocketAcceptMessage, NodeMessage, NodeReference};
+use crate::node::{
+    CreateNodeError, NodeAction, NodeFollowerRegistrationMessage, NodeMessage, NodeReference,
+    NodeSocketAcceptMessage,
+};
+use crate::node::member::NodeMemberTask;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::net::ToSocketAddrs;
@@ -7,13 +11,15 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio::{select, spawn};
 use tracing::{error, info};
+use zlambda_common::channel::{DoReceive, DoSend};
+use zlambda_common::error::FollowerRegistrationNotALeaderError;
 use zlambda_common::message::{
-    FollowerToGuestMessage, GuestToNodeMessage, GuestToNodeRegisterRequestMessage,
-    LeaderToGuestMessage, Message, MessageError, MessageStreamReader, MessageStreamWriter, GuestToNodeRecoveryRequestMessage,
+    FollowerToGuestMessage, GuestToNodeMessage, GuestToNodeRecoveryRequestMessage,
+    GuestToNodeRegisterRequestMessage, LeaderToGuestMessage, Message, MessageError,
+    MessageStreamReader, MessageStreamWriter,
 };
 use zlambda_common::node::NodeId;
 use zlambda_common::term::Term;
-use zlambda_common::channel::{DoReceive, DoSend};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,7 +27,7 @@ use zlambda_common::channel::{DoReceive, DoSend};
 pub struct NodeTask {
     node_id: NodeId,
     leader_node_id: NodeId,
-    node_addresses: HashMap<NodeId, SocketAddr>,
+    node_addresses: Vec<SocketAddr>,
     term: Term,
     tcp_listener: TcpListener,
     sender: mpsc::Sender<NodeMessage>,
@@ -44,7 +50,7 @@ impl NodeTask {
             None => Ok(Self {
                 node_id: 0,
                 leader_node_id: 0,
-                node_addresses: [(0, tcp_listener.local_addr()?)].into(),
+                node_addresses: vec![tcp_listener.local_addr()?],
                 term: 0,
                 tcp_listener,
                 sender,
@@ -116,9 +122,12 @@ impl NodeTask {
                     );
 
                     writer
-                        .write(GuestToNodeMessage::RecoveryRequest(
-                            GuestToNodeRecoveryRequestMessage::new(address, node_id),
-                        ).into())
+                        .write(
+                            GuestToNodeMessage::RecoveryRequest(
+                                GuestToNodeRecoveryRequestMessage::new(address, node_id),
+                            )
+                            .into(),
+                        )
                         .await?;
 
                     match reader.read().await? {
@@ -129,16 +138,18 @@ impl NodeTask {
                             socket = TcpStream::connect(message.leader_address()).await?;
                             continue;
                         }
-                        Some(Message::LeaderToGuest(LeaderToGuestMessage::RecoveryErrorResponse(
-                            message,
-                        ))) => {
+                        Some(Message::LeaderToGuest(
+                            LeaderToGuestMessage::RecoveryErrorResponse(message),
+                        )) => {
                             let (error,) = message.into();
-                            return Err(error.into())
+                            return Err(error.into());
                         }
                         Some(Message::LeaderToGuest(LeaderToGuestMessage::RecoveryOkResponse(
                             message,
                         ))) => break message.into(),
-                        Some(message) => return Err(MessageError::UnexpectedMessage(message).into()),
+                        Some(message) => {
+                            return Err(MessageError::UnexpectedMessage(message).into())
+                        }
                     }
                 };
 
@@ -199,13 +210,17 @@ impl NodeTask {
     async fn on_node_message(&mut self, message: NodeMessage) -> NodeAction {
         match message {
             NodeMessage::SocketAccept(message) => self.on_node_socket_accept_message(message).await,
-            _ => {
-                NodeAction::Stop
+            NodeMessage::FollowerRegistration(message) => {
+                self.on_node_follower_registration_message(message).await
             }
+            _ => NodeAction::Stop,
         }
     }
 
-    async fn on_node_socket_accept_message(&mut self, message: NodeSocketAcceptMessage) -> NodeAction {
+    async fn on_node_socket_accept_message(
+        &mut self,
+        message: NodeSocketAcceptMessage,
+    ) -> NodeAction {
         let (socket_address, stream) = message.into();
         let (reader, writer) = stream.into_split();
         let (reader, writer) = (
@@ -216,6 +231,43 @@ impl NodeTask {
         info!("Connection {} created", socket_address);
 
         NodeConnectionTask::new(reader, writer, NodeReference::new(self.sender.clone()));
+
+        NodeAction::Continue
+    }
+
+    async fn on_node_follower_registration_message(
+        &mut self,
+        message: NodeFollowerRegistrationMessage,
+    ) -> NodeAction {
+        let (socket_address, sender) = message.into();
+
+        if self.leader_node_id != self.node_id {
+            let leader_address = match self.node_addresses.get(self.leader_node_id) {
+                None => return NodeAction::Stop,
+                Some(leader_address) => *leader_address,
+            };
+
+            sender
+                .do_send(Err(FollowerRegistrationNotALeaderError::new(
+                    leader_address,
+                )
+                .into()))
+                .await;
+
+            return NodeAction::Continue;
+        }
+
+        self.node_addresses.push(socket_address);
+
+        let task = NodeMemberTask::new(
+            self.node_addresses.len() - 1,
+            NodeReference::new(self.sender.clone()),
+        );
+        let reference = task.reference();
+
+        task.spawn();
+
+        sender.do_send(Ok(reference)).await;
 
         NodeAction::Continue
     }

@@ -1,6 +1,6 @@
 use std::io;
-use zlambda_common::message::MessageError;
 use zlambda_common::error::RecoveryError;
+use zlambda_common::message::MessageError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

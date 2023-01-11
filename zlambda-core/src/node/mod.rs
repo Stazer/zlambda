@@ -1,10 +1,10 @@
 mod action;
-pub mod connection;
 pub mod client;
+pub mod connection;
 mod error;
+pub mod member;
 mod message;
 mod reference;
-pub mod member;
 mod task;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,3 +14,7 @@ pub use error::*;
 pub use message::*;
 pub use reference::*;
 pub use task::*;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type NodeId = usize;

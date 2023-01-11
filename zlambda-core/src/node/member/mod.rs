@@ -1,7 +1,11 @@
 mod action;
+mod message;
+mod reference;
 mod task;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub use action::*;
+pub use message::*;
+pub use reference::*;
 pub use task::*;
