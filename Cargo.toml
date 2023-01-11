@@ -2,7 +2,7 @@
 members = [
     #"zlambda-cli",
     #"zlambda-client",
-    "zlambda-common",
+    #"zlambda-common",
     #"zlambda-process",
     #"zlambda-server",
     "zlambda-core",

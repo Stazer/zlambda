@@ -1,9 +1,12 @@
+use crate::channel::{DoReceive, DoSend};
 use crate::node::member::NodeMemberReference;
-use crate::node::{NodeFollowerRegistrationMessage, NodeMessage, NodePingMessage};
+use crate::node::{
+    NodeFollowerRegistrationError, NodeFollowerRegistrationMessage,
+    NodeMessage, NodePingMessage,
+};
+use crate::message::{MessageStreamReader, MessageStreamWriter};
 use std::net::SocketAddr;
 use tokio::sync::{mpsc, oneshot};
-use zlambda_common::channel::{DoReceive, DoSend};
-use zlambda_common::error::FollowerRegistrationError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,11 +33,13 @@ impl NodeReference {
     pub async fn register_follower(
         &self,
         address: SocketAddr,
-    ) -> Result<NodeMemberReference, FollowerRegistrationError> {
+        reader: MessageStreamReader,
+        writer: MessageStreamWriter,
+    ) -> Result<(), NodeFollowerRegistrationError> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .do_send(NodeFollowerRegistrationMessage::new(address, sender).into())
+            .do_send(NodeFollowerRegistrationMessage::new(address, reader, writer, sender).into())
             .await;
 
         receiver.do_receive().await

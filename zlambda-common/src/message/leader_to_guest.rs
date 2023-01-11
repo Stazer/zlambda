@@ -1,10 +1,10 @@
+use crate::error::RecoveryError;
 use crate::message::{BasicMessageStreamReader, BasicMessageStreamWriter, Message, MessageError};
 use crate::node::NodeId;
 use crate::term::Term;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use crate::error::RecoveryError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -12,13 +12,11 @@ use crate::error::RecoveryError;
 pub struct LeaderToGuestRegisterOkResponseMessage {
     node_id: NodeId,
     leader_node_id: NodeId,
-    node_addresses: HashMap<NodeId, SocketAddr>,
+    node_addresses: Vec<SocketAddr>,
     term: Term,
 }
 
-impl From<LeaderToGuestRegisterOkResponseMessage>
-    for (NodeId, NodeId, HashMap<NodeId, SocketAddr>, Term)
-{
+impl From<LeaderToGuestRegisterOkResponseMessage> for (NodeId, NodeId, Vec<SocketAddr>, Term) {
     fn from(message: LeaderToGuestRegisterOkResponseMessage) -> Self {
         (
             message.node_id,
@@ -33,7 +31,7 @@ impl LeaderToGuestRegisterOkResponseMessage {
     pub fn new(
         node_id: NodeId,
         leader_node_id: NodeId,
-        node_addresses: HashMap<NodeId, SocketAddr>,
+        node_addresses: Vec<SocketAddr>,
         term: Term,
     ) -> Self {
         Self {
@@ -52,7 +50,7 @@ impl LeaderToGuestRegisterOkResponseMessage {
         self.leader_node_id
     }
 
-    pub fn node_addresses(&self) -> &HashMap<NodeId, SocketAddr> {
+    pub fn node_addresses(&self) -> &Vec<SocketAddr> {
         &self.node_addresses
     }
 
@@ -90,13 +88,11 @@ impl LeaderToGuestRecoveryErrorResponseMessage {
 pub struct LeaderToGuestRecoveryOkResponseMessage {
     node_id: NodeId,
     leader_node_id: NodeId,
-    node_addresses: HashMap<NodeId, SocketAddr>,
+    node_addresses: Vec<SocketAddr>,
     term: Term,
 }
 
-impl From<LeaderToGuestRecoveryOkResponseMessage>
-    for (NodeId, NodeId, HashMap<NodeId, SocketAddr>, Term)
-{
+impl From<LeaderToGuestRecoveryOkResponseMessage> for (NodeId, NodeId, Vec<SocketAddr>, Term) {
     fn from(message: LeaderToGuestRecoveryOkResponseMessage) -> Self {
         (
             message.node_id,
@@ -111,7 +107,7 @@ impl LeaderToGuestRecoveryOkResponseMessage {
     pub fn new(
         node_id: NodeId,
         leader_node_id: NodeId,
-        node_addresses: HashMap<NodeId, SocketAddr>,
+        node_addresses: Vec<SocketAddr>,
         term: Term,
     ) -> Self {
         Self {
@@ -130,7 +126,7 @@ impl LeaderToGuestRecoveryOkResponseMessage {
         self.leader_node_id
     }
 
-    pub fn node_addresses(&self) -> &HashMap<NodeId, SocketAddr> {
+    pub fn node_addresses(&self) -> &Vec<SocketAddr> {
         &self.node_addresses
     }
 
@@ -138,7 +134,6 @@ impl LeaderToGuestRecoveryOkResponseMessage {
         self.term
     }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

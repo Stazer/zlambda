@@ -1,1 +1,1 @@
-pub type NodeId = u64;
+pub type NodeId = usize;

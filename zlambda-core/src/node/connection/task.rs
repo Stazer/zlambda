@@ -1,17 +1,15 @@
-use crate::node::client::NodeClientTask;
-use crate::node::connection::{
-    NodeConnectionAction, NodeConnectionClientRegistrationAction,
-    NodeConnectionFollowerRegistrationAction,
-};
-use crate::node::NodeReference;
-use tokio::spawn;
-use tracing::error;
-use zlambda_common::error::FollowerRegistrationError;
-use zlambda_common::message::{
+use crate::message::{
     ClientToNodeMessage, FollowerToGuestMessage, FollowerToGuestRegisterNotALeaderResponseMessage,
     GuestToNodeMessage, GuestToNodeRecoveryRequestMessage, GuestToNodeRegisterRequestMessage,
     Message, MessageError, MessageStreamReader, MessageStreamWriter,
 };
+use crate::node::client::NodeClientTask;
+use crate::node::connection::{
+    NodeConnectionAction, NodeConnectionClientRegistrationAction,
+};
+use crate::node::{NodeFollowerRegistrationError, NodeReference};
+use tokio::spawn;
+use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,19 +17,19 @@ use zlambda_common::message::{
 pub struct NodeConnectionTask {
     reader: MessageStreamReader,
     writer: MessageStreamWriter,
-    reference: NodeReference,
+    node_reference: NodeReference,
 }
 
 impl NodeConnectionTask {
     pub fn new(
         reader: MessageStreamReader,
         writer: MessageStreamWriter,
-        reference: NodeReference,
+        node_reference: NodeReference,
     ) -> Self {
         Self {
             reader,
             writer,
-            reference,
+            node_reference,
         }
     }
 
@@ -48,11 +46,32 @@ impl NodeConnectionTask {
             NodeConnectionAction::ClientRegistration(action) => {
                 let (message,) = action.into();
 
-                NodeClientTask::new(self.reader, self.writer, self.reference, message).spawn()
+                NodeClientTask::new(self.reader, self.writer, self.node_reference, message).spawn()
             }
-            NodeConnectionAction::FollowerRegistration(action) => {}
-            NodeConnectionAction::FollowerHandshake(action) => {}
-            NodeConnectionAction::FollowerRecovery(action) => {}
+            NodeConnectionAction::FollowerRegistration(action) => {
+                let (address,) = action.into();
+
+                let (leader_address, _, mut writer) = match self.node_reference.register_follower(address, self.reader, self.writer).await {
+                    Ok(()) => return,
+                    Err(NodeFollowerRegistrationError::NotALeader(error)) => error.into(),
+                };
+
+                let result =
+                    writer
+                    .write(
+                        FollowerToGuestMessage::RegisterNotALeaderResponse(
+                            FollowerToGuestRegisterNotALeaderResponseMessage::new(
+                                leader_address,
+                            ),
+                        )
+                        .into(),
+                    )
+                    .await;
+
+                if let Err(error) = result {
+                    error!("{}", error);
+                }
+            }
         }
     }
 
@@ -101,10 +120,9 @@ impl NodeConnectionTask {
         &mut self,
         message: GuestToNodeRegisterRequestMessage,
     ) -> NodeConnectionAction {
-        let (address,) = message.into();
-
-        let member_reference = match self.reference.register_follower(address).await {
-            Err(FollowerRegistrationError::NotALeader(error)) => {
+        NodeConnectionAction::Stop
+        /*let (node_member_reference,) = match self.reference.register_follower(address).await {
+            Err(NodeFollowerRegistrationError::NotALeader(error)) => {
                 let result = self
                     .writer
                     .write(
@@ -122,10 +140,10 @@ impl NodeConnectionTask {
                     Ok(()) => NodeConnectionAction::Stop,
                 };
             }
-            Ok(member_reference) => member_reference,
-        };
+            Ok(node_member_reference) => node_member_reference.into(),
+        };*/
 
-        NodeConnectionFollowerRegistrationAction::new(member_reference).into()
+        //NodeConnectionFollowerRegistrationResult::new(node_member_reference).into()
     }
 
     async fn on_guest_to_node_recovery_request_message(

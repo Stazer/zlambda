@@ -1,25 +1,25 @@
-use crate::node::connection::NodeConnectionTask;
-use crate::node::{
-    CreateNodeError, NodeAction, NodeFollowerRegistrationMessage, NodeMessage, NodeReference,
-    NodeSocketAcceptMessage,
+use crate::channel::{DoReceive, DoSend};
+use crate::message::{
+    FollowerToGuestMessage, GuestToNodeMessage, GuestToNodeRecoveryRequestMessage,
+    GuestToNodeRegisterRequestMessage, LeaderToGuestMessage, Message, MessageError,
+    MessageStreamReader, MessageStreamWriter,
 };
+use crate::node::connection::NodeConnectionTask;
+use crate::node::member::NodeMemberReference;
 use crate::node::member::NodeMemberTask;
-use std::collections::HashMap;
+use crate::node::NodeId;
+use crate::node::{
+    CreateNodeError, NodeAction, NodeFollowerRegistrationMessage,
+    NodeFollowerRegistrationNotALeaderError, NodeMessage,
+    NodeReference, NodeSocketAcceptMessage,
+};
+use crate::term::Term;
 use std::net::SocketAddr;
 use tokio::net::ToSocketAddrs;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio::{select, spawn};
 use tracing::{error, info};
-use zlambda_common::channel::{DoReceive, DoSend};
-use zlambda_common::error::FollowerRegistrationNotALeaderError;
-use zlambda_common::message::{
-    FollowerToGuestMessage, GuestToNodeMessage, GuestToNodeRecoveryRequestMessage,
-    GuestToNodeRegisterRequestMessage, LeaderToGuestMessage, Message, MessageError,
-    MessageStreamReader, MessageStreamWriter,
-};
-use zlambda_common::node::NodeId;
-use zlambda_common::term::Term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,6 +28,7 @@ pub struct NodeTask {
     node_id: NodeId,
     leader_node_id: NodeId,
     node_addresses: Vec<SocketAddr>,
+    member_references: Vec<NodeMemberReference>,
     term: Term,
     tcp_listener: TcpListener,
     sender: mpsc::Sender<NodeMessage>,
@@ -51,6 +52,7 @@ impl NodeTask {
                 node_id: 0,
                 leader_node_id: 0,
                 node_addresses: vec![tcp_listener.local_addr()?],
+                member_references: Vec::default(),
                 term: 0,
                 tcp_listener,
                 sender,
@@ -103,6 +105,7 @@ impl NodeTask {
                     node_id,
                     leader_node_id,
                     node_addresses,
+                    member_references: Vec::default(),
                     term,
                     tcp_listener,
                     sender,
@@ -159,6 +162,7 @@ impl NodeTask {
                     node_id,
                     leader_node_id,
                     node_addresses,
+                    member_references: Vec::default(),
                     term,
                     tcp_listener,
                     sender,
@@ -239,7 +243,7 @@ impl NodeTask {
         &mut self,
         message: NodeFollowerRegistrationMessage,
     ) -> NodeAction {
-        let (socket_address, sender) = message.into();
+        let (socket_address, reader, writer, sender) = message.into();
 
         if self.leader_node_id != self.node_id {
             let leader_address = match self.node_addresses.get(self.leader_node_id) {
@@ -248,26 +252,27 @@ impl NodeTask {
             };
 
             sender
-                .do_send(Err(FollowerRegistrationNotALeaderError::new(
-                    leader_address,
+                .do_send(Err(NodeFollowerRegistrationNotALeaderError::new(
+                    leader_address, reader, writer,
                 )
                 .into()))
                 .await;
+        } else {
+            self.node_addresses.push(socket_address);
 
-            return NodeAction::Continue;
+            let task = NodeMemberTask::new(
+                self.node_addresses.len() - 1,
+                NodeReference::new(self.sender.clone()),
+                Some(reader),
+                Some(writer),
+            );
+
+            task.spawn();
+
+            sender
+                .do_send(Ok(()))
+                .await;
         }
-
-        self.node_addresses.push(socket_address);
-
-        let task = NodeMemberTask::new(
-            self.node_addresses.len() - 1,
-            NodeReference::new(self.sender.clone()),
-        );
-        let reference = task.reference();
-
-        task.spawn();
-
-        sender.do_send(Ok(reference)).await;
 
         NodeAction::Continue
     }

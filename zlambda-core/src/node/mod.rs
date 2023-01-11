@@ -4,6 +4,7 @@ pub mod connection;
 mod error;
 pub mod member;
 mod message;
+mod output;
 mod reference;
 mod task;
 
@@ -12,6 +13,7 @@ mod task;
 pub use action::*;
 pub use error::*;
 pub use message::*;
+pub use output::*;
 pub use reference::*;
 pub use task::*;
 

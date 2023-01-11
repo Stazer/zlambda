@@ -1,6 +1,7 @@
+use crate::message::{ClientToNodeMessage, MessageError};
 use crate::node::member::NodeMemberReference;
 use std::error::Error;
-use zlambda_common::message::{ClientToNodeMessage, MessageError};
+use std::net::SocketAddr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,12 +36,12 @@ impl NodeConnectionClientRegistrationAction {
 
 #[derive(Debug)]
 pub struct NodeConnectionFollowerRegistrationAction {
-    reference: NodeMemberReference,
+    address: SocketAddr,
 }
 
-impl From<NodeConnectionFollowerRegistrationAction> for (NodeMemberReference,) {
+impl From<NodeConnectionFollowerRegistrationAction> for (SocketAddr,) {
     fn from(action: NodeConnectionFollowerRegistrationAction) -> Self {
-        (action.reference,)
+        (action.address,)
     }
 }
 
@@ -51,70 +52,14 @@ impl From<NodeConnectionFollowerRegistrationAction> for NodeConnectionAction {
 }
 
 impl NodeConnectionFollowerRegistrationAction {
-    pub fn new(reference: NodeMemberReference) -> Self {
-        Self { reference }
+    pub fn new(address: SocketAddr) -> Self {
+        Self {
+            address,
+        }
     }
 
-    pub fn reference(&self) -> &NodeMemberReference {
-        &self.reference
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct NodeConnectionFollowerHandshakeAction {
-    reference: NodeMemberReference,
-}
-
-impl From<NodeConnectionFollowerHandshakeAction> for (NodeMemberReference,) {
-    fn from(action: NodeConnectionFollowerHandshakeAction) -> Self {
-        (action.reference,)
-    }
-}
-
-impl From<NodeConnectionFollowerHandshakeAction> for NodeConnectionAction {
-    fn from(action: NodeConnectionFollowerHandshakeAction) -> Self {
-        NodeConnectionAction::FollowerHandshake(action)
-    }
-}
-
-impl NodeConnectionFollowerHandshakeAction {
-    pub fn new(reference: NodeMemberReference) -> Self {
-        Self { reference }
-    }
-
-    pub fn reference(&self) -> &NodeMemberReference {
-        &self.reference
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct NodeConnectionFollowerRecoveryAction {
-    reference: NodeMemberReference,
-}
-
-impl From<NodeConnectionFollowerRecoveryAction> for (NodeMemberReference,) {
-    fn from(action: NodeConnectionFollowerRecoveryAction) -> Self {
-        (action.reference,)
-    }
-}
-
-impl From<NodeConnectionFollowerRecoveryAction> for NodeConnectionAction {
-    fn from(action: NodeConnectionFollowerRecoveryAction) -> Self {
-        NodeConnectionAction::FollowerRecovery(action)
-    }
-}
-
-impl NodeConnectionFollowerRecoveryAction {
-    pub fn new(reference: NodeMemberReference) -> Self {
-        Self { reference }
-    }
-
-    pub fn reference(&self) -> &NodeMemberReference {
-        &self.reference
+    pub fn address(&self) -> &SocketAddr {
+        &self.address
     }
 }
 
@@ -127,8 +72,6 @@ pub enum NodeConnectionAction {
     Error(Box<dyn Error + Send>),
     ClientRegistration(NodeConnectionClientRegistrationAction),
     FollowerRegistration(NodeConnectionFollowerRegistrationAction),
-    FollowerHandshake(NodeConnectionFollowerHandshakeAction),
-    FollowerRecovery(NodeConnectionFollowerRecoveryAction),
 }
 
 impl From<MessageError> for NodeConnectionAction {

@@ -1,9 +1,8 @@
-use crate::node::member::NodeMemberReference;
+use crate::node::{NodeFollowerRegistrationError, NodeId};
+use crate::message::{MessageStreamReader, MessageStreamWriter};
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
-use zlambda_common::error::FollowerRegistrationError;
-use zlambda_common::node::NodeId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,17 +75,21 @@ impl NodeSocketAcceptMessage {
 #[derive(Debug)]
 pub struct NodeFollowerRegistrationMessage {
     address: SocketAddr,
-    sender: oneshot::Sender<Result<NodeMemberReference, FollowerRegistrationError>>,
+    reader: MessageStreamReader,
+    writer: MessageStreamWriter,
+    sender: oneshot::Sender<Result<(), NodeFollowerRegistrationError>>,
 }
 
 impl From<NodeFollowerRegistrationMessage>
     for (
         SocketAddr,
-        oneshot::Sender<Result<NodeMemberReference, FollowerRegistrationError>>,
+        MessageStreamReader,
+        MessageStreamWriter,
+        oneshot::Sender<Result<(), NodeFollowerRegistrationError>>,
     )
 {
     fn from(message: NodeFollowerRegistrationMessage) -> Self {
-        (message.address, message.sender)
+        (message.address, message.reader, message.writer, message.sender)
     }
 }
 
@@ -99,9 +102,13 @@ impl From<NodeFollowerRegistrationMessage> for NodeMessage {
 impl NodeFollowerRegistrationMessage {
     pub fn new(
         address: SocketAddr,
-        sender: oneshot::Sender<Result<NodeMemberReference, FollowerRegistrationError>>,
+        reader: MessageStreamReader,
+        writer: MessageStreamWriter,
+        sender: oneshot::Sender<
+            Result<(), NodeFollowerRegistrationError>,
+        >,
     ) -> Self {
-        Self { address, sender }
+        Self { address, reader, writer, sender }
     }
 
     pub fn address(&self) -> &SocketAddr {
@@ -110,8 +117,17 @@ impl NodeFollowerRegistrationMessage {
 
     pub fn sender(
         &self,
-    ) -> &oneshot::Sender<Result<NodeMemberReference, FollowerRegistrationError>> {
+    ) -> &oneshot::Sender<Result<(), NodeFollowerRegistrationError>>
+    {
         &self.sender
+    }
+
+    pub fn reader(&self) -> &MessageStreamReader {
+        &self.reader
+    }
+
+    pub fn writer(&self) -> &MessageStreamWriter {
+        &self.writer
     }
 }
 

@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
-use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,7 +33,41 @@ impl SimpleError {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum RecoveryError {
-    FollowerOnline,
+    FollowerAlreadyOnline,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FollowerRegistrationNotALeaderError {
+    leader_address: SocketAddr,
+}
+
+impl From<FollowerRegistrationNotALeaderError> for (SocketAddr,) {
+    fn from(error: FollowerRegistrationNotALeaderError) -> Self {
+        (error.leader_address,)
+    }
+}
+
+impl From<FollowerRegistrationNotALeaderError> for FollowerRegistrationError {
+    fn from(error: FollowerRegistrationNotALeaderError) -> Self {
+        Self::NotALeader(error)
+    }
+}
+
+impl FollowerRegistrationNotALeaderError {
+    pub fn new(leader_address: SocketAddr) -> Self {
+        Self { leader_address }
+    }
+
+    pub fn leader_address(&self) -> &SocketAddr {
+        &self.leader_address
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum FollowerRegistrationError {
+    NotALeader(FollowerRegistrationNotALeaderError),
+}

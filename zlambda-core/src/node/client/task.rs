@@ -1,8 +1,8 @@
+use crate::message::{ClientToNodeMessage, MessageStreamReader, MessageStreamWriter};
 use crate::node::client::NodeClientAction;
 use crate::node::NodeReference;
 use tokio::spawn;
 use tracing::error;
-use zlambda_common::message::{ClientToNodeMessage, MessageStreamReader, MessageStreamWriter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

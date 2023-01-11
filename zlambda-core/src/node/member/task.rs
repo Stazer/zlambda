@@ -1,10 +1,14 @@
-use crate::node::member::{NodeMemberAction, NodeMemberMessage, NodeMemberReference};
+use crate::channel::{DoReceive, DoSend};
+use crate::message::{MessageStreamReader, MessageStreamWriter};
+use crate::node::member::{
+    NodeMemberAction,
+    NodeMemberMessage, NodeMemberReference,
+};
 use crate::node::NodeId;
 use crate::node::NodeReference;
-use crate::message::{MessageStreamReader, MessageStreamWriter};
-use tokio::spawn;
 use tokio::sync::mpsc;
-use tracing::error;
+use tokio::{select, spawn};
+use tracing::{error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +23,7 @@ pub struct NodeMemberTask {
 }
 
 impl NodeMemberTask {
-    pub fn new(node_id: NodeId, node_reference: NodeReference) -> Self {
+    pub fn new(node_id: NodeId, node_reference: NodeReference, reader: Option<MessageStreamReader>, writer: Option<MessageStreamWriter>) -> Self {
         let (sender, receiver) = mpsc::channel(16);
 
         Self {
@@ -27,8 +31,8 @@ impl NodeMemberTask {
             node_reference,
             sender,
             receiver,
-            reader: None,
-            writer: None,
+            reader,
+            writer,
         }
     }
 
@@ -56,6 +60,14 @@ impl NodeMemberTask {
     }
 
     async fn select(&mut self) -> NodeMemberAction {
+        select!(
+            message = self.receiver.do_receive() => {
+                self.on_node_member_message(message).await
+            }
+        )
+    }
+
+    async fn on_node_member_message(&mut self, message: NodeMemberMessage) -> NodeMemberAction {
         NodeMemberAction::Continue
     }
 }
