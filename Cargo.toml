@@ -6,4 +6,5 @@ members = [
     #"zlambda-process",
     #"zlambda-server",
     "zlambda-core",
+    "zlambda-cli",
 ]

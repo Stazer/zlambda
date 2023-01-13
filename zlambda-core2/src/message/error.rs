@@ -1,3 +1,4 @@
+use crate::message::Message;
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io;
@@ -6,7 +7,7 @@ use std::io;
 
 pub enum MessageError {
     UnexpectedEnd,
-    UnexpectedMessage(String),
+    UnexpectedMessage(Message),
     ExpectedMessage,
     PostcardError(postcard::Error),
     IoError(io::Error),
@@ -16,9 +17,7 @@ impl Debug for MessageError {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
             Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
-            Self::UnexpectedMessage(message) => {
-                write!(formatter, "Unexpected message ({})", message)
-            }
+            Self::UnexpectedMessage(_) => write!(formatter, "Unexpected message"),
             Self::ExpectedMessage => write!(formatter, "Expected message"),
             Self::PostcardError(error) => Debug::fmt(error, formatter),
             Self::IoError(error) => Debug::fmt(error, formatter),
@@ -30,9 +29,7 @@ impl Display for MessageError {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
             Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
-            Self::UnexpectedMessage(message) => {
-                write!(formatter, "Unexpected message ({})", message)
-            }
+            Self::UnexpectedMessage(_) => write!(formatter, "Unexpected message"),
             Self::ExpectedMessage => write!(formatter, "Expected message"),
             Self::PostcardError(error) => Display::fmt(error, formatter),
             Self::IoError(error) => Display::fmt(error, formatter),

@@ -1,123 +1,23 @@
-use bytes::Bytes;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/*use bytes::Bytes;
 use postcard::{take_from_bytes, to_allocvec};
 use serde::{Deserialize, Serialize};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-mod candidate_to_candidate;
-mod client_to_node;
 mod error;
-mod follower_to_follower;
-mod follower_to_guest;
-mod follower_to_leader;
-mod guest_to_leader;
-mod guest_to_node;
-mod leader_to_follower;
-mod leader_to_guest;
-mod node_to_client;
-mod reader;
-mod writer;
+mod receiver;
+mod sender;
 
-pub use candidate_to_candidate::*;
-pub use client_to_node::*;
 pub use error::*;
-pub use follower_to_follower::*;
-pub use follower_to_guest::*;
-pub use follower_to_leader::*;
-pub use guest_to_leader::*;
-pub use guest_to_node::*;
-pub use leader_to_follower::*;
-pub use leader_to_guest::*;
-pub use node_to_client::*;
-pub use reader::*;
-pub use writer::*;
+pub use receiver::*;
+pub use sender::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Message {
-    GuestToLeader(GuestToLeaderMessage),
-    LeaderToGuest(LeaderToGuestMessage),
-
-    FollowerToGuest(FollowerToGuestMessage),
-
-    GuestToNode(GuestToNodeMessage),
-
-    LeaderToFollower(LeaderToFollowerMessage),
-    FollowerToLeader(FollowerToLeaderMessage),
-
-    ClientToNode(ClientToNodeMessage),
-    NodeToClient(NodeToClientMessage),
-
-    CandidateToCandidate(CandidateToCandidateMessage),
-
-    FollowerToFollower(FollowerToFollowerMessage),
-}
-
-impl From<Message> for Result<Message, MessageError> {
-    fn from(message: Message) -> Self {
-        Ok(message)
-    }
-}
-
-impl From<GuestToLeaderMessage> for Message {
-    fn from(message: GuestToLeaderMessage) -> Self {
-        Self::GuestToLeader(message)
-    }
-}
-
-impl From<LeaderToGuestMessage> for Message {
-    fn from(message: LeaderToGuestMessage) -> Self {
-        Self::LeaderToGuest(message)
-    }
-}
-
-impl From<FollowerToGuestMessage> for Message {
-    fn from(message: FollowerToGuestMessage) -> Self {
-        Self::FollowerToGuest(message)
-    }
-}
-
-impl From<GuestToNodeMessage> for Message {
-    fn from(message: GuestToNodeMessage) -> Self {
-        Self::GuestToNode(message)
-    }
-}
-
-impl From<LeaderToFollowerMessage> for Message {
-    fn from(message: LeaderToFollowerMessage) -> Self {
-        Self::LeaderToFollower(message)
-    }
-}
-
-impl From<FollowerToLeaderMessage> for Message {
-    fn from(message: FollowerToLeaderMessage) -> Self {
-        Self::FollowerToLeader(message)
-    }
-}
-
-impl From<NodeToClientMessage> for Message {
-    fn from(message: NodeToClientMessage) -> Self {
-        Self::NodeToClient(message)
-    }
-}
-
-impl From<ClientToNodeMessage> for Message {
-    fn from(message: ClientToNodeMessage) -> Self {
-        Self::ClientToNode(message)
-    }
-}
-
-impl From<CandidateToCandidateMessage> for Message {
-    fn from(message: CandidateToCandidateMessage) -> Self {
-        Self::CandidateToCandidate(message)
-    }
-}
-
-impl From<FollowerToFollowerMessage> for Message {
-    fn from(message: FollowerToFollowerMessage) -> Self {
-        Self::FollowerToFollower(message)
-    }
 }
 
 impl Message {
@@ -135,5 +35,112 @@ impl Message {
     }
 }
 
-pub type MessageStreamReader = BasicMessageStreamReader<Message>;
-pub type MessageStreamWriter = BasicMessageStreamWriter<Message>;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+use crate::message::{Message, MessageError};
+use bytes::BytesMut;
+use std::fmt::Debug;
+use tokio::net::tcp::OwnedReadHalf;
+use tokio_stream::StreamExt;
+use tokio_util::io::ReaderStream;
+use tokio::sync::{mpsc, oneshot};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Default)]
+pub struct MessageBufferReader {
+    buffer: BytesMut,
+}
+
+impl MessageBufferReader {
+    pub fn push(&mut self, bytes: &[u8]) {
+        self.buffer.extend_from_slice(bytes);
+    }
+
+    pub fn next(&mut self) -> Result<Option<Message>, MessageError> {
+        let (read, message) = match Message::from_bytes(&self.buffer) {
+            Ok((read, message)) => (read, message),
+            Err(MessageError::UnexpectedEnd) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+
+        self.buffer = self.buffer.split_off(read);
+
+        Ok(Some(message))
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct MessageSocketReceiver {
+    buffer: MessageBufferReader,
+    reader: ReaderStream<OwnedReadHalf>,
+}
+
+impl MessageStreamReader {
+    pub fn new(reader: OwnedReadHalf) -> Self {
+        Self {
+            buffer: MessageBufferReader::default(),
+            reader: ReaderStream::new(reader),
+        }
+    }
+
+    pub async fn read(&mut self) -> Result<Option<Message>, MessageError> {
+        loop {
+            match self.buffer.next()? {
+                Some(item) => return Ok(Some(item)),
+                None => {
+                    let bytes = match self.reader.next().await {
+                        None => return Ok(None),
+                        Some(Err(error)) => return Err(error.into()),
+                        Some(Ok(bytes)) => bytes,
+                    };
+
+                    self.buffer.push(&bytes);
+                }
+            }
+        }
+    }
+}
+
+use crate::message::{Message, MessageError};
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufWriter;
+use tokio::net::tcp::OwnedWriteHalf;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct MessageStreamWriter {
+    writer: BufWriter<OwnedWriteHalf>,
+}
+
+impl MessageStreamWriter {
+    pub fn new(writer: OwnedWriteHalf) -> Self {
+        Self {
+            writer: BufWriter::new(writer),
+        }
+    }
+
+    pub async fn write(&mut self, message: Message) -> Result<(), MessageError> {
+        self.writer
+            .write_all(&message.to_bytes()?)
+            .await
+            .map(|_| ())?;
+
+        Ok(())
+    }
+}*/
+
+mod buffer;
+mod channel;
+mod error;
+mod socket;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub use buffer::*;
+pub use channel::*;
+pub use error::*;
+pub use socket::*;

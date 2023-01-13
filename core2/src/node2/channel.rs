@@ -1,0 +1,22 @@
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct NodeNotifyInput {
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub enum NodeMessage {
+    Notify(AsynchronousMessage<NodeNotifyInput, NodeNotifyOutput>)
+}
+
+pub struct NodeChannel {
+    sender: mpsc::Sender<NodeMessage>,
+}
+
+impl NodeChannel {
+}
+
+//Input -> Channel -> Output
+
+//    Output = Result<Success, Error>

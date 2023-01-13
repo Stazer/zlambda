@@ -10,7 +10,7 @@ use tokio::io::{stdin, stdout};
 use zlambda_client::Client;
 use zlambda_common::module::ModuleId;
 use zlambda_common::node::NodeId;
-use zlambda_server::ServerBuilder;
+use zlambda_core::node::NodeTask;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,6 +83,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 console_subscriber::init();
             }
 
+            NodeTask::new(
+                listener_address,
+                match command {
+                    ServerCommand::Leader => None,
+                    ServerCommand::Follower {
+                        leader_address,
+                        node_id,
+                    } => Some((leader_address, node_id)),
+                },
+            )
+            .run()
+            .await
             /*NodeTask::new(
                 listener_address,
                 match command {
@@ -95,19 +107,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )*/
 
             /*ServerBuilder::new()
-                .task(
-                    listener_address,
-                    match command {
-                        ServerCommand::Leader => None,
-                        ServerCommand::Follower {
-                            leader_address,
-                            node_id,
-                        } => Some((leader_address, node_id)),
-                    },
-                )
-                .await?
-                .run()
-                .await;*/
+            .task(
+                listener_address,
+                match command {
+                    ServerCommand::Leader => None,
+                    ServerCommand::Follower {
+                        leader_address,
+                        node_id,
+                    } => Some((leader_address, node_id)),
+                },
+            )
+            .await?
+            .run()
+            .await;*/
         }
         MainCommand::Client { address, command } => {
             let mut client = match Client::new(address).await {
