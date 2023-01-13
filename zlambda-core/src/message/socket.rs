@@ -77,22 +77,16 @@ where
         }
     }
 
-    pub async fn write<S>(&mut self, message: S) -> Result<(), MessageError>
+    pub async fn write<I, M>(&mut self, message: I) -> Result<(), MessageError>
     where
-        S: AsRef<T>,
+        I: AsRef<M>,
+        T: From<M>,
     {
         self.writer
-            .write_all(&to_allocvec(message.as_ref())?)
+            .write_all(&to_allocvec(T::from(message))?)
             .await
             .map(|_| ())?;
 
         Ok(())
-    }
-
-    pub async fn do_write<S>(&mut self, message: S)
-    where
-        S: AsRef<T>,
-    {
-        self.write(message).await;
     }
 }
