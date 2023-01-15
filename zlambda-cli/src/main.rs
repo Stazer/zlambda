@@ -7,10 +7,8 @@ use std::error::Error;
 use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
 use tokio::io::{stdin, stdout};
-use zlambda_client::Client;
-use zlambda_common::module::ModuleId;
-use zlambda_common::node::NodeId;
-use zlambda_core::node::NodeTask;
+use zlambda_core::node::{NodeId, NodeTask};
+use zlambda_core::module::{ModuleId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,7 +90,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         node_id,
                     } => Some((leader_address, node_id)),
                 },
-            )
+            ).await?
             .run()
             .await
             /*NodeTask::new(
@@ -122,7 +120,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .await;*/
         }
         MainCommand::Client { address, command } => {
-            let mut client = match Client::new(address).await {
+            /*let mut client = match Client::new(address).await {
                 Err(error) => return Err(error),
                 Ok(client) => client,
             };
@@ -138,7 +136,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .write_all(&client.dispatch(id, stdin()).await?)
                         .await?;
                 }
-            };
+            };*/
         }
     };
 
