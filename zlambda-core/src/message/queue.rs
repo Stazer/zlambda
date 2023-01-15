@@ -52,14 +52,14 @@ where
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
-pub struct MessageQueueWriter<T>
+pub struct MessageQueueSender<T>
 where
     T: Debug + Send,
 {
     sender: mpsc::Sender<T>,
 }
 
-impl<T> MessageQueueWriter<T>
+impl<T> MessageQueueSender<T>
 where
     T: Debug + Send,
 {
@@ -67,7 +67,7 @@ where
         Self { sender }
     }
 
-    pub async fn do_write<M>(&self, message: M)
+    pub async fn do_send<M>(&self, message: M)
     where
         T: From<M>
     {
@@ -78,14 +78,14 @@ where
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct MessageQueueReader<T>
+pub struct MessageQueueReceiver<T>
 where
     T: Debug + Send,
 {
     receiver: mpsc::Receiver<T>,
 }
 
-impl<T> MessageQueueReader<T>
+impl<T> MessageQueueReceiver<T>
 where
     T: Debug + Send,
 {
@@ -93,21 +93,21 @@ where
         Self { receiver }
     }
 
-    pub async fn do_read(&mut self) -> T {
+    pub async fn do_receive(&mut self) -> T {
         self.receiver.do_receive().await
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub fn message_queue<T>() -> (MessageQueueWriter<T>, MessageQueueReader<T>)
+pub fn message_queue<T>() -> (MessageQueueSender<T>, MessageQueueReceiver<T>)
 where
     T: Debug + Send,
 {
     let (sender, receiver) = mpsc::channel(16);
 
     (
-        MessageQueueWriter::new(sender),
-        MessageQueueReader::new(receiver),
+        MessageQueueSender::new(sender),
+        MessageQueueReceiver::new(receiver),
     )
 }

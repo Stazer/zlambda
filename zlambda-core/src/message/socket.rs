@@ -12,7 +12,41 @@ use tokio_util::io::ReaderStream;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct MessageSocketReader<T>
+pub struct MessageSocketSender<T>
+where
+    T: Serialize,
+{
+    writer: BufWriter<OwnedWriteHalf>,
+    r#type: PhantomData<T>,
+}
+
+impl<T> MessageSocketSender<T>
+where
+    T: Serialize,
+{
+    pub fn new(writer: OwnedWriteHalf) -> Self {
+        Self {
+            writer: BufWriter::new(writer),
+            r#type: PhantomData::<T>,
+        }
+    }
+
+    pub async fn write<M>(&mut self, message: M) -> Result<(), MessageError>
+    where
+        T: From<M>,
+    {
+        self.writer
+            .write_all(&to_allocvec(&T::from(message))?)
+            .await
+            .map(|_| ())?;
+
+        Ok(())
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct MessageSocketReceiver<T>
 where
     T: DeserializeOwned,
 {
@@ -20,7 +54,7 @@ where
     reader: ReaderStream<OwnedReadHalf>,
 }
 
-impl<T> MessageSocketReader<T>
+impl<T> MessageSocketReceiver<T>
 where
     T: DeserializeOwned,
 {
@@ -53,40 +87,5 @@ where
             Ok(Some(message)) => Some(message),
             _ => None,
         }
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub struct MessageSocketWriter<T>
-where
-    T: Serialize,
-{
-    writer: BufWriter<OwnedWriteHalf>,
-    r#type: PhantomData<T>,
-}
-
-impl<T> MessageSocketWriter<T>
-where
-    T: Serialize,
-{
-    pub fn new(writer: OwnedWriteHalf) -> Self {
-        Self {
-            writer: BufWriter::new(writer),
-            r#type: PhantomData::<T>,
-        }
-    }
-
-    pub async fn write<I, M>(&mut self, message: I) -> Result<(), MessageError>
-    where
-        I: AsRef<M>,
-        T: From<M>,
-    {
-        self.writer
-            .write_all(&to_allocvec(T::from(message))?)
-            .await
-            .map(|_| ())?;
-
-        Ok(())
     }
 }

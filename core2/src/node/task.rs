@@ -22,7 +22,7 @@ pub struct NodeTask {
     node_id: NodeId,
     leader_node_id: NodeId,
     node_socket_addresses: Vec<SocketAddr>,
-    term: Term,
+    log: Log,
     tcp_listener: TcpListener,
     sender: MessageSender<NodeMessage>,
     receiver: MessageReceiver<NodeMessage>,
