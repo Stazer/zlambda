@@ -12,6 +12,7 @@ use tokio_util::io::ReaderStream;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct MessageSocketSender<T>
 where
     T: Serialize,
@@ -31,7 +32,7 @@ where
         }
     }
 
-    pub async fn write<M>(&mut self, message: M) -> Result<(), MessageError>
+    pub async fn send<M>(&mut self, message: M) -> Result<(), MessageError>
     where
         T: From<M>,
     {
@@ -46,6 +47,7 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct MessageSocketReceiver<T>
 where
     T: DeserializeOwned,
@@ -58,14 +60,14 @@ impl<T> MessageSocketReceiver<T>
 where
     T: DeserializeOwned,
 {
-    pub fn new(reader: ReaderStream<OwnedReadHalf>) -> Self {
+    pub fn new(reader: OwnedReadHalf) -> Self {
         Self {
             buffer: MessageBufferReader::<T>::default(),
-            reader,
+            reader: ReaderStream::new(reader),
         }
     }
 
-    pub async fn read(&mut self) -> Result<Option<T>, MessageError> {
+    pub async fn receive(&mut self) -> Result<Option<T>, MessageError> {
         loop {
             match self.buffer.next()? {
                 Some(item) => return Ok(Some(item)),
@@ -79,13 +81,6 @@ where
                     self.buffer.extend(&bytes);
                 }
             }
-        }
-    }
-
-    pub async fn do_read(&mut self) -> Option<T> {
-        match self.read().await {
-            Ok(Some(message)) => Some(message),
-            _ => None,
         }
     }
 }

@@ -51,12 +51,21 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MessageQueueSender<T>
 where
     T: Debug + Send,
 {
     sender: mpsc::Sender<T>,
+}
+
+impl<T> Clone for MessageQueueSender<T>
+where
+    T: Debug + Send,
+{
+    fn clone(&self) -> Self {
+        Self::new(self.sender.clone())
+    }
 }
 
 impl<T> MessageQueueSender<T>
@@ -69,7 +78,7 @@ where
 
     pub async fn do_send<M>(&self, message: M)
     where
-        T: From<M>
+        T: From<M>,
     {
         self.sender.do_send(T::from(message)).await
     }

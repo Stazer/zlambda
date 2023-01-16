@@ -7,8 +7,8 @@ use std::error::Error;
 use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
 use tokio::io::{stdin, stdout};
+use zlambda_core::module::ModuleId;
 use zlambda_core::node::{NodeId, NodeTask};
-use zlambda_core::module::{ModuleId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,7 +90,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         node_id,
                     } => Some((leader_address, node_id)),
                 },
-            ).await?
+            )
+            .await?
             .run()
             .await
             /*NodeTask::new(

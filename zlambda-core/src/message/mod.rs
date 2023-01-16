@@ -1,13 +1,15 @@
+mod asynchronous;
 mod buffer;
-mod queue;
 mod error;
+mod queue;
 mod socket;
-mod envelope;
+mod synchronous;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub use asynchronous::*;
 pub use buffer::*;
-pub use queue::*;
 pub use error::*;
+pub use queue::*;
 pub use socket::*;
-pub use envelope::*;
+pub use synchronous::*;

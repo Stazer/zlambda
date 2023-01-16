@@ -8,8 +8,7 @@ pub use term::*;
 
 #[derive(Debug, Default)]
 pub struct Log {
-    current_term: LogTerm
+    current_term: LogTerm,
 }
 
-impl Log {
-}
+impl Log {}

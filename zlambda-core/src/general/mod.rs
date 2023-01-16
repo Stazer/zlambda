@@ -1,8 +1,7 @@
-#![feature(async_fn_in_trait)]
+mod input;
+mod message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub mod general;
-pub mod message;
-pub mod module;
-pub mod server;
+pub use input::*;
+pub use message::*;
