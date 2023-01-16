@@ -1,4 +1,4 @@
-use crate::message::{MessageBufferReader, MessageError};
+use crate::message::{AsynchronousMessage, MessageBufferReader, MessageError};
 use postcard::to_allocvec;
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
@@ -42,6 +42,13 @@ where
             .map(|_| ())?;
 
         Ok(())
+    }
+
+    pub async fn send_asynchronous<I>(&mut self, input: I) -> Result<(), MessageError>
+    where
+        T: From<AsynchronousMessage<I>>,
+    {
+        self.send(AsynchronousMessage::new(input)).await
     }
 }
 

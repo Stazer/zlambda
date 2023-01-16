@@ -1,7 +1,7 @@
 use crate::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
-    ServerRegistrationAttemptMessageInput, ServerRegistrationAttemptMessageOutput,
-    ServerSocketAcceptMessageInput,
+    ServerRegistrationMessageInput, ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
+    ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -10,20 +10,37 @@ pub type ServerSocketAcceptMessage = AsynchronousMessage<ServerSocketAcceptMessa
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerRegistrationAttemptMessage = SynchronousMessage<
-    ServerRegistrationAttemptMessageInput,
-    ServerRegistrationAttemptMessageOutput,
->;
+pub type ServerRegistrationMessage =
+    SynchronousMessage<ServerRegistrationMessageInput, ServerRegistrationMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerRecoveryMessage =
+    SynchronousMessage<ServerRecoveryMessageInput, ServerRecoveryMessageOutput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub enum ServerMessage {
     SocketAccept(ServerSocketAcceptMessage),
+    Registration(ServerRegistrationMessage),
+    Recovery(ServerRecoveryMessage),
 }
 
-impl From<ServerSocketAcceptMessageInput> for ServerMessage {
-    fn from(input: ServerSocketAcceptMessageInput) -> Self {
-        Self::SocketAccept(ServerSocketAcceptMessage::new(input))
+impl From<ServerSocketAcceptMessage> for ServerMessage {
+    fn from(message: ServerSocketAcceptMessage) -> Self {
+        Self::SocketAccept(message)
+    }
+}
+
+impl From<ServerRegistrationMessage> for ServerMessage {
+    fn from(message: ServerRegistrationMessage) -> Self {
+        Self::Registration(message)
+    }
+}
+
+impl From<ServerRecoveryMessage> for ServerMessage {
+    fn from(message: ServerRecoveryMessage) -> Self {
+        Self::Recovery(message)
     }
 }

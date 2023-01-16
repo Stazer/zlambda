@@ -1,4 +1,5 @@
 use crate::message::MessageError;
+use crate::server::ServerId;
 use std::error;
 use std::fmt::{self, Display, Formatter};
 use std::io;
@@ -19,7 +20,9 @@ impl Display for NewServerError {
         match self {
             Self::Io(error) => Display::fmt(error, formatter),
             Self::Message(error) => Display::fmt(error, formatter),
-            Self::IsOnline(server_id) => write!(formatter, "Server with id {} is online", server_id),
+            Self::IsOnline(server_id) => {
+                write!(formatter, "Server with id {} is online", server_id)
+            }
         }
     }
 }

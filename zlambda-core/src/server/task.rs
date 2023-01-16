@@ -1,18 +1,21 @@
 use crate::general::{
-    GeneralMessage, GeneralRegistrationRequestMessage, GeneralRegistrationRequestMessageInput,
-    GeneralRegistrationResponseMessageInput, GeneralRecoveryRequestMessageInput, GeneralRecoveryRequestMessage,
-    GeneralRecoveryResponseMessageInput
+    GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryRequestMessageInput,
+    GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessage,
+    GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
 };
 use crate::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };
 use crate::server::connection::ServerConnectionTask;
-use crate::server::{Log, NewServerError, ServerId, ServerMessage, ServerSocketAcceptMessage};
+use crate::server::{
+    Log, NewServerError, ServerId, ServerMessage, ServerRegistrationMessage,
+    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerRecoveryMessage,
+};
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::{select, spawn};
-use tracing::info;
+use tracing::{error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,7 +77,8 @@ impl ServerTask {
                             match input {
                                 GeneralRegistrationResponseMessageInput::NotALeader(input) => {
                                     socket =
-                                        TcpStream::connect(input.leader_socket_address()).await?;
+                                        TcpStream::connect(input.leader_server_socket_address())
+                                            .await?;
                                     continue;
                                 }
                                 GeneralRegistrationResponseMessageInput::Success(input) => {
@@ -118,11 +122,9 @@ impl ServerTask {
                     );
 
                     sender
-                        .send(
-                            GeneralRecoveryRequestMessage::new(
-                                GeneralRecoveryRequestMessageInput::new(server_id),
-                            ),
-                        )
+                        .send(GeneralRecoveryRequestMessage::new(
+                            GeneralRecoveryRequestMessageInput::new(server_id),
+                        ))
                         .await?;
 
                     match receiver.receive().await? {
@@ -137,7 +139,7 @@ impl ServerTask {
                                     continue;
                                 }
                                 GeneralRecoveryResponseMessageInput::IsOnline => {
-                                    return Err(NewServerError::IsOnline);
+                                    return Err(NewServerError::IsOnline(server_id));
                                 }
                                 GeneralRecoveryResponseMessageInput::Success(input) => {
                                     break input.into()
@@ -145,12 +147,17 @@ impl ServerTask {
                             }
                         }
                         Some(message) => {
-                            return Err(MessageError::UnexpectedMessage(format!("{:?}", message)).into())
+                            return Err(
+                                MessageError::UnexpectedMessage(format!("{:?}", message)).into()
+                            )
                         }
                     }
                 };
 
-                info!("Recovered with leader {} and term {}", leader_server_id, term);
+                info!(
+                    "Recovered with leader {} and term {}",
+                    leader_server_id, term
+                );
 
                 Ok(Self {
                     server_id,
@@ -165,139 +172,6 @@ impl ServerTask {
         }
     }
 
-    /*pub async fn new<S, T>(
-        listener_address: S,
-        follower_data: Option<(T, Option<ServerId>)>,
-    ) -> Result<Self, NewServerError>
-    where
-        S: ToSocketAddrs,
-        T: ToSocketAddrs,
-    {
-        let tcp_listener = TcpListener::bind(listener_address).await?;
-        let (sender, receiver) = message_channel();
-
-        match follower_data {
-            None => Ok(Self {
-                server_id: 0,
-                leader_server_id: 0,
-                server_socket_addresses: vec![tcp_listener.local_addr()?],
-                term: 0,
-                tcp_listener,
-                sender,
-                receiver,
-            }),
-            Some((registration_address, None)) => {
-                let address = tcp_listener.local_addr()?;
-                let mut socket = TcpStream::connect(registration_address).await?;
-
-                let (server_id, leader_server_id, server_socket_addresses, term) = loop {
-                    let (reader, writer) = socket.into_split();
-
-                    let (mut reader, mut writer) = (
-                        MessageStreamReader::new(reader),
-                        MessageStreamWriter::new(writer),
-                    );
-
-                    writer
-                        .write(
-                            GuestToServerMessage::RegisterRequest(
-                                GuestToServerRegisterRequestMessage::new(address),
-                            )
-                            .into(),
-                        )
-                        .await?;
-
-                    match reader.read().await? {
-                        None => return Err(MessageError::ExpectedMessage.into()),
-                        Some(Message::FollowerToGuest(
-                            FollowerToGuestMessage::RegisterNotALeaderResponse(message),
-                        )) => {
-                            socket = TcpStream::connect(message.leader_address()).await?;
-                            continue;
-                        }
-                        Some(Message::LeaderToGuest(LeaderToGuestMessage::RegisterOkResponse(
-                            message,
-                        ))) => break message.into(),
-                        Some(message) => {
-                            return Err(MessageError::UnexpectedMessage(message).into())
-                        }
-                    }
-                };
-
-                info!(
-                    "Registered as server {} at leader {} with term {}",
-                    server_id, leader_server_id, term
-                );
-
-                Ok(Self {
-                    server_id,
-                    leader_server_id,
-                    server_socket_addresses,
-                    term,
-                    tcp_listener,
-                    sender,
-                    receiver,
-                })
-            }
-            Some((recovery_address, Some(server_id))) => {
-                let address = tcp_listener.local_addr()?;
-                let mut socket = TcpStream::connect(recovery_address).await?;
-
-                let (server_id, leader_server_id, server_socket_addresses, term) = loop {
-                    let (reader, writer) = socket.into_split();
-
-                    let (mut reader, mut writer) = (
-                        MessageStreamReader::new(reader),
-                        MessageStreamWriter::new(writer),
-                    );
-
-                    writer
-                        .write(
-                            GuestToServerMessage::RecoveryRequest(
-                                GuestToServerRecoveryRequestMessage::new(address, server_id),
-                            )
-                            .into(),
-                        )
-                        .await?;
-
-                    match reader.read().await? {
-                        None => return Err(MessageError::ExpectedMessage.into()),
-                        Some(Message::FollowerToGuest(
-                            FollowerToGuestMessage::RecoveryNotALeaderResponse(message),
-                        )) => {
-                            socket = TcpStream::connect(message.leader_address()).await?;
-                            continue;
-                        }
-                        Some(Message::LeaderToGuest(
-                            LeaderToGuestMessage::RecoveryErrorResponse(message),
-                        )) => {
-                            let (error,) = message.into();
-                            return Err(error.into());
-                        }
-                        Some(Message::LeaderToGuest(LeaderToGuestMessage::RecoveryOkResponse(
-                            message,
-                        ))) => break message.into(),
-                        Some(message) => {
-                            return Err(MessageError::UnexpectedMessage(message).into())
-                        }
-                    }
-                };
-
-                info!("Recovered with leader {} and term {}", leader_server_id, term);
-
-                Ok(Self {
-                    server_id,
-                    leader_server_id,
-                    server_socket_addresses,
-                    term,
-                    tcp_listener,
-                    sender,
-                    receiver,
-                })
-            }
-        }
-    }*/
-
     pub async fn spawn(self) {
         spawn(async move { self.run().await });
     }
@@ -306,24 +180,45 @@ impl ServerTask {
         loop {
             select!(
                 result = self.tcp_listener.accept() => {
+                    let (socket_stream, socket_address) = match result {
+                        Ok(socket) => socket,
+                        Err(error) => {
+                            error!("{}", error);
+                            continue;
+                        }
+                    };
+
+                    self.on_server_message(
+                        ServerSocketAcceptMessage::new(
+                            ServerSocketAcceptMessageInput::new(socket_stream, socket_address),
+                        ).into(),
+                    ).await;
                 }
             )
         }
     }
 
-    pub async fn on_server_message(&mut self, message: ServerMessage) {
+    async fn on_server_message(&mut self, message: ServerMessage) {
         match message {
             ServerMessage::SocketAccept(message) => {
                 self.on_server_socket_accept_message(message).await
             }
+            ServerMessage::Registration(message) => {
+                self.on_server_registration_message(message).await
+            }
+            ServerMessage::Recovery(message) => {
+                self.on_server_recovery_message(message).await
+            }
         }
     }
 
-    pub async fn on_server_socket_accept_message(&mut self, message: ServerSocketAcceptMessage) {
+    async fn on_server_socket_accept_message(&mut self, message: ServerSocketAcceptMessage) {
         let (input,) = message.into();
-        let (stream,) = input.into();
+        let (socket_stream, socket_address) = input.into();
 
-        let (reader, writer) = stream.into_split();
+        info!("Connection from {}", socket_address);
+
+        let (reader, writer) = socket_stream.into_split();
 
         ServerConnectionTask::new(
             self.sender.clone(),
@@ -332,4 +227,8 @@ impl ServerTask {
         )
         .spawn()
     }
+
+    async fn on_server_registration_message(&mut self, message: ServerRegistrationMessage) {}
+
+    async fn on_server_recovery_message(&mut self, message: ServerRecoveryMessage) {}
 }

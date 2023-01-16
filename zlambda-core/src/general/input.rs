@@ -7,22 +7,24 @@ use std::net::SocketAddr;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralRegistrationRequestMessageInput {
-    socket_address: SocketAddr,
+    server_socket_address: SocketAddr,
 }
 
 impl From<GeneralRegistrationRequestMessageInput> for (SocketAddr,) {
     fn from(input: GeneralRegistrationRequestMessageInput) -> Self {
-        (input.socket_address,)
+        (input.server_socket_address,)
     }
 }
 
 impl GeneralRegistrationRequestMessageInput {
-    pub fn new(socket_address: SocketAddr) -> Self {
-        Self { socket_address }
+    pub fn new(server_socket_address: SocketAddr) -> Self {
+        Self {
+            server_socket_address,
+        }
     }
 
-    pub fn socket_address(&self) -> &SocketAddr {
-        &self.socket_address
+    pub fn server_socket_address(&self) -> &SocketAddr {
+        &self.server_socket_address
     }
 }
 
@@ -30,24 +32,24 @@ impl GeneralRegistrationRequestMessageInput {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralRegistrationResponseMessageNotALeaderInput {
-    leader_socket_address: SocketAddr,
+    leader_server_socket_address: SocketAddr,
 }
 
 impl From<GeneralRegistrationResponseMessageNotALeaderInput> for (SocketAddr,) {
     fn from(input: GeneralRegistrationResponseMessageNotALeaderInput) -> Self {
-        (input.leader_socket_address,)
+        (input.leader_server_socket_address,)
     }
 }
 
 impl GeneralRegistrationResponseMessageNotALeaderInput {
-    pub fn new(leader_socket_address: SocketAddr) -> Self {
+    pub fn new(leader_server_socket_address: SocketAddr) -> Self {
         Self {
-            leader_socket_address,
+            leader_server_socket_address,
         }
     }
 
-    pub fn leader_socket_address(&self) -> &SocketAddr {
-        &self.leader_socket_address
+    pub fn leader_server_socket_address(&self) -> &SocketAddr {
+        &self.leader_server_socket_address
     }
 }
 
@@ -237,5 +239,11 @@ pub enum GeneralRecoveryResponseMessageInput {
 impl From<GeneralRecoveryResponseMessageNotALeaderInput> for GeneralRecoveryResponseMessageInput {
     fn from(input: GeneralRecoveryResponseMessageNotALeaderInput) -> Self {
         Self::NotALeader(input)
+    }
+}
+
+impl From<GeneralRecoveryResponseMessageSuccessInput> for GeneralRecoveryResponseMessageInput {
+    fn from(input: GeneralRecoveryResponseMessageSuccessInput) -> Self {
+        Self::Success(input)
     }
 }
