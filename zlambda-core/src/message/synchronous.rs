@@ -1,11 +1,22 @@
+use crate::message::{DoReceive, DoSend};
 use std::fmt::{self, Debug, Formatter};
 use tokio::sync::oneshot;
-use crate::message::DoSend;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub fn synchronous_message_output_channel() -> () {
+pub fn synchronous_message_output_channel<O>() -> (
+    SynchronousMessageOutputSender<O>,
+    SynchronousMessageOutputReceiver<O>,
+)
+where
+    O: Debug + Send,
+{
+    let (sender, receiver) = oneshot::channel();
 
+    (
+        SynchronousMessageOutputSender::new(sender),
+        SynchronousMessageOutputReceiver::new(receiver),
+    )
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,45 +32,76 @@ impl<O> SynchronousMessageOutputSender<O>
 where
     O: Debug + Send,
 {
-    fn new(
-        sender: oneshot::Sender<O>,
-    ) -> Self {
-        Self {
-            sender,
-        }
+    fn new(sender: oneshot::Sender<O>) -> Self {
+        Self { sender }
     }
 
-    pub async fn do_send(self, output: O) {
-        self.sender.do_send(output).await
+    pub async fn do_send<T>(self, output: T)
+    where
+        O: From<T>,
+    {
+        self.sender.do_send(output.into()).await
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct SynchronousMessage<I, O> {
+pub struct SynchronousMessageOutputReceiver<O>
+where
+    O: Send,
+{
+    receiver: oneshot::Receiver<O>,
+}
+
+impl<O> SynchronousMessageOutputReceiver<O>
+where
+    O: Debug + Send,
+{
+    fn new(receiver: oneshot::Receiver<O>) -> Self {
+        Self { receiver }
+    }
+
+    pub async fn do_receive(self) -> O {
+        self.receiver.do_receive().await
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct SynchronousMessage<I, O>
+where
+    O: Debug + Send,
+{
     input: I,
-    sender: oneshot::Sender<O>,
+    sender: SynchronousMessageOutputSender<O>,
 }
 
 impl<I, O> Debug for SynchronousMessage<I, O>
 where
     I: Debug,
+    O: Debug + Send,
 {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        let mut builder = formatter.debug_struct("AsynchronousMessage");
+        let mut builder = formatter.debug_struct("SynchronousMessage");
         builder.field("input", &self.input);
         builder.finish()
     }
 }
 
-impl<I, O> From<SynchronousMessage<I, O>> for (I, oneshot::Sender<O>) {
+impl<I, O> From<SynchronousMessage<I, O>> for (I, SynchronousMessageOutputSender<O>)
+where
+    O: Debug + Send,
+{
     fn from(envelope: SynchronousMessage<I, O>) -> Self {
         (envelope.input, envelope.sender)
     }
 }
 
-impl<I, O> SynchronousMessage<I, O> {
-    pub fn new(input: I, sender: oneshot::Sender<O>) -> Self {
+impl<I, O> SynchronousMessage<I, O>
+where
+    O: Debug + Send,
+{
+    pub fn new(input: I, sender: SynchronousMessageOutputSender<O>) -> Self {
         Self { input, sender }
     }
 
@@ -67,7 +109,7 @@ impl<I, O> SynchronousMessage<I, O> {
         &self.input
     }
 
-    pub fn sender(&self) -> &oneshot::Sender<O> {
+    pub fn sender(&self) -> &SynchronousMessageOutputSender<O> {
         &self.sender
     }
 }

@@ -1,3 +1,5 @@
+use crate::general::GeneralMessage;
+use crate::message::{MessageSocketReceiver, MessageSocketSender};
 use crate::server::{FollowingLog, LeadingLog, ServerId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,13 +29,22 @@ impl ServerLeaderType {
 pub struct ServerFollowerType {
     leader_server_id: ServerId,
     log: FollowingLog,
+    sender: MessageSocketSender<GeneralMessage>,
+    receiver: MessageSocketReceiver<GeneralMessage>,
 }
 
 impl ServerFollowerType {
-    pub fn new(leader_server_id: ServerId, log: FollowingLog) -> Self {
+    pub fn new(
+        leader_server_id: ServerId,
+        log: FollowingLog,
+        sender: MessageSocketSender<GeneralMessage>,
+        receiver: MessageSocketReceiver<GeneralMessage>,
+    ) -> Self {
         Self {
             leader_server_id,
             log,
+            sender,
+            receiver,
         }
     }
 
@@ -47,6 +58,22 @@ impl ServerFollowerType {
 
     pub fn log_mut(&mut self) -> &mut FollowingLog {
         &mut self.log
+    }
+
+    pub fn sender(&self) -> &MessageSocketSender<GeneralMessage> {
+        &self.sender
+    }
+
+    pub fn sender_mut(&mut self) -> &MessageSocketSender<GeneralMessage> {
+        &self.sender
+    }
+
+    pub fn receiver(&self) -> &MessageSocketReceiver<GeneralMessage> {
+        &self.receiver
+    }
+
+    pub fn receiver_mut(&mut self) -> &MessageSocketReceiver<GeneralMessage> {
+        &self.receiver
     }
 }
 

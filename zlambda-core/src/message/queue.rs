@@ -1,4 +1,6 @@
-use crate::message::{DoSend, DoReceive, AsynchronousMessage, SynchronousMessage};
+use crate::message::{
+    synchronous_message_output_channel, AsynchronousMessage, DoReceive, DoSend, SynchronousMessage,
+};
 use std::fmt::Debug;
 use tokio::sync::{mpsc, oneshot};
 
@@ -48,7 +50,7 @@ where
         T: From<SynchronousMessage<I, O>>,
         O: Debug + Send,
     {
-        let (sender, receiver) = oneshot::channel();
+        let (sender, receiver) = synchronous_message_output_channel();
 
         self.do_send(SynchronousMessage::new(input, sender)).await;
 

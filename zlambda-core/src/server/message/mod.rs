@@ -1,7 +1,9 @@
 use crate::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
     ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
-    ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
+    ServerRegistrationMessageOutput, ServerReplicateLogEntriesMessageInput,
+    ServerReplicateLogEntriesMessageOutput, ServerSocketAcceptMessageInput,
+    ServerAcknowledgeLogEntriesMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,11 +22,26 @@ pub type ServerRecoveryMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerReplicateLogEntriesMessage = SynchronousMessage<
+    ServerReplicateLogEntriesMessageInput,
+    ServerReplicateLogEntriesMessageOutput,
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerAcknowledgeLogEntriesMessage = AsynchronousMessage<
+    ServerAcknowledgeLogEntriesMessageInput,
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     SocketAccept(ServerSocketAcceptMessage),
     Registration(ServerRegistrationMessage),
     Recovery(ServerRecoveryMessage),
+    ReplicateLogEntries(ServerReplicateLogEntriesMessage),
+    AcknowledgeLogEntries(ServerAcknowledgeLogEntriesMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -42,5 +59,17 @@ impl From<ServerRegistrationMessage> for ServerMessage {
 impl From<ServerRecoveryMessage> for ServerMessage {
     fn from(message: ServerRecoveryMessage) -> Self {
         Self::Recovery(message)
+    }
+}
+
+impl From<ServerReplicateLogEntriesMessage> for ServerMessage {
+    fn from(message: ServerReplicateLogEntriesMessage) -> Self {
+        Self::ReplicateLogEntries(message)
+    }
+}
+
+impl From<ServerAcknowledgeLogEntriesMessage> for ServerMessage {
+    fn from(message: ServerAcknowledgeLogEntriesMessage) -> Self {
+        Self::AcknowledgeLogEntries(message)
     }
 }

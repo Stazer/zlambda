@@ -1,4 +1,4 @@
-use crate::server::{LogTerm, ServerId};
+use crate::server::{LogEntryId, LogTerm, ServerId};
 use std::net::SocketAddr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,5 +189,28 @@ impl From<ServerRecoveryMessageNotALeaderOutput> for ServerRecoveryMessageOutput
 impl From<ServerRecoveryMessageSuccessOutput> for ServerRecoveryMessageOutput {
     fn from(output: ServerRecoveryMessageSuccessOutput) -> Self {
         Self::Success(output)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerReplicateLogEntriesMessageOutput {
+    log_entry_ids: Vec<LogEntryId>,
+}
+
+impl From<ServerReplicateLogEntriesMessageOutput> for (Vec<LogEntryId>,) {
+    fn from(output: ServerReplicateLogEntriesMessageOutput) -> Self {
+        (output.log_entry_ids,)
+    }
+}
+
+impl ServerReplicateLogEntriesMessageOutput {
+    pub fn new(log_entry_ids: Vec<LogEntryId>) -> Self {
+        Self { log_entry_ids }
+    }
+
+    pub fn log_entry_ids(&self) -> &Vec<LogEntryId> {
+        &self.log_entry_ids
     }
 }

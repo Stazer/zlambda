@@ -1,19 +1,19 @@
 mod asynchronous;
 mod buffer;
+mod do_receive;
+mod do_send;
 mod error;
 mod queue;
 mod socket;
 mod synchronous;
-mod do_send;
-mod do_receive;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub use asynchronous::*;
 pub use buffer::*;
+pub use do_receive::*;
+pub use do_send::*;
 pub use error::*;
 pub use queue::*;
 pub use socket::*;
 pub use synchronous::*;
-pub use do_send::*;
-pub use do_receive::*;

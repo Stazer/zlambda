@@ -1,4 +1,4 @@
-use crate::server::ServerId;
+use crate::server::{LogEntryId, LogEntryData, ServerId};
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
@@ -74,6 +74,63 @@ impl From<ServerRecoveryMessageInput> for (ServerId,) {
 impl ServerRecoveryMessageInput {
     pub fn new(server_id: ServerId) -> Self {
         Self { server_id }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerReplicateLogEntriesMessageInput {
+    log_entries_data: Vec<LogEntryData>,
+}
+
+impl From<ServerReplicateLogEntriesMessageInput> for (Vec<LogEntryData>,) {
+    fn from(input: ServerReplicateLogEntriesMessageInput) -> Self {
+        (input.log_entries_data,)
+    }
+}
+
+impl ServerReplicateLogEntriesMessageInput {
+    pub fn new(log_entries_data: Vec<LogEntryData>) -> Self {
+        Self { log_entries_data }
+    }
+
+    pub fn log_entries_data(&self) -> &Vec<LogEntryData> {
+        &self.log_entries_data
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerAcknowledgeLogEntriesMessageInput {
+    log_entry_ids: Vec<LogEntryId>,
+    server_id: ServerId,
+}
+
+impl From<ServerAcknowledgeLogEntriesMessageInput> for (Vec<LogEntryId>, ServerId) {
+    fn from(input: ServerAcknowledgeLogEntriesMessageInput) -> Self {
+        (input.log_entry_ids, input.server_id)
+    }
+}
+
+impl ServerAcknowledgeLogEntriesMessageInput {
+    pub fn new(
+        log_entry_ids: Vec<LogEntryId>,
+        server_id: ServerId,
+    ) -> Self {
+        Self {
+            log_entry_ids,
+            server_id,
+        }
+    }
+
+    pub fn log_entry_ids(&self) -> &Vec<LogEntryId> {
+        &self.log_entry_ids
     }
 
     pub fn server_id(&self) -> ServerId {

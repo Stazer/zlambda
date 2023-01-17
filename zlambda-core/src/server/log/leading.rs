@@ -1,5 +1,5 @@
 use crate::server::ServerId;
-use crate::server::{LogEntry, LogEntryId, LogError, LogTerm};
+use crate::server::{LogEntry, LogEntryData, LogEntryId, LogError, LogTerm};
 use std::collections::hash_map::RandomState;
 use std::collections::hash_set::Difference;
 use std::collections::HashSet;
@@ -12,7 +12,7 @@ pub struct LeadingLog {
     entries: Vec<LogEntry>,
     acknowledgeable_server_ids: Vec<HashSet<ServerId>>,
     acknowledged_server_ids: Vec<HashSet<ServerId>>,
-    last_committed_log_entry_id: Option<LogEntryId>,
+    next_committing_log_entry_id: LogEntryId,
 }
 
 impl LeadingLog {
@@ -29,6 +29,8 @@ impl LeadingLog {
             .get(id)
             .map(|server_ids| server_ids.len() / 2)
     }
+
+
 
     pub fn acknowledgeable_server_ids(&self, id: LogEntryId) -> Option<&HashSet<ServerId>> {
         self.acknowledgeable_server_ids.get(id)
@@ -49,19 +51,37 @@ impl LeadingLog {
             (Some(acknowledgeable_server_ids), Some(acknowledged_server_ids)) => {
                 Some(acknowledgeable_server_ids.difference(acknowledged_server_ids))
             }
-            _ => return None,
+            _ => None,
         }
     }
 
-    pub fn is_acknowledged(&self, id: LogEntryId) -> Option<bool> {
+    pub fn next_committing_log_entry_id(&self) -> LogEntryId {
+        self.next_committing_log_entry_id
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
+        match self.next_committing_log_entry_id {
+            0 => None,
+            next_committing_log_entry_id => Some(next_committing_log_entry_id - 1)
+        }
+    }
+
+    pub fn is_acknowledged(&self, id: LogEntryId) -> bool {
         match (
             self.quorum_count(id),
             self.remaining_acknowledgeable_server_ids(id),
         ) {
             (Some(quorum_count), Some(remaining_acknowledgeable_server_ids)) => {
-                Some(remaining_acknowledgeable_server_ids.count() <= quorum_count)
+                remaining_acknowledgeable_server_ids.count() <= quorum_count
             }
-            _ => None,
+            _ => false,
+        }
+    }
+
+    pub fn is_committed(&self, id: LogEntryId) -> bool {
+        match self.last_committed_log_entry_id() {
+            None => false,
+            Some(last_committed_log_entry_id) => last_committed_log_entry_id <= id
         }
     }
 
@@ -86,6 +106,28 @@ impl LeadingLog {
 
         server_ids.insert(server_id);
 
+        loop {
+            if self.is_committed(self.next_committing_log_entry_id) {
+                self.next_committing_log_entry_id += 1;
+            } else {
+                break;
+            }
+        }
+
         Ok(())
+    }
+
+    pub fn append(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {
+        self.entries.reserve(log_entries_data.len());
+        let start = self.entries.len() - 1;
+
+        self.entries.extend(
+            log_entries_data
+                .into_iter()
+                .enumerate()
+                .map(|(index, data)| LogEntry::new(start + index, self.current_term, data)),
+        );
+
+        (start..self.entries.len()).collect()
     }
 }
