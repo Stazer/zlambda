@@ -9,7 +9,7 @@ use crate::message::{
 };
 use crate::server::connection::ServerConnectionTask;
 use crate::server::{
-    FollowingLog, LeadingLog, LogManager, NewServerError, ServerFollowerType, ServerId,
+    FollowingLog, LeadingLog, NewServerError, ServerFollowerType, ServerId,
     ServerLeaderType, ServerMessage, ServerRecoveryMessage, ServerRegistrationMessage,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
 };
