@@ -1,6 +1,6 @@
+use crate::server::ServerId;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
-use crate::server::ServerId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -73,9 +73,7 @@ impl From<ServerRecoveryMessageInput> for (ServerId,) {
 
 impl ServerRecoveryMessageInput {
     pub fn new(server_id: ServerId) -> Self {
-        Self {
-            server_id,
-        }
+        Self { server_id }
     }
 
     pub fn server_id(&self) -> ServerId {

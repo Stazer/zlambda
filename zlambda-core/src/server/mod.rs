@@ -7,6 +7,7 @@ mod member;
 mod message;
 mod output;
 mod task;
+mod r#type;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,4 +19,5 @@ pub use log::*;
 pub use member::*;
 pub use message::*;
 pub use output::*;
+pub use r#type::*;
 pub use task::*;

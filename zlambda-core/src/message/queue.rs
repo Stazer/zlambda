@@ -1,54 +1,6 @@
-use crate::message::{AsynchronousMessage, SynchronousMessage};
+use crate::message::{DoSend, DoReceive, AsynchronousMessage, SynchronousMessage};
 use std::fmt::Debug;
 use tokio::sync::{mpsc, oneshot};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-trait DoSend<T> {
-    async fn do_send(self, value: T);
-}
-
-impl<T> DoSend<T> for oneshot::Sender<T>
-where
-    T: std::fmt::Debug + Send,
-{
-    async fn do_send(self, value: T) {
-        self.send(value).expect("Data must be sent")
-    }
-}
-
-impl<T> DoSend<T> for &mpsc::Sender<T>
-where
-    T: std::fmt::Debug + Send,
-{
-    async fn do_send(self, value: T) {
-        self.send(value).await.expect("Data must be sent")
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-trait DoReceive<T> {
-    async fn do_receive(self) -> T;
-}
-
-impl<T> DoReceive<T> for oneshot::Receiver<T>
-where
-    T: std::fmt::Debug + Send,
-{
-    async fn do_receive(self) -> T {
-        self.await.expect("Data must be received")
-    }
-}
-
-impl<T> DoReceive<T> for &mut mpsc::Receiver<T>
-where
-    T: std::fmt::Debug + Send,
-{
-    async fn do_receive(self) -> T {
-        self.recv().await.expect("Data must be received")
-    }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

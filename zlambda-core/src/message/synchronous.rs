@@ -1,5 +1,38 @@
 use std::fmt::{self, Debug, Formatter};
 use tokio::sync::oneshot;
+use crate::message::DoSend;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub fn synchronous_message_output_channel() -> () {
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct SynchronousMessageOutputSender<O>
+where
+    O: Debug + Send,
+{
+    sender: oneshot::Sender<O>,
+}
+
+impl<O> SynchronousMessageOutputSender<O>
+where
+    O: Debug + Send,
+{
+    fn new(
+        sender: oneshot::Sender<O>,
+    ) -> Self {
+        Self {
+            sender,
+        }
+    }
+
+    pub async fn do_send(self, output: O) {
+        self.sender.do_send(output).await
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

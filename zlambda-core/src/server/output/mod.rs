@@ -33,7 +33,7 @@ pub struct ServerRegistrationMessageSuccessOutput {
     server_id: ServerId,
     leader_server_id: ServerId,
     server_socket_addresses: Vec<Option<SocketAddr>>,
-    log_term: LogTerm,
+    current_log_term: LogTerm,
 }
 
 impl From<ServerRegistrationMessageSuccessOutput>
@@ -44,7 +44,7 @@ impl From<ServerRegistrationMessageSuccessOutput>
             output.server_id,
             output.leader_server_id,
             output.server_socket_addresses,
-            output.log_term,
+            output.current_log_term,
         )
     }
 }
@@ -54,13 +54,13 @@ impl ServerRegistrationMessageSuccessOutput {
         server_id: ServerId,
         leader_server_id: ServerId,
         server_socket_addresses: Vec<Option<SocketAddr>>,
-        log_term: LogTerm,
+        current_log_term: LogTerm,
     ) -> Self {
         Self {
             server_id,
             leader_server_id,
             server_socket_addresses,
-            log_term,
+            current_log_term,
         }
     }
 
@@ -76,8 +76,8 @@ impl ServerRegistrationMessageSuccessOutput {
         &self.server_socket_addresses
     }
 
-    pub fn log_term(&self) -> LogTerm {
-        self.log_term
+    pub fn curremt_log_term(&self) -> LogTerm {
+        self.current_log_term
     }
 }
 
@@ -132,17 +132,15 @@ impl ServerRecoveryMessageNotALeaderOutput {
 pub struct ServerRecoveryMessageSuccessOutput {
     leader_server_id: ServerId,
     server_socket_addresses: Vec<Option<SocketAddr>>,
-    log_term: LogTerm,
+    current_log_term: LogTerm,
 }
 
-impl From<ServerRecoveryMessageSuccessOutput>
-    for (ServerId, Vec<Option<SocketAddr>>, LogTerm)
-{
+impl From<ServerRecoveryMessageSuccessOutput> for (ServerId, Vec<Option<SocketAddr>>, LogTerm) {
     fn from(output: ServerRecoveryMessageSuccessOutput) -> Self {
         (
             output.leader_server_id,
             output.server_socket_addresses,
-            output.log_term,
+            output.current_log_term,
         )
     }
 }
@@ -151,12 +149,12 @@ impl ServerRecoveryMessageSuccessOutput {
     pub fn new(
         leader_server_id: ServerId,
         server_socket_addresses: Vec<Option<SocketAddr>>,
-        log_term: LogTerm,
+        current_log_term: LogTerm,
     ) -> Self {
         Self {
             leader_server_id,
             server_socket_addresses,
-            log_term,
+            current_log_term,
         }
     }
 
@@ -168,8 +166,8 @@ impl ServerRecoveryMessageSuccessOutput {
         &self.server_socket_addresses
     }
 
-    pub fn log_term(&self) -> LogTerm {
-        self.log_term
+    pub fn current_log_term(&self) -> LogTerm {
+        self.current_log_term
     }
 }
 

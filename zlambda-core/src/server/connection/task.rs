@@ -1,15 +1,16 @@
 use crate::general::{
-    GeneralMessage, GeneralRecoveryRequestMessage, GeneralRegistrationRequestMessage,
-    GeneralRegistrationResponseMessageInput, GeneralRegistrationResponseMessageNotALeaderInput,
-    GeneralRegistrationResponseMessageSuccessInput, GeneralRecoveryResponseMessageInput,
+    GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryResponseMessageInput,
     GeneralRecoveryResponseMessageNotALeaderInput, GeneralRecoveryResponseMessageSuccessInput,
+    GeneralRegistrationRequestMessage, GeneralRegistrationResponseMessageInput,
+    GeneralRegistrationResponseMessageNotALeaderInput,
+    GeneralRegistrationResponseMessageSuccessInput,
 };
 use crate::message::{
     MessageError, MessageQueueSender, MessageSocketReceiver, MessageSocketSender,
 };
 use crate::server::{
-    ServerMessage, ServerRegistrationMessageInput, ServerRegistrationMessageOutput, ServerRecoveryMessageInput,
-    ServerRecoveryMessageOutput,
+    ServerMessage, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
+    ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
 };
 use tokio::spawn;
 use tracing::error;
@@ -147,7 +148,8 @@ impl ServerConnectionTask {
                             leader_server_id,
                             server_socket_address,
                             log_term,
-                        ).into(),
+                        )
+                        .into(),
                     ))
                     .await
                 {

@@ -9,8 +9,9 @@ use crate::message::{
 };
 use crate::server::connection::ServerConnectionTask;
 use crate::server::{
-    Log, NewServerError, ServerId, ServerMessage, ServerRegistrationMessage,
-    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerRecoveryMessage,
+    FollowingLog, LeadingLog, LogManager, NewServerError, ServerFollowerType, ServerId,
+    ServerLeaderType, ServerMessage, ServerRecoveryMessage, ServerRegistrationMessage,
+    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
 };
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -21,9 +22,8 @@ use tracing::{error, info};
 
 pub struct ServerTask {
     server_id: ServerId,
-    leader_server_id: ServerId,
     server_socket_addresses: Vec<Option<SocketAddr>>,
-    log: Log,
+    r#type: ServerType,
     tcp_listener: TcpListener,
     sender: MessageQueueSender<ServerMessage>,
     receiver: MessageQueueReceiver<ServerMessage>,
@@ -44,9 +44,8 @@ impl ServerTask {
         match follower_data {
             None => Ok(Self {
                 server_id: 0,
-                leader_server_id: 0,
                 server_socket_addresses: vec![Some(tcp_listener.local_addr()?)],
-                log: Log::default(),
+                r#type: ServerLeaderType::new(LeadingLog::default()).into(),
                 tcp_listener,
                 sender,
                 receiver,
@@ -101,9 +100,12 @@ impl ServerTask {
 
                 Ok(Self {
                     server_id,
-                    leader_server_id,
                     server_socket_addresses,
-                    log: Log::default(),
+                    r#type: ServerFollowerType::new(
+                        leader_server_id,
+                        FollowingLog::new(term, Vec::default(), None),
+                    )
+                    .into(),
                     tcp_listener,
                     sender,
                     receiver,
@@ -161,9 +163,12 @@ impl ServerTask {
 
                 Ok(Self {
                     server_id,
-                    leader_server_id,
                     server_socket_addresses,
-                    log: Log::default(),
+                    r#type: ServerFollowerType::new(
+                        leader_server_id,
+                        FollowingLog::new(term, Vec::default(), None),
+                    )
+                    .into(),
                     tcp_listener,
                     sender,
                     receiver,
@@ -206,9 +211,7 @@ impl ServerTask {
             ServerMessage::Registration(message) => {
                 self.on_server_registration_message(message).await
             }
-            ServerMessage::Recovery(message) => {
-                self.on_server_recovery_message(message).await
-            }
+            ServerMessage::Recovery(message) => self.on_server_recovery_message(message).await,
         }
     }
 
@@ -228,7 +231,22 @@ impl ServerTask {
         .spawn()
     }
 
-    async fn on_server_registration_message(&mut self, message: ServerRegistrationMessage) {}
+    async fn on_server_registration_message(&mut self, message: ServerRegistrationMessage) {
+        let (input, sender) = message.into();
 
-    async fn on_server_recovery_message(&mut self, message: ServerRecoveryMessage) {}
+        match &self.r#type {
+            ServerType::Follower(follower) => {
+                /*sender.do_send(ServerRegistrationMessageNotALeaderOutput::new(
+                    self.node_socket_addresses.get(follower.leader_server_id()).expect(""),
+                ).into()).await;*/
+            }
+            ServerType::Leader(leader) => {
+
+            }
+        }
+    }
+
+    async fn on_server_recovery_message(&mut self, message: ServerRecoveryMessage) {
+        let (input, sender) = message.into();
+    }
 }

@@ -1,7 +1,7 @@
 use crate::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
-    ServerRegistrationMessageInput, ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
-    ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
+    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
+    ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
