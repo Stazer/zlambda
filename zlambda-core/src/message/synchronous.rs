@@ -73,7 +73,7 @@ where
     O: Debug + Send,
 {
     input: I,
-    sender: SynchronousMessageOutputSender<O>,
+    output_sender: SynchronousMessageOutputSender<O>,
 }
 
 impl<I, O> Debug for SynchronousMessage<I, O>
@@ -93,7 +93,7 @@ where
     O: Debug + Send,
 {
     fn from(envelope: SynchronousMessage<I, O>) -> Self {
-        (envelope.input, envelope.sender)
+        (envelope.input, envelope.output_sender)
     }
 }
 
@@ -101,15 +101,18 @@ impl<I, O> SynchronousMessage<I, O>
 where
     O: Debug + Send,
 {
-    pub fn new(input: I, sender: SynchronousMessageOutputSender<O>) -> Self {
-        Self { input, sender }
+    pub fn new(input: I, output_sender: SynchronousMessageOutputSender<O>) -> Self {
+        Self {
+            input,
+            output_sender,
+        }
     }
 
     pub fn input(&self) -> &I {
         &self.input
     }
 
-    pub fn sender(&self) -> &SynchronousMessageOutputSender<O> {
-        &self.sender
+    pub fn output_sender(&self) -> &SynchronousMessageOutputSender<O> {
+        &self.output_sender
     }
 }

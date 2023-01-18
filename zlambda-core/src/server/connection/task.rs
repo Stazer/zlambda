@@ -9,7 +9,7 @@ use crate::message::{
     MessageError, MessageQueueSender, MessageSocketReceiver, MessageSocketSender,
 };
 use crate::server::{
-    ServerMessage, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
+    ServerMemberTask, ServerMessage, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
     ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
 };
 use tokio::spawn;
@@ -95,7 +95,7 @@ impl ServerConnectionTask {
                 }
             }
             ServerRegistrationMessageOutput::Success(output) => {
-                let (server_id, leader_server_id, server_socket_addresses, log_term) =
+                let (server_id, leader_server_id, server_socket_addresses, log_term, member_sender) =
                     output.into();
 
                 if let Err(error) = self
@@ -111,6 +111,8 @@ impl ServerConnectionTask {
                     .await
                 {
                     error!("{}", error);
+                } else {
+                    //member_sender.
                 }
             }
         }
@@ -138,6 +140,15 @@ impl ServerConnectionTask {
                     error!("{}", error);
                 }
             }
+            ServerRecoveryMessageOutput::IsOnline => {
+                if let Err(error) = self
+                    .general_sender
+                    .send_asynchronous(GeneralRecoveryResponseMessageInput::IsOnline)
+                    .await
+                {
+                    error!("{}", error);
+                }
+            }
             ServerRecoveryMessageOutput::Success(output) => {
                 let (leader_server_id, server_socket_address, log_term) = output.into();
 
@@ -151,15 +162,6 @@ impl ServerConnectionTask {
                         )
                         .into(),
                     ))
-                    .await
-                {
-                    error!("{}", error);
-                }
-            }
-            ServerRecoveryMessageOutput::IsOnline => {
-                if let Err(error) = self
-                    .general_sender
-                    .send_asynchronous(GeneralRecoveryResponseMessageInput::IsOnline)
                     .await
                 {
                     error!("{}", error);

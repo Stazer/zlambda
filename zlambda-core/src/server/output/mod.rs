@@ -1,3 +1,5 @@
+use crate::message::MessageQueueSender;
+use crate::server::member::ServerMemberMessage;
 use crate::server::{LogEntryId, LogTerm, ServerId};
 use std::net::SocketAddr;
 
@@ -34,10 +36,17 @@ pub struct ServerRegistrationMessageSuccessOutput {
     leader_server_id: ServerId,
     server_socket_addresses: Vec<Option<SocketAddr>>,
     current_log_term: LogTerm,
+    member_sender: MessageQueueSender<ServerMemberMessage>,
 }
 
 impl From<ServerRegistrationMessageSuccessOutput>
-    for (ServerId, ServerId, Vec<Option<SocketAddr>>, LogTerm)
+    for (
+        ServerId,
+        ServerId,
+        Vec<Option<SocketAddr>>,
+        LogTerm,
+        MessageQueueSender<ServerMemberMessage>,
+    )
 {
     fn from(output: ServerRegistrationMessageSuccessOutput) -> Self {
         (
@@ -45,6 +54,7 @@ impl From<ServerRegistrationMessageSuccessOutput>
             output.leader_server_id,
             output.server_socket_addresses,
             output.current_log_term,
+            output.member_sender,
         )
     }
 }
@@ -55,12 +65,14 @@ impl ServerRegistrationMessageSuccessOutput {
         leader_server_id: ServerId,
         server_socket_addresses: Vec<Option<SocketAddr>>,
         current_log_term: LogTerm,
+        member_sender: MessageQueueSender<ServerMemberMessage>,
     ) -> Self {
         Self {
             server_id,
             leader_server_id,
             server_socket_addresses,
             current_log_term,
+            member_sender,
         }
     }
 
@@ -78,6 +90,10 @@ impl ServerRegistrationMessageSuccessOutput {
 
     pub fn curremt_log_term(&self) -> LogTerm {
         self.current_log_term
+    }
+
+    pub fn member_sender(&self) -> &MessageQueueSender<ServerMemberMessage> {
+        &self.member_sender
     }
 }
 

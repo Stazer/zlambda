@@ -247,3 +247,17 @@ impl From<GeneralRecoveryResponseMessageSuccessInput> for GeneralRecoveryRespons
         Self::Success(input)
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralLogEntriesAppendRequestInput {}
+
+impl GeneralLogEntriesAppendRequestInput {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralLogEntriesAppendResponseInput {}
+
+impl GeneralLogEntriesAppendResponseInput {}

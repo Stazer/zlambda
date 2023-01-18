@@ -30,8 +30,6 @@ impl LeadingLog {
             .map(|server_ids| server_ids.len() / 2)
     }
 
-
-
     pub fn acknowledgeable_server_ids(&self, id: LogEntryId) -> Option<&HashSet<ServerId>> {
         self.acknowledgeable_server_ids.get(id)
     }
@@ -62,7 +60,7 @@ impl LeadingLog {
     pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
         match self.next_committing_log_entry_id {
             0 => None,
-            next_committing_log_entry_id => Some(next_committing_log_entry_id - 1)
+            next_committing_log_entry_id => Some(next_committing_log_entry_id - 1),
         }
     }
 
@@ -81,7 +79,7 @@ impl LeadingLog {
     pub fn is_committed(&self, id: LogEntryId) -> bool {
         match self.last_committed_log_entry_id() {
             None => false,
-            Some(last_committed_log_entry_id) => last_committed_log_entry_id <= id
+            Some(last_committed_log_entry_id) => last_committed_log_entry_id <= id,
         }
     }
 

@@ -1,4 +1,5 @@
 use crate::general::{
+    GeneralLogEntriesAppendRequestInput, GeneralLogEntriesAppendResponseInput,
     GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
     GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
 };
@@ -25,12 +26,23 @@ pub type GeneralRecoveryResponseMessage = AsynchronousMessage<GeneralRecoveryRes
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type GeneralLogEntriesAppendRequest = AsynchronousMessage<GeneralLogEntriesAppendRequestInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type GeneralLogEntriesAppendResponse =
+    AsynchronousMessage<GeneralLogEntriesAppendResponseInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum GeneralMessage {
     RegistrationRequest(GeneralRegistrationRequestMessage),
     RegistrationResponse(GeneralRegistrationResponseMessage),
     RecoveryRequest(GeneralRecoveryRequestMessage),
     RecoveryResponse(GeneralRecoveryResponseMessage),
+    LogEntriesAppendRequest(GeneralLogEntriesAppendRequest),
+    LogEntriesAppendResponse(GeneralLogEntriesAppendResponse),
 }
 
 impl From<GeneralRegistrationRequestMessage> for GeneralMessage {

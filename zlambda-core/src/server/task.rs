@@ -8,13 +8,19 @@ use crate::message::{
     MessageSocketSender,
 };
 use crate::server::connection::ServerConnectionTask;
-use crate::server::{
-    FollowingLog, LeadingLog, NewServerError, ServerFollowerType, ServerId, ServerLeaderType,
-    ServerMessage, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
-    ServerRegistrationMessage, ServerRegistrationMessageNotALeaderOutput,
-    ServerReplicateLogEntriesMessage, ServerReplicateLogEntriesMessageOutput,
-    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType, ServerAcknowledgeLogEntriesMessage,
+use crate::server::member::{
+    ServerMemberMessage, ServerMemberReplicateMessage, ServerMemberReplicateMessageInput,
+    ServerMemberTask,
 };
+use crate::server::{
+    FollowingLog, LeadingLog, LogEntryId, NewServerError, ServerAcknowledgeLogEntriesMessage,
+    ServerFollowerType, ServerId, ServerLeaderType, ServerMessage, ServerRecoveryMessage,
+    ServerRecoveryMessageNotALeaderOutput, ServerRegistrationMessage,
+    ServerRegistrationMessageNotALeaderOutput, ServerReplicateLogEntriesMessage,
+    ServerReplicateLogEntriesMessageOutput, ServerSocketAcceptMessage,
+    ServerSocketAcceptMessageInput, ServerType,
+};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::{select, spawn};
@@ -24,11 +30,12 @@ use tracing::{error, info};
 
 pub struct ServerTask {
     server_id: ServerId,
-    server_socket_addresses: Vec<Option<SocketAddr>>,
+    server_members: Vec<Option<(SocketAddr, Option<MessageQueueSender<ServerMemberMessage>>)>>,
     r#type: ServerType,
     tcp_listener: TcpListener,
     sender: MessageQueueSender<ServerMessage>,
     receiver: MessageQueueReceiver<ServerMessage>,
+    commit_messages: HashMap<LogEntryId, Vec<ServerMessage>>,
 }
 
 impl ServerTask {
@@ -46,11 +53,12 @@ impl ServerTask {
         match follower_data {
             None => Ok(Self {
                 server_id: 0,
-                server_socket_addresses: vec![Some(tcp_listener.local_addr()?)],
+                server_members: vec![Some((tcp_listener.local_addr()?, None))],
                 r#type: ServerLeaderType::new(LeadingLog::default()).into(),
                 tcp_listener,
                 sender: queue_sender,
                 receiver: queue_receiver,
+                commit_messages: HashMap::default(),
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -123,7 +131,6 @@ impl ServerTask {
 
                 Ok(Self {
                     server_id,
-                    server_socket_addresses,
                     r#type: ServerFollowerType::new(
                         leader_server_id,
                         FollowingLog::new(term, Vec::default(), None),
@@ -131,9 +138,11 @@ impl ServerTask {
                         socket_receiver,
                     )
                     .into(),
+                    server_members: Vec::default(),
                     tcp_listener,
                     sender: queue_sender,
                     receiver: queue_receiver,
+                    commit_messages: HashMap::default(),
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -202,7 +211,6 @@ impl ServerTask {
 
                 Ok(Self {
                     server_id,
-                    server_socket_addresses,
                     r#type: ServerFollowerType::new(
                         leader_server_id,
                         FollowingLog::new(term, Vec::default(), None),
@@ -210,9 +218,11 @@ impl ServerTask {
                         socket_receiver,
                     )
                     .into(),
+                    server_members: Vec::default(),
                     tcp_listener,
                     sender: queue_sender,
                     receiver: queue_receiver,
+                    commit_messages: HashMap::default(),
                 })
             }
         }
@@ -257,7 +267,8 @@ impl ServerTask {
                 self.on_server_replicate_log_entries_message(message).await
             }
             ServerMessage::AcknowledgeLogEntries(message) => {
-                self.on_server_acknowledge_log_entries_message(message).await
+                self.on_server_acknowledge_log_entries_message(message)
+                    .await
             }
         }
     }
@@ -279,22 +290,49 @@ impl ServerTask {
     }
 
     async fn on_server_registration_message(&mut self, message: ServerRegistrationMessage) {
-        let (input, sender) = message.into();
+        let (input, output_sender) = message.into();
 
         match &self.r#type {
-            ServerType::Leader(leader) => {}
-            ServerType::Follower(follower) => {
-                let leader_server_socket_address = match self
-                    .server_socket_addresses
-                    .get(follower.leader_server_id())
-                {
-                    Some(Some(leader_server_socket_address)) => *leader_server_socket_address,
-                    _ => {
-                        panic!("Expected leader server socket address");
+            ServerType::Leader(leader) => {
+                let member_server_id = {
+                    let mut iterator = self.server_members.iter();
+                    let mut index = 0;
+
+                    loop {
+                        if iterator.next().is_none() {
+                            break index;
+                        }
+
+                        index += 1
                     }
                 };
 
-                sender
+                let task = ServerMemberTask::new(member_server_id, self.sender.clone(), None, None);
+                let sender = task.sender().clone();
+                task.spawn();
+
+                if member_server_id >= self.server_members.len() {
+                    self.server_members
+                        .resize_with(member_server_id + 1, || None);
+                }
+
+                *self
+                    .server_members
+                    .get_mut(member_server_id)
+                    .expect("valid entry") = Some((input.server_socket_address(), Some(sender)));
+
+                //self.on_server_replicate_message().await;
+            }
+            ServerType::Follower(follower) => {
+                let leader_server_socket_address =
+                    match self.server_members.get(follower.leader_server_id()) {
+                        Some(Some(member)) => member.0,
+                        _ => {
+                            panic!("Expected leader server socket address");
+                        }
+                    };
+
+                output_sender
                     .do_send(ServerRegistrationMessageNotALeaderOutput::new(
                         leader_server_socket_address,
                     ))
@@ -309,15 +347,13 @@ impl ServerTask {
         match &self.r#type {
             ServerType::Leader(leader) => {}
             ServerType::Follower(follower) => {
-                let leader_server_socket_address = match self
-                    .server_socket_addresses
-                    .get(follower.leader_server_id())
-                {
-                    Some(Some(leader_server_socket_address)) => *leader_server_socket_address,
-                    _ => {
-                        panic!("Expected leader server socket address");
-                    }
-                };
+                let leader_server_socket_address =
+                    match self.server_members.get(follower.leader_server_id()) {
+                        Some(Some(member)) => member.0,
+                        _ => {
+                            panic!("Expected leader server socket address");
+                        }
+                    };
 
                 sender
                     .do_send(ServerRecoveryMessageNotALeaderOutput::new(
@@ -337,11 +373,42 @@ impl ServerTask {
 
         match &mut self.r#type {
             ServerType::Leader(ref mut leader) => {
+                let log_entry_ids = leader.log_mut().append(log_entries_data);
+                let log_entries = log_entry_ids.iter().map(|log_entry_id| leader.log().entries().get(*log_entry_id)).flatten().cloned().collect::<Vec<_>>();
+
                 sender
                     .do_send(ServerReplicateLogEntriesMessageOutput::new(
-                        leader.log_mut().append(log_entries_data),
+                        log_entry_ids,
                     ))
                     .await;
+
+                for server_member in &self.server_members {
+                    if let Some(Some(sender)) = server_member.as_ref().map(|member| &member.1) {
+                        sender
+                            .do_send(ServerMemberReplicateMessage::new(
+                                ServerMemberReplicateMessageInput::new(
+                                    log_entries.clone(),
+                                ),
+                            ))
+                            .await;
+                    }
+                }
+                /*
+                    compiler bug:
+                 */
+                /*for member_sender in self
+                    .server_members
+                    .iter()
+                    .flatten()
+                    .map(|member| &member.1)
+                    .flatten()
+                {
+                    member_sender
+                        .do_send(ServerMemberReplicateMessage::new(
+                            ServerMemberReplicateMessageInput::new(vec![]),
+                        ))
+                        .await;
+                }*/
             }
             ServerType::Follower(follower) => {
                 unimplemented!()
@@ -357,13 +424,24 @@ impl ServerTask {
 
         match &mut self.r#type {
             ServerType::Leader(ref mut leader) => {
-                let last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
+                let from_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
 
                 for log_entry_id in input.log_entry_ids() {
-                    leader.log_mut().acknowledge(*log_entry_id, input.server_id());
+                    leader
+                        .log_mut()
+                        .acknowledge(*log_entry_id, input.server_id());
                 }
 
-                let last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
+                let to_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
+
+                let committed_log_entries = match (
+                    from_last_committed_log_entry_id,
+                    to_last_committed_log_entry_id,
+                ) {
+                    (None, Some(to)) => Some(0..to),
+                    (Some(from), Some(to)) => Some(from..to),
+                    _ => None,
+                };
             }
             ServerType::Follower(follower) => {
                 unimplemented!()

@@ -1,4 +1,4 @@
-use crate::server::{LogEntryId, LogEntryData, ServerId};
+use crate::server::{LogEntryData, LogEntryId, ServerId};
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
@@ -119,10 +119,7 @@ impl From<ServerAcknowledgeLogEntriesMessageInput> for (Vec<LogEntryId>, ServerI
 }
 
 impl ServerAcknowledgeLogEntriesMessageInput {
-    pub fn new(
-        log_entry_ids: Vec<LogEntryId>,
-        server_id: ServerId,
-    ) -> Self {
+    pub fn new(log_entry_ids: Vec<LogEntryId>, server_id: ServerId) -> Self {
         Self {
             log_entry_ids,
             server_id,
