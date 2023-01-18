@@ -13,7 +13,7 @@ use crate::server::member::{
     ServerMemberTask,
 };
 use crate::server::{
-    FollowingLog, LeadingLog, LogEntryData, LogEntryId, NewServerError,
+    AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, NewServerError,
     ServerAcknowledgeLogEntriesMessage, ServerFollowerType, ServerId, ServerLeaderType,
     ServerMessage, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
     ServerRegistrationMessage, ServerRegistrationMessageNotALeaderOutput,
@@ -325,6 +325,15 @@ impl ServerTask {
                     .server_members
                     .get_mut(member_server_id)
                     .expect("valid entry") = Some((input.server_socket_address(), Some(sender)));
+
+                self.replicate(
+                    vec![AddServerLogEntryData::new(
+                        member_server_id,
+                        input.server_socket_address(),
+                    ).into()],
+                    |_| None,
+                )
+                .await;
             }
             ServerType::Follower(follower) => {
                 let leader_server_socket_address =
@@ -443,10 +452,10 @@ impl ServerTask {
                         Some(messages) => messages,
                     };
 
-                    self.commit_messages
+                    /*self.commit_messages
                         .entry(*log_entry_id)
                         .or_insert_with(Vec::default)
-                        .extend(messages);
+                        .extend(messages);*/
                 }
 
                 self.acknowledge(&log_entry_ids, self.server_id).await;

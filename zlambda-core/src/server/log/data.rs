@@ -63,3 +63,15 @@ pub enum LogEntryData {
     AddServer(AddServerLogEntryData),
     RemoveServer(RemoveServerLogEntryData),
 }
+
+impl From<AddServerLogEntryData> for LogEntryData {
+    fn from(data: AddServerLogEntryData) -> Self {
+        Self::AddServer(data)
+    }
+}
+
+impl From<RemoveServerLogEntryData> for LogEntryData {
+    fn from(data: RemoveServerLogEntryData) -> Self {
+        Self::RemoveServer(data)
+    }
+}
