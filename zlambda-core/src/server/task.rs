@@ -13,13 +13,14 @@ use crate::server::member::{
     ServerMemberTask,
 };
 use crate::server::{
-    FollowingLog, LeadingLog, LogEntryId, NewServerError, ServerAcknowledgeLogEntriesMessage,
-    ServerFollowerType, ServerId, ServerLeaderType, ServerMessage, ServerRecoveryMessage,
-    ServerRecoveryMessageNotALeaderOutput, ServerRegistrationMessage,
-    ServerRegistrationMessageNotALeaderOutput, ServerReplicateLogEntriesMessage,
-    ServerReplicateLogEntriesMessageOutput, ServerSocketAcceptMessage,
-    ServerSocketAcceptMessageInput, ServerType,
+    FollowingLog, LeadingLog, LogEntryData, LogEntryId, NewServerError,
+    ServerAcknowledgeLogEntriesMessage, ServerFollowerType, ServerId, ServerLeaderType,
+    ServerMessage, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
+    ServerRegistrationMessage, ServerRegistrationMessageNotALeaderOutput,
+    ServerReplicateLogEntriesMessage, ServerReplicateLogEntriesMessageOutput,
+    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
 };
+use async_recursion::async_recursion;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -250,10 +251,14 @@ impl ServerTask {
                         ).into(),
                     ).await;
                 }
+                message = self.receiver.do_receive() => {
+                    self.on_server_message(message).await;
+                }
             )
         }
     }
 
+    #[async_recursion]
     async fn on_server_message(&mut self, message: ServerMessage) {
         match message {
             ServerMessage::SocketAccept(message) => {
@@ -320,8 +325,6 @@ impl ServerTask {
                     .server_members
                     .get_mut(member_server_id)
                     .expect("valid entry") = Some((input.server_socket_address(), Some(sender)));
-
-                //self.on_server_replicate_message().await;
             }
             ServerType::Follower(follower) => {
                 let leader_server_socket_address =
@@ -371,31 +374,55 @@ impl ServerTask {
         let (input, sender) = message.into();
         let (log_entries_data,) = input.into();
 
+        sender
+            .do_send(ServerReplicateLogEntriesMessageOutput::new(
+                self.replicate(log_entries_data, |log_entry_ids| None).await,
+            ))
+            .await;
+    }
+
+    async fn on_server_acknowledge_log_entries_message(
+        &mut self,
+        message: ServerAcknowledgeLogEntriesMessage,
+    ) {
+        let (input,) = message.into();
+
+        self.acknowledge(input.log_entry_ids(), input.server_id())
+            .await;
+    }
+
+    async fn replicate<F>(
+        &mut self,
+        log_entries_data: Vec<LogEntryData>,
+        commit_messages_builder: F,
+    ) -> Vec<LogEntryId>
+    where
+        F: Fn(LogEntryId) -> Option<Vec<ServerMessage>>,
+    {
         match &mut self.r#type {
             ServerType::Leader(ref mut leader) => {
                 let log_entry_ids = leader.log_mut().append(log_entries_data);
-                let log_entries = log_entry_ids.iter().map(|log_entry_id| leader.log().entries().get(*log_entry_id)).flatten().cloned().collect::<Vec<_>>();
 
-                sender
-                    .do_send(ServerReplicateLogEntriesMessageOutput::new(
-                        log_entry_ids,
-                    ))
-                    .await;
+                let log_entries = log_entry_ids
+                    .iter()
+                    .map(|log_entry_id| leader.log().entries().get(*log_entry_id))
+                    .flatten()
+                    .cloned()
+                    .collect::<Vec<_>>();
 
                 for server_member in &self.server_members {
                     if let Some(Some(sender)) = server_member.as_ref().map(|member| &member.1) {
                         sender
                             .do_send(ServerMemberReplicateMessage::new(
-                                ServerMemberReplicateMessageInput::new(
-                                    log_entries.clone(),
-                                ),
+                                ServerMemberReplicateMessageInput::new(log_entries.clone()),
                             ))
                             .await;
                     }
                 }
+
                 /*
-                    compiler bug:
-                 */
+                   compiler bug:
+                */
                 /*for member_sender in self
                     .server_members
                     .iter()
@@ -409,6 +436,22 @@ impl ServerTask {
                         ))
                         .await;
                 }*/
+
+                for log_entry_id in &log_entry_ids {
+                    let messages = match commit_messages_builder(*log_entry_id) {
+                        None => continue,
+                        Some(messages) => messages,
+                    };
+
+                    self.commit_messages
+                        .entry(*log_entry_id)
+                        .or_insert_with(Vec::default)
+                        .extend(messages);
+                }
+
+                self.acknowledge(&log_entry_ids, self.server_id).await;
+
+                log_entry_ids
             }
             ServerType::Follower(follower) => {
                 unimplemented!()
@@ -416,25 +459,20 @@ impl ServerTask {
         }
     }
 
-    async fn on_server_acknowledge_log_entries_message(
-        &mut self,
-        message: ServerAcknowledgeLogEntriesMessage,
-    ) {
-        let (input,) = message.into();
-
+    async fn acknowledge(&mut self, log_entry_ids: &Vec<LogEntryId>, server_id: ServerId) {
         match &mut self.r#type {
             ServerType::Leader(ref mut leader) => {
                 let from_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
 
-                for log_entry_id in input.log_entry_ids() {
-                    leader
-                        .log_mut()
-                        .acknowledge(*log_entry_id, input.server_id());
+                for log_entry_id in log_entry_ids {
+                    if let Err(error) = leader.log_mut().acknowledge(*log_entry_id, server_id) {
+                        error!("{}", error);
+                    }
                 }
 
                 let to_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
 
-                let committed_log_entries = match (
+                let committed_log_entry_ids = match (
                     from_last_committed_log_entry_id,
                     to_last_committed_log_entry_id,
                 ) {
@@ -442,6 +480,18 @@ impl ServerTask {
                     (Some(from), Some(to)) => Some(from..to),
                     _ => None,
                 };
+
+                if let Some(committed_log_entry_ids) = committed_log_entry_ids {
+                    for committed_log_entry_id in committed_log_entry_ids {
+                        for message in self
+                            .commit_messages
+                            .remove(&committed_log_entry_id)
+                            .unwrap_or_default()
+                        {
+                            self.on_server_message(message).await;
+                        }
+                    }
+                }
             }
             ServerType::Follower(follower) => {
                 unimplemented!()

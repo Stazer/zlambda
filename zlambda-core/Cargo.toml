@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 async-ffi = "*"
-async-trait = "*"
+async-recursion = "*"
 bytes = { version = "1", features = ["serde"] }
 futures = "0.3"
 libloading = "0.7"

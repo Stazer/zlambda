@@ -1,8 +1,4 @@
-use crate::server::ServerId;
-use crate::server::{LogEntry, LogEntryId, LogError, LogTerm};
-use std::collections::hash_map::RandomState;
-use std::collections::hash_set::Difference;
-use std::collections::HashSet;
+use crate::server::{LogEntry, LogEntryId, LogTerm};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
