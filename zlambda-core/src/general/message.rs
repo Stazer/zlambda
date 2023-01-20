@@ -26,11 +26,11 @@ pub type GeneralRecoveryResponseMessage = AsynchronousMessage<GeneralRecoveryRes
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type GeneralLogEntriesAppendRequest = AsynchronousMessage<GeneralLogEntriesAppendRequestInput>;
+pub type GeneralLogEntriesAppendRequestMessage = AsynchronousMessage<GeneralLogEntriesAppendRequestInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type GeneralLogEntriesAppendResponse =
+pub type GeneralLogEntriesAppendResponseMessage =
     AsynchronousMessage<GeneralLogEntriesAppendResponseInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,8 +41,8 @@ pub enum GeneralMessage {
     RegistrationResponse(GeneralRegistrationResponseMessage),
     RecoveryRequest(GeneralRecoveryRequestMessage),
     RecoveryResponse(GeneralRecoveryResponseMessage),
-    LogEntriesAppendRequest(GeneralLogEntriesAppendRequest),
-    LogEntriesAppendResponse(GeneralLogEntriesAppendResponse),
+    LogEntriesAppendRequest(GeneralLogEntriesAppendRequestMessage),
+    LogEntriesAppendResponse(GeneralLogEntriesAppendResponseMessage),
 }
 
 impl From<GeneralRegistrationRequestMessage> for GeneralMessage {
@@ -66,5 +66,17 @@ impl From<GeneralRecoveryRequestMessage> for GeneralMessage {
 impl From<GeneralRecoveryResponseMessage> for GeneralMessage {
     fn from(message: GeneralRecoveryResponseMessage) -> Self {
         GeneralMessage::RecoveryResponse(message)
+    }
+}
+
+impl From<GeneralLogEntriesAppendRequestMessage> for GeneralMessage {
+    fn from(message: GeneralLogEntriesAppendRequestMessage) -> Self {
+        Self::LogEntriesAppendRequest(message)
+    }
+}
+
+impl From<GeneralLogEntriesAppendResponseMessage> for GeneralMessage {
+    fn from(message: GeneralLogEntriesAppendResponseMessage) -> Self {
+        Self::LogEntriesAppendResponse(message)
     }
 }

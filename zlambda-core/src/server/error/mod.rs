@@ -11,6 +11,7 @@ pub enum NewServerError {
     Io(io::Error),
     Message(MessageError),
     IsOnline(ServerId),
+    Unknown(ServerId),
 }
 
 impl error::Error for NewServerError {}
@@ -22,6 +23,9 @@ impl Display for NewServerError {
             Self::Message(error) => Display::fmt(error, formatter),
             Self::IsOnline(server_id) => {
                 write!(formatter, "Server with id {} is online", server_id)
+            }
+            Self::Unknown(server_id) => {
+                write!(formatter, "Server id {} is unknown", server_id)
             }
         }
     }

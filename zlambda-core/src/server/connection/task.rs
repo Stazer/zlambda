@@ -12,7 +12,7 @@ use crate::server::{
     ServerMessage, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
     ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
 };
-use crate::server::member::{ServerMemberRegistrationMessageInput};
+use crate::server::member::{ServerMemberRegistrationMessageInput, ServerMemberRecoveryMessageInput};
 use tokio::spawn;
 use tracing::error;
 
@@ -155,8 +155,17 @@ impl ServerConnectionTask {
                     error!("{}", error);
                 }
             }
+            ServerRecoveryMessageOutput::Unknown => {
+                if let Err(error) = self
+                    .general_socket_sender
+                    .send_asynchronous(GeneralRecoveryResponseMessageInput::IsOnline)
+                    .await
+                {
+                    error!("{}", error);
+                }
+            }
             ServerRecoveryMessageOutput::Success(output) => {
-                let (leader_server_id, server_socket_address, log_term) = output.into();
+                let (leader_server_id, server_socket_address, log_term, member_queue_sender) = output.into();
 
                 if let Err(error) = self
                     .general_socket_sender
@@ -171,6 +180,13 @@ impl ServerConnectionTask {
                     .await
                 {
                     error!("{}", error);
+                } else {
+                    member_queue_sender.do_send_asynchronous(
+                        ServerMemberRecoveryMessageInput::new(
+                            self.general_socket_sender,
+                            self.general_socket_receiver,
+                        )
+                    ).await;
                 }
             }
         }

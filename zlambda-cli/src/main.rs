@@ -5,10 +5,10 @@
 use clap::{Args, Parser, Subcommand};
 use std::error::Error;
 use std::path::PathBuf;
-use tokio::io::AsyncWriteExt;
-use tokio::io::{stdin, stdout};
+//use tokio::io::AsyncWriteExt;
+//use tokio::io::{stdin, stdout};
 use zlambda_core::module::ModuleId;
-use zlambda_core::node::{NodeId, NodeTask};
+use zlambda_core::server::{ServerId, ServerTask};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,7 +24,7 @@ struct MainArguments {
 #[derive(Clone, Debug, Args)]
 struct FollowerData {
     address: String,
-    node_id: NodeId,
+    server_id: ServerId,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,7 +52,7 @@ enum ServerCommand {
     Leader,
     Follower {
         leader_address: String,
-        node_id: Option<NodeId>,
+        server_id: Option<ServerId>,
     },
 }
 
@@ -81,46 +81,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 console_subscriber::init();
             }
 
-            NodeTask::new(
+            ServerTask::new(
                 listener_address,
                 match command {
                     ServerCommand::Leader => None,
                     ServerCommand::Follower {
                         leader_address,
-                        node_id,
-                    } => Some((leader_address, node_id)),
+                        server_id,
+                    } => Some((leader_address, server_id)),
                 },
             )
             .await?
             .run()
             .await
-            /*NodeTask::new(
-                listener_address,
-                match command {
-                    ServerCommand::Leader => None,
-                    ServerCommand::Follower {
-                        leader_address,
-                        node_id,
-                    } => Some((leader_address, node_id)),
-                },
-            )*/
-
-            /*ServerBuilder::new()
-            .task(
-                listener_address,
-                match command {
-                    ServerCommand::Leader => None,
-                    ServerCommand::Follower {
-                        leader_address,
-                        node_id,
-                    } => Some((leader_address, node_id)),
-                },
-            )
-            .await?
-            .run()
-            .await;*/
         }
-        MainCommand::Client { address, command } => {
+        MainCommand::Client { address: _, command: _ } => {
             /*let mut client = match Client::new(address).await {
                 Err(error) => return Err(error),
                 Ok(client) => client,

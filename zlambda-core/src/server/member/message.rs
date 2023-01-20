@@ -1,5 +1,5 @@
 use crate::message::AsynchronousMessage;
-use crate::server::member::{ServerMemberReplicationMessageInput, ServerMemberRegistrationMessageInput};
+use crate::server::member::{ServerMemberReplicationMessageInput, ServerMemberRegistrationMessageInput, ServerMemberRecoveryMessageInput};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -11,10 +11,15 @@ pub type ServerMemberRegistrationMessage = AsynchronousMessage<ServerMemberRegis
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerMemberRecoveryMessage = AsynchronousMessage<ServerMemberRecoveryMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMemberMessage {
     Replication(ServerMemberReplicationMessage),
     Registration(ServerMemberRegistrationMessage),
+    Recovery(ServerMemberRecoveryMessage),
 }
 
 impl From<ServerMemberReplicationMessage> for ServerMemberMessage {
@@ -26,5 +31,11 @@ impl From<ServerMemberReplicationMessage> for ServerMemberMessage {
 impl From<ServerMemberRegistrationMessage> for ServerMemberMessage {
     fn from(message: ServerMemberRegistrationMessage) -> Self {
         Self::Registration(message)
+    }
+}
+
+impl From<ServerMemberRecoveryMessage> for ServerMemberMessage {
+    fn from(message: ServerMemberRecoveryMessage) -> Self {
+        Self::Recovery(message)
     }
 }

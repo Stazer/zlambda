@@ -20,8 +20,9 @@ use crate::server::{
     ServerRegistrationMessage, ServerRegistrationMessageNotALeaderOutput,
     ServerRegistrationMessageSuccessOutput, ServerLogEntriesReplicationMessage,
     ServerLogEntriesReplicationMessageOutput, ServerSocketAcceptMessage,
-    ServerSocketAcceptMessageInput, ServerType,
-};
+    ServerSocketAcceptMessageInput, ServerType, ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput,
+}
+;
 use async_recursion::async_recursion;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -185,6 +186,9 @@ impl ServerTask {
                                 GeneralRecoveryResponseMessageInput::IsOnline => {
                                     return Err(NewServerError::IsOnline(server_id));
                                 }
+                                GeneralRecoveryResponseMessageInput::Unknown => {
+                                    return Err(NewServerError::Unknown(server_id));
+                                }
                                 GeneralRecoveryResponseMessageInput::Success(input) => {
                                     let (leader_server_id, server_socket_addresses, term) =
                                         input.into();
@@ -303,7 +307,7 @@ impl ServerTask {
         let (input, output_sender) = message.into();
 
         match &self.r#type {
-            ServerType::Leader(leader) => {
+            ServerType::Leader(_) => {
                 let member_server_id = {
                     let mut iterator = self.server_members.iter();
                     let mut index = 0;
@@ -317,7 +321,7 @@ impl ServerTask {
                     }
                 };
 
-                let task = ServerMemberTask::new(member_server_id, self.sender.clone(), None, None);
+                let task = ServerMemberTask::new(member_server_id, self.sender.clone(), None);
                 let sender = task.sender().clone();
                 task.spawn();
 
@@ -340,7 +344,7 @@ impl ServerTask {
                     .await;
 
                 self.commit_messages
-                    .entry(*log_entry_ids.get(0).expect("valid log entry id"))
+                    .entry(*log_entry_ids.first().expect("valid log entry id"))
                     .or_insert(Vec::default())
                     .push(
                         ServerCommitRegistrationMessage::new(
@@ -374,7 +378,32 @@ impl ServerTask {
         let (input, sender) = message.into();
 
         match &self.r#type {
-            ServerType::Leader(leader) => {}
+            ServerType::Leader(leader) => {
+                match self.server_members.get(input.server_id()) {
+                    None | Some(None) => {
+                        sender.do_send(ServerRecoveryMessageOutput::Unknown).await;
+                    }
+                    Some(Some(member)) => {
+                        match &member.1 {
+                            None => sender.do_send(ServerRecoveryMessageOutput::Unknown).await,
+                            Some(member_sender) => {
+                                sender.do_send(
+                                    ServerRecoveryMessageSuccessOutput::new(
+                                        self.server_id,
+                                        self.server_members
+                                            .iter()
+                                            .map(|member| member.as_ref().map(|x| x.0))
+                                            .collect(),
+                                        leader.log().current_term(),
+                                        member_sender.clone(),
+
+                                    )
+                                ).await;
+                            }
+                        }
+                    },
+                };
+            }
             ServerType::Follower(follower) => {
                 let leader_server_socket_address =
                     match self.server_members.get(follower.leader_server_id()) {
@@ -422,7 +451,6 @@ impl ServerTask {
         message: ServerCommitRegistrationMessage,
     ) {
         let (input, output_sender) = message.into();
-        //let (output_sender,) = input.into();
 
         let leader = match &self.r#type {
             ServerType::Leader(leader) => leader,

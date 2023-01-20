@@ -1,5 +1,4 @@
-use crate::server::LogTerm;
-use crate::server::ServerId;
+use crate::server::{ServerId, LogEntryId, LogTerm, LogEntry};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -233,6 +232,7 @@ impl GeneralRecoveryResponseMessageSuccessInput {
 pub enum GeneralRecoveryResponseMessageInput {
     NotALeader(GeneralRecoveryResponseMessageNotALeaderInput),
     IsOnline,
+    Unknown,
     Success(GeneralRecoveryResponseMessageSuccessInput),
 }
 
@@ -251,13 +251,53 @@ impl From<GeneralRecoveryResponseMessageSuccessInput> for GeneralRecoveryRespons
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GeneralLogEntriesAppendRequestInput {}
+pub struct GeneralLogEntriesAppendRequestInput {
+    log_entries: Vec<LogEntry>,
+}
 
-impl GeneralLogEntriesAppendRequestInput {}
+impl From<GeneralLogEntriesAppendRequestInput> for (Vec<LogEntry>,) {
+    fn from(input: GeneralLogEntriesAppendRequestInput) -> Self {
+        (input.log_entries,)
+    }
+}
+
+impl GeneralLogEntriesAppendRequestInput {
+    pub fn new(
+        log_entries: Vec<LogEntry>,
+    ) -> Self {
+        Self {
+            log_entries,
+        }
+    }
+
+    pub fn log_entries(&self) -> &Vec<LogEntry> {
+        &self.log_entries
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GeneralLogEntriesAppendResponseInput {}
+pub struct GeneralLogEntriesAppendResponseInput {
+    acknowledged_log_entry_ids: Vec<LogEntryId>,
+}
 
-impl GeneralLogEntriesAppendResponseInput {}
+impl From<GeneralLogEntriesAppendResponseInput> for (Vec<LogEntryId>,) {
+    fn from(input: GeneralLogEntriesAppendResponseInput) -> Self {
+        (input.acknowledged_log_entry_ids,)
+    }
+}
+
+impl GeneralLogEntriesAppendResponseInput {
+    pub fn new(
+        acknowledged_log_entry_ids: Vec<LogEntryId>,
+    ) -> Self {
+        Self {
+            acknowledged_log_entry_ids,
+        }
+    }
+
+    pub fn acknowledged_log_entry_ids(&self) -> &Vec<LogEntryId> {
+        &self.acknowledged_log_entry_ids
+    }
+}

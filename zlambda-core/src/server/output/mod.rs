@@ -149,14 +149,16 @@ pub struct ServerRecoveryMessageSuccessOutput {
     leader_server_id: ServerId,
     server_socket_addresses: Vec<Option<SocketAddr>>,
     current_log_term: LogTerm,
+    member_queue_sender: MessageQueueSender<ServerMemberMessage>,
 }
 
-impl From<ServerRecoveryMessageSuccessOutput> for (ServerId, Vec<Option<SocketAddr>>, LogTerm) {
+impl From<ServerRecoveryMessageSuccessOutput> for (ServerId, Vec<Option<SocketAddr>>, LogTerm, MessageQueueSender<ServerMemberMessage>) {
     fn from(output: ServerRecoveryMessageSuccessOutput) -> Self {
         (
             output.leader_server_id,
             output.server_socket_addresses,
             output.current_log_term,
+            output.member_queue_sender,
         )
     }
 }
@@ -166,11 +168,13 @@ impl ServerRecoveryMessageSuccessOutput {
         leader_server_id: ServerId,
         server_socket_addresses: Vec<Option<SocketAddr>>,
         current_log_term: LogTerm,
+        member_queue_sender: MessageQueueSender<ServerMemberMessage>,
     ) -> Self {
         Self {
             leader_server_id,
             server_socket_addresses,
             current_log_term,
+            member_queue_sender,
         }
     }
 
@@ -185,6 +189,10 @@ impl ServerRecoveryMessageSuccessOutput {
     pub fn current_log_term(&self) -> LogTerm {
         self.current_log_term
     }
+
+    pub fn member_queue_sender(&self) -> &MessageQueueSender<ServerMemberMessage> {
+        &self.member_queue_sender
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,8 +200,9 @@ impl ServerRecoveryMessageSuccessOutput {
 #[derive(Debug)]
 pub enum ServerRecoveryMessageOutput {
     NotALeader(ServerRecoveryMessageNotALeaderOutput),
-    Success(ServerRecoveryMessageSuccessOutput),
     IsOnline,
+    Unknown,
+    Success(ServerRecoveryMessageSuccessOutput),
 }
 
 impl From<ServerRecoveryMessageNotALeaderOutput> for ServerRecoveryMessageOutput {
