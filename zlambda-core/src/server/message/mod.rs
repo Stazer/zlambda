@@ -1,9 +1,9 @@
 use crate::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
-    ServerAcknowledgeLogEntriesMessageInput, ServerRecoveryMessageInput,
-    ServerRecoveryMessageOutput, ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
-    ServerReplicateLogEntriesMessageInput, ServerReplicateLogEntriesMessageOutput,
-    ServerSocketAcceptMessageInput,
+    ServerLogEntriesAcknowledgementMessageInput, ServerCommitRegistrationMessageInput,
+    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
+    ServerRegistrationMessageOutput, ServerLogEntriesReplicationMessageInput,
+    ServerLogEntriesReplicationMessageOutput, ServerSocketAcceptMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,15 +22,20 @@ pub type ServerRecoveryMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerReplicateLogEntriesMessage = SynchronousMessage<
-    ServerReplicateLogEntriesMessageInput,
-    ServerReplicateLogEntriesMessageOutput,
+pub type ServerLogEntriesReplicationMessage = SynchronousMessage<
+    ServerLogEntriesReplicationMessageInput,
+    ServerLogEntriesReplicationMessageOutput,
 >;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerAcknowledgeLogEntriesMessage =
-    AsynchronousMessage<ServerAcknowledgeLogEntriesMessageInput>;
+pub type ServerLogEntriesAcknowledgementMessage =
+    AsynchronousMessage<ServerLogEntriesAcknowledgementMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerCommitRegistrationMessage =
+    SynchronousMessage<ServerCommitRegistrationMessageInput, ServerRegistrationMessageOutput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,9 +43,10 @@ pub type ServerAcknowledgeLogEntriesMessage =
 pub enum ServerMessage {
     SocketAccept(ServerSocketAcceptMessage),
     Registration(ServerRegistrationMessage),
+    CommitRegistration(ServerCommitRegistrationMessage),
     Recovery(ServerRecoveryMessage),
-    ReplicateLogEntries(ServerReplicateLogEntriesMessage),
-    AcknowledgeLogEntries(ServerAcknowledgeLogEntriesMessage),
+    LogEntriesReplication(ServerLogEntriesReplicationMessage),
+    LogEntriesAcknowledgement(ServerLogEntriesAcknowledgementMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -55,20 +61,26 @@ impl From<ServerRegistrationMessage> for ServerMessage {
     }
 }
 
+impl From<ServerCommitRegistrationMessage> for ServerMessage {
+    fn from(message: ServerCommitRegistrationMessage) -> Self {
+        Self::CommitRegistration(message)
+    }
+}
+
 impl From<ServerRecoveryMessage> for ServerMessage {
     fn from(message: ServerRecoveryMessage) -> Self {
         Self::Recovery(message)
     }
 }
 
-impl From<ServerReplicateLogEntriesMessage> for ServerMessage {
-    fn from(message: ServerReplicateLogEntriesMessage) -> Self {
-        Self::ReplicateLogEntries(message)
+impl From<ServerLogEntriesReplicationMessage> for ServerMessage {
+    fn from(message: ServerLogEntriesReplicationMessage) -> Self {
+        Self::LogEntriesReplication(message)
     }
 }
 
-impl From<ServerAcknowledgeLogEntriesMessage> for ServerMessage {
-    fn from(message: ServerAcknowledgeLogEntriesMessage) -> Self {
-        Self::AcknowledgeLogEntries(message)
+impl From<ServerLogEntriesAcknowledgementMessage> for ServerMessage {
+    fn from(message: ServerLogEntriesAcknowledgementMessage) -> Self {
+        Self::LogEntriesAcknowledgement(message)
     }
 }

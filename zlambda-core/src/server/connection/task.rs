@@ -9,9 +9,10 @@ use crate::message::{
     MessageError, MessageQueueSender, MessageSocketReceiver, MessageSocketSender,
 };
 use crate::server::{
-    ServerMemberTask, ServerMessage, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
+    ServerMessage, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
     ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
 };
+use crate::server::member::{ServerMemberRegistrationMessageInput};
 use tokio::spawn;
 use tracing::error;
 
@@ -19,21 +20,21 @@ use tracing::error;
 
 #[derive(Debug)]
 pub struct ServerConnectionTask {
-    server_sender: MessageQueueSender<ServerMessage>,
-    general_sender: MessageSocketSender<GeneralMessage>,
-    general_receiver: MessageSocketReceiver<GeneralMessage>,
+    server_queue_sender: MessageQueueSender<ServerMessage>,
+    general_socket_sender: MessageSocketSender<GeneralMessage>,
+    general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
 }
 
 impl ServerConnectionTask {
     pub fn new(
-        server_sender: MessageQueueSender<ServerMessage>,
-        general_sender: MessageSocketSender<GeneralMessage>,
-        general_receiver: MessageSocketReceiver<GeneralMessage>,
+        server_queue_sender: MessageQueueSender<ServerMessage>,
+        general_socket_sender: MessageSocketSender<GeneralMessage>,
+        general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
     ) -> Self {
         Self {
-            server_sender,
-            general_sender,
-            general_receiver,
+            server_queue_sender,
+            general_socket_sender,
+            general_socket_receiver,
         }
     }
 
@@ -42,7 +43,7 @@ impl ServerConnectionTask {
     }
 
     pub async fn run(mut self) {
-        let message = match self.general_receiver.receive().await {
+        let message = match self.general_socket_receiver.receive().await {
             Err(error) => {
                 error!("{}", error);
                 return;
@@ -77,13 +78,13 @@ impl ServerConnectionTask {
         let (server_socket_address,) = input.into();
 
         match self
-            .server_sender
+            .server_queue_sender
             .do_send_synchronous(ServerRegistrationMessageInput::new(server_socket_address))
             .await
         {
             ServerRegistrationMessageOutput::NotALeader(output) => {
                 if let Err(error) = self
-                    .general_sender
+                    .general_socket_sender
                     .send_asynchronous(GeneralRegistrationResponseMessageInput::NotALeader(
                         GeneralRegistrationResponseMessageNotALeaderInput::new(
                             *output.leader_server_socket_address(),
@@ -95,11 +96,11 @@ impl ServerConnectionTask {
                 }
             }
             ServerRegistrationMessageOutput::Success(output) => {
-                let (server_id, leader_server_id, server_socket_addresses, log_term, member_sender) =
+                let (server_id, leader_server_id, server_socket_addresses, log_term, member_queue_sender) =
                     output.into();
 
                 if let Err(error) = self
-                    .general_sender
+                    .general_socket_sender
                     .send_asynchronous(GeneralRegistrationResponseMessageInput::Success(
                         GeneralRegistrationResponseMessageSuccessInput::new(
                             server_id,
@@ -112,7 +113,12 @@ impl ServerConnectionTask {
                 {
                     error!("{}", error);
                 } else {
-                    //member_sender.
+                    member_queue_sender.do_send_asynchronous(
+                        ServerMemberRegistrationMessageInput::new(
+                            self.general_socket_sender,
+                            self.general_socket_receiver,
+                        )
+                    ).await;
                 }
             }
         }
@@ -123,13 +129,13 @@ impl ServerConnectionTask {
         let (server_id,) = input.into();
 
         match self
-            .server_sender
+            .server_queue_sender
             .do_send_synchronous(ServerRecoveryMessageInput::new(server_id))
             .await
         {
             ServerRecoveryMessageOutput::NotALeader(output) => {
                 if let Err(error) = self
-                    .general_sender
+                    .general_socket_sender
                     .send_asynchronous(GeneralRecoveryResponseMessageInput::NotALeader(
                         GeneralRecoveryResponseMessageNotALeaderInput::new(
                             *output.leader_server_socket_address(),
@@ -142,7 +148,7 @@ impl ServerConnectionTask {
             }
             ServerRecoveryMessageOutput::IsOnline => {
                 if let Err(error) = self
-                    .general_sender
+                    .general_socket_sender
                     .send_asynchronous(GeneralRecoveryResponseMessageInput::IsOnline)
                     .await
                 {
@@ -153,7 +159,7 @@ impl ServerConnectionTask {
                 let (leader_server_id, server_socket_address, log_term) = output.into();
 
                 if let Err(error) = self
-                    .general_sender
+                    .general_socket_sender
                     .send_asynchronous(GeneralRecoveryResponseMessageInput::Success(
                         GeneralRecoveryResponseMessageSuccessInput::new(
                             leader_server_id,

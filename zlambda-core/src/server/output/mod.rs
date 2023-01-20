@@ -211,17 +211,17 @@ impl From<ServerRecoveryMessageSuccessOutput> for ServerRecoveryMessageOutput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerReplicateLogEntriesMessageOutput {
+pub struct ServerLogEntriesReplicationMessageOutput {
     log_entry_ids: Vec<LogEntryId>,
 }
 
-impl From<ServerReplicateLogEntriesMessageOutput> for (Vec<LogEntryId>,) {
-    fn from(output: ServerReplicateLogEntriesMessageOutput) -> Self {
+impl From<ServerLogEntriesReplicationMessageOutput> for (Vec<LogEntryId>,) {
+    fn from(output: ServerLogEntriesReplicationMessageOutput) -> Self {
         (output.log_entry_ids,)
     }
 }
 
-impl ServerReplicateLogEntriesMessageOutput {
+impl ServerLogEntriesReplicationMessageOutput {
     pub fn new(log_entry_ids: Vec<LogEntryId>) -> Self {
         Self { log_entry_ids }
     }

@@ -1,4 +1,5 @@
-use crate::server::{LogEntryData, LogEntryId, ServerId};
+use crate::server::member::ServerMemberMessage;
+use crate::server::{LogEntryData, LogEntryId, ServerId, ServerRegistrationMessageOutput};
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
@@ -61,6 +62,29 @@ impl ServerRegistrationMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ServerCommitRegistrationMessageInput {
+    member_server_id: ServerId,
+}
+
+impl From<ServerCommitRegistrationMessageInput> for (ServerId,) {
+    fn from(input: ServerCommitRegistrationMessageInput) -> Self {
+        (input.member_server_id,)
+    }
+}
+
+impl ServerCommitRegistrationMessageInput {
+    pub fn new(member_server_id: ServerId) -> Self {
+        Self { member_server_id }
+    }
+
+    pub fn member_server_id(&self) -> ServerId {
+        self.member_server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ServerRecoveryMessageInput {
     server_id: ServerId,
 }
@@ -84,17 +108,17 @@ impl ServerRecoveryMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerReplicateLogEntriesMessageInput {
+pub struct ServerLogEntriesReplicationMessageInput {
     log_entries_data: Vec<LogEntryData>,
 }
 
-impl From<ServerReplicateLogEntriesMessageInput> for (Vec<LogEntryData>,) {
-    fn from(input: ServerReplicateLogEntriesMessageInput) -> Self {
+impl From<ServerLogEntriesReplicationMessageInput> for (Vec<LogEntryData>,) {
+    fn from(input: ServerLogEntriesReplicationMessageInput) -> Self {
         (input.log_entries_data,)
     }
 }
 
-impl ServerReplicateLogEntriesMessageInput {
+impl ServerLogEntriesReplicationMessageInput {
     pub fn new(log_entries_data: Vec<LogEntryData>) -> Self {
         Self { log_entries_data }
     }
@@ -107,18 +131,18 @@ impl ServerReplicateLogEntriesMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerAcknowledgeLogEntriesMessageInput {
+pub struct ServerLogEntriesAcknowledgementMessageInput {
     log_entry_ids: Vec<LogEntryId>,
     server_id: ServerId,
 }
 
-impl From<ServerAcknowledgeLogEntriesMessageInput> for (Vec<LogEntryId>, ServerId) {
-    fn from(input: ServerAcknowledgeLogEntriesMessageInput) -> Self {
+impl From<ServerLogEntriesAcknowledgementMessageInput> for (Vec<LogEntryId>, ServerId) {
+    fn from(input: ServerLogEntriesAcknowledgementMessageInput) -> Self {
         (input.log_entry_ids, input.server_id)
     }
 }
 
-impl ServerAcknowledgeLogEntriesMessageInput {
+impl ServerLogEntriesAcknowledgementMessageInput {
     pub fn new(log_entry_ids: Vec<LogEntryId>, server_id: ServerId) -> Self {
         Self {
             log_entry_ids,

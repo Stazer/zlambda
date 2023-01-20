@@ -1,19 +1,30 @@
 use crate::message::AsynchronousMessage;
-use crate::server::member::ServerMemberReplicateMessageInput;
+use crate::server::member::{ServerMemberReplicationMessageInput, ServerMemberRegistrationMessageInput};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerMemberReplicateMessage = AsynchronousMessage<ServerMemberReplicateMessageInput>;
+pub type ServerMemberReplicationMessage = AsynchronousMessage<ServerMemberReplicationMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerMemberRegistrationMessage = AsynchronousMessage<ServerMemberRegistrationMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub enum ServerMemberMessage {
-    Replicate(ServerMemberReplicateMessage),
+    Replication(ServerMemberReplicationMessage),
+    Registration(ServerMemberRegistrationMessage),
 }
 
-impl From<ServerMemberReplicateMessage> for ServerMemberMessage {
-    fn from(message: ServerMemberReplicateMessage) -> Self {
-        Self::Replicate(message)
+impl From<ServerMemberReplicationMessage> for ServerMemberMessage {
+    fn from(message: ServerMemberReplicationMessage) -> Self {
+        Self::Replication(message)
+    }
+}
+
+impl From<ServerMemberRegistrationMessage> for ServerMemberMessage {
+    fn from(message: ServerMemberRegistrationMessage) -> Self {
+        Self::Registration(message)
     }
 }

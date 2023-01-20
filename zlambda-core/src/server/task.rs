@@ -9,16 +9,18 @@ use crate::message::{
 };
 use crate::server::connection::ServerConnectionTask;
 use crate::server::member::{
-    ServerMemberMessage, ServerMemberReplicateMessage, ServerMemberReplicateMessageInput,
+    ServerMemberMessage, ServerMemberReplicationMessage, ServerMemberReplicationMessageInput,
     ServerMemberTask,
 };
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, NewServerError,
-    ServerAcknowledgeLogEntriesMessage, ServerFollowerType, ServerId, ServerLeaderType,
+    ServerLogEntriesAcknowledgementMessage, ServerCommitRegistrationMessage,
+    ServerCommitRegistrationMessageInput, ServerFollowerType, ServerId, ServerLeaderType,
     ServerMessage, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
     ServerRegistrationMessage, ServerRegistrationMessageNotALeaderOutput,
-    ServerReplicateLogEntriesMessage, ServerReplicateLogEntriesMessageOutput,
-    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
+    ServerRegistrationMessageSuccessOutput, ServerLogEntriesReplicationMessage,
+    ServerLogEntriesReplicationMessageOutput, ServerSocketAcceptMessage,
+    ServerSocketAcceptMessageInput, ServerType,
 };
 use async_recursion::async_recursion;
 use std::collections::HashMap;
@@ -268,12 +270,15 @@ impl ServerTask {
                 self.on_server_registration_message(message).await
             }
             ServerMessage::Recovery(message) => self.on_server_recovery_message(message).await,
-            ServerMessage::ReplicateLogEntries(message) => {
-                self.on_server_replicate_log_entries_message(message).await
+            ServerMessage::LogEntriesReplication(message) => {
+                self.on_server_log_entries_replication_message(message).await
             }
-            ServerMessage::AcknowledgeLogEntries(message) => {
-                self.on_server_acknowledge_log_entries_message(message)
+            ServerMessage::LogEntriesAcknowledgement(message) => {
+                self.on_server_log_entries_acknowledgement_message(message)
                     .await
+            }
+            ServerMessage::CommitRegistration(message) => {
+                self.on_server_commit_registration_message(message).await
             }
         }
     }
@@ -326,14 +331,26 @@ impl ServerTask {
                     .get_mut(member_server_id)
                     .expect("valid entry") = Some((input.server_socket_address(), Some(sender)));
 
-                self.replicate(
-                    vec![AddServerLogEntryData::new(
+                let log_entry_ids = self
+                    .replicate(vec![AddServerLogEntryData::new(
                         member_server_id,
                         input.server_socket_address(),
-                    ).into()],
-                    |_| None,
-                )
-                .await;
+                    )
+                    .into()])
+                    .await;
+
+                self.commit_messages
+                    .entry(*log_entry_ids.get(0).expect("valid log entry id"))
+                    .or_insert(Vec::default())
+                    .push(
+                        ServerCommitRegistrationMessage::new(
+                            ServerCommitRegistrationMessageInput::new(member_server_id),
+                            output_sender,
+                        )
+                        .into(),
+                    );
+
+                self.acknowledge(&log_entry_ids, self.server_id).await;
             }
             ServerType::Follower(follower) => {
                 let leader_server_socket_address =
@@ -376,23 +393,23 @@ impl ServerTask {
         }
     }
 
-    async fn on_server_replicate_log_entries_message(
+    async fn on_server_log_entries_replication_message(
         &mut self,
-        message: ServerReplicateLogEntriesMessage,
+        message: ServerLogEntriesReplicationMessage,
     ) {
         let (input, sender) = message.into();
         let (log_entries_data,) = input.into();
 
         sender
-            .do_send(ServerReplicateLogEntriesMessageOutput::new(
-                self.replicate(log_entries_data, |log_entry_ids| None).await,
+            .do_send(ServerLogEntriesReplicationMessageOutput::new(
+                self.replicate(log_entries_data).await,
             ))
             .await;
     }
 
-    async fn on_server_acknowledge_log_entries_message(
+    async fn on_server_log_entries_acknowledgement_message(
         &mut self,
-        message: ServerAcknowledgeLogEntriesMessage,
+        message: ServerLogEntriesAcknowledgementMessage,
     ) {
         let (input,) = message.into();
 
@@ -400,14 +417,46 @@ impl ServerTask {
             .await;
     }
 
-    async fn replicate<F>(
+    async fn on_server_commit_registration_message(
         &mut self,
-        log_entries_data: Vec<LogEntryData>,
-        commit_messages_builder: F,
-    ) -> Vec<LogEntryId>
-    where
-        F: Fn(LogEntryId) -> Option<Vec<ServerMessage>>,
-    {
+        message: ServerCommitRegistrationMessage,
+    ) {
+        let (input, output_sender) = message.into();
+        //let (output_sender,) = input.into();
+
+        let leader = match &self.r#type {
+            ServerType::Leader(leader) => leader,
+            ServerType::Follower(_) => panic!("Server should be leader"),
+        };
+
+        let member = match self.server_members.get(input.member_server_id()) {
+            Some(Some(member)) => member,
+            None | Some(None) => panic!("Server member {} should exist", input.member_server_id()),
+        };
+
+        let member_sender = match &member.1 {
+            Some(member_sender) => member_sender.clone(),
+            None => panic!(
+                "Server member {} should have assigned sender",
+                input.member_server_id()
+            ),
+        };
+
+        output_sender
+            .do_send(ServerRegistrationMessageSuccessOutput::new(
+                input.member_server_id(),
+                self.server_id,
+                self.server_members
+                    .iter()
+                    .map(|member| member.as_ref().map(|x| x.0))
+                    .collect(),
+                leader.log().current_term(),
+                member_sender,
+            ))
+            .await;
+    }
+
+    async fn replicate(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {
         match &mut self.r#type {
             ServerType::Leader(ref mut leader) => {
                 let log_entry_ids = leader.log_mut().append(log_entries_data);
@@ -422,15 +471,15 @@ impl ServerTask {
                 for server_member in &self.server_members {
                     if let Some(Some(sender)) = server_member.as_ref().map(|member| &member.1) {
                         sender
-                            .do_send(ServerMemberReplicateMessage::new(
-                                ServerMemberReplicateMessageInput::new(log_entries.clone()),
+                            .do_send(ServerMemberReplicationMessage::new(
+                                ServerMemberReplicationMessageInput::new(log_entries.clone()),
                             ))
                             .await;
                     }
                 }
 
                 /*
-                   compiler bug:
+                   causes compiler bug:
                 */
                 /*for member_sender in self
                     .server_members
@@ -440,25 +489,11 @@ impl ServerTask {
                     .flatten()
                 {
                     member_sender
-                        .do_send(ServerMemberReplicateMessage::new(
-                            ServerMemberReplicateMessageInput::new(vec![]),
+                        .do_send(ServerMemberReplicationMessage::new(
+                            ServerMemberReplicationMessageInput::new(vec![]),
                         ))
                         .await;
                 }*/
-
-                for log_entry_id in &log_entry_ids {
-                    let messages = match commit_messages_builder(*log_entry_id) {
-                        None => continue,
-                        Some(messages) => messages,
-                    };
-
-                    /*self.commit_messages
-                        .entry(*log_entry_id)
-                        .or_insert_with(Vec::default)
-                        .extend(messages);*/
-                }
-
-                self.acknowledge(&log_entry_ids, self.server_id).await;
 
                 log_entry_ids
             }
