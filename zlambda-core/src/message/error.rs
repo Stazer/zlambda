@@ -17,7 +17,7 @@ impl Debug for MessageError {
         match self {
             Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
             Self::UnexpectedMessage(message) => {
-                write!(formatter, "Unexpected message ({})", message)
+                write!(formatter, "Unexpected message ({message})")
             }
             Self::ExpectedMessage => write!(formatter, "Expected message"),
             Self::PostcardError(error) => Debug::fmt(error, formatter),
@@ -31,7 +31,7 @@ impl Display for MessageError {
         match self {
             Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
             Self::UnexpectedMessage(message) => {
-                write!(formatter, "Unexpected message ({})", message)
+                write!(formatter, "Unexpected message ({message})")
             }
             Self::ExpectedMessage => write!(formatter, "Expected message"),
             Self::PostcardError(error) => Display::fmt(error, formatter),

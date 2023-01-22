@@ -22,10 +22,10 @@ impl Display for NewServerError {
             Self::Io(error) => Display::fmt(error, formatter),
             Self::Message(error) => Display::fmt(error, formatter),
             Self::IsOnline(server_id) => {
-                write!(formatter, "Server with id {} is online", server_id)
+                write!(formatter, "Server with id {server_id} is online")
             }
             Self::Unknown(server_id) => {
-                write!(formatter, "Server id {} is unknown", server_id)
+                write!(formatter, "Server id {server_id} is unknown")
             }
         }
     }

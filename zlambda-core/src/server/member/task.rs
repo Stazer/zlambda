@@ -176,7 +176,7 @@ impl ServerMemberTask {
             message => {
                 error!(
                     "{}",
-                    MessageError::UnexpectedMessage(format!("{:?}", message))
+                    MessageError::UnexpectedMessage(format!("{message:?}"))
                 );
             }
         }
@@ -187,7 +187,7 @@ impl ServerMemberTask {
         message: GeneralLogEntriesAppendResponseMessage,
     ) {
         let (input,) = message.into();
-        let (acknowledged_log_entry_ids, missing_log_entry_ids) = input.into();
+        let (acknowledged_log_entry_ids, _missing_log_entry_ids) = input.into();
 
         self.server_queue_sender
             .do_send_asynchronous(ServerLogEntriesAcknowledgementMessageInput::new(

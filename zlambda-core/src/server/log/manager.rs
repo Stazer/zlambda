@@ -49,7 +49,7 @@ impl LogManager {
             (Some(acknowledgeable_server_ids), Some(acknowledged_server_ids)) => {
                 Some(acknowledgeable_server_ids.difference(acknowledged_server_ids))
             }
-            _ => return None,
+            _ => None,
         }
     }
 

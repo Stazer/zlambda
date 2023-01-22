@@ -67,7 +67,7 @@ impl ServerConnectionTask {
             }
             message => error!(
                 "{}",
-                MessageError::UnexpectedMessage(format!("{:?}", message))
+                MessageError::UnexpectedMessage(format!("{message:?}"))
             ),
         }
     }
@@ -182,8 +182,7 @@ impl ServerConnectionTask {
                             leader_server_id,
                             server_socket_address,
                             log_term,
-                        )
-                        .into(),
+                        ),
                     ))
                     .await
                 {

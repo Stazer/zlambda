@@ -1,6 +1,6 @@
 use crate::general::GeneralMessage;
-use crate::server::member::ServerMemberMessage;
-use crate::server::{LogEntryData, LogEntryId, ServerId, ServerRegistrationMessageOutput};
+
+use crate::server::{LogEntryData, LogEntryId, ServerId};
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 

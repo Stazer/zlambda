@@ -31,7 +31,7 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::{select, spawn};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,7 +74,7 @@ impl ServerTask {
                 let (
                     server_id,
                     leader_server_id,
-                    server_socket_addresses,
+                    _server_socket_addresses,
                     term,
                     socket_sender,
                     socket_receiver,
@@ -125,7 +125,7 @@ impl ServerTask {
                         }
                         Some(message) => {
                             return Err(
-                                MessageError::UnexpectedMessage(format!("{:?}", message)).into()
+                                MessageError::UnexpectedMessage(format!("{message:?}")).into()
                             )
                         }
                     }
@@ -157,7 +157,7 @@ impl ServerTask {
 
                 let (
                     leader_server_id,
-                    server_socket_addresses,
+                    _server_socket_addresses,
                     term,
                     socket_sender,
                     socket_receiver,
@@ -208,7 +208,7 @@ impl ServerTask {
                         }
                         Some(message) => {
                             return Err(
-                                MessageError::UnexpectedMessage(format!("{:?}", message)).into()
+                                MessageError::UnexpectedMessage(format!("{message:?}")).into()
                             )
                         }
                     }
@@ -322,7 +322,7 @@ impl ServerTask {
             message => {
                 error!(
                     "{}",
-                    MessageError::UnexpectedMessage(format!("{:?}", message))
+                    MessageError::UnexpectedMessage(format!("{message:?}"))
                 );
             }
         }
@@ -547,7 +547,6 @@ impl ServerTask {
         {
             error!("{}", error);
             unimplemented!("Switch to candidate");
-            return;
         }
     }
 
@@ -559,17 +558,13 @@ impl ServerTask {
                     self.server_members
                         .iter()
                         .enumerate()
-                        .flat_map(|member| match member.1 {
-                            Some(_) => Some(member.0),
-                            None => None,
-                        })
+                        .flat_map(|member| member.1.as_ref().map(|_| member.0))
                         .collect(),
                 );
 
                 let log_entries = log_entry_ids
                     .iter()
-                    .map(|log_entry_id| leader.log().entries().get(*log_entry_id))
-                    .flatten()
+                    .filter_map(|log_entry_id| leader.log().entries().get(*log_entry_id))
                     .cloned()
                     .collect::<Vec<_>>();
 
