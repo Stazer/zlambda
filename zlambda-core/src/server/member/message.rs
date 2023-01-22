@@ -1,5 +1,8 @@
 use crate::message::AsynchronousMessage;
-use crate::server::member::{ServerMemberReplicationMessageInput, ServerMemberRegistrationMessageInput, ServerMemberRecoveryMessageInput};
+use crate::server::member::{
+    ServerMemberRecoveryMessageInput, ServerMemberRegistrationMessageInput,
+    ServerMemberReplicationMessageInput,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -7,7 +10,8 @@ pub type ServerMemberReplicationMessage = AsynchronousMessage<ServerMemberReplic
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerMemberRegistrationMessage = AsynchronousMessage<ServerMemberRegistrationMessageInput>;
+pub type ServerMemberRegistrationMessage =
+    AsynchronousMessage<ServerMemberRegistrationMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

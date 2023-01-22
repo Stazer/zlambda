@@ -1,6 +1,6 @@
-use crate::server::LogEntry;
-use crate::message::{MessageSocketSender, MessageSocketReceiver};
 use crate::general::GeneralMessage;
+use crate::message::{MessageSocketReceiver, MessageSocketSender};
+use crate::server::LogEntry;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -33,7 +33,12 @@ pub struct ServerMemberRegistrationMessageInput {
     general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
 }
 
-impl From<ServerMemberRegistrationMessageInput> for (MessageSocketSender<GeneralMessage>, MessageSocketReceiver<GeneralMessage>) {
+impl From<ServerMemberRegistrationMessageInput>
+    for (
+        MessageSocketSender<GeneralMessage>,
+        MessageSocketReceiver<GeneralMessage>,
+    )
+{
     fn from(input: ServerMemberRegistrationMessageInput) -> Self {
         (input.general_socket_sender, input.general_socket_receiver)
     }
@@ -67,7 +72,12 @@ pub struct ServerMemberRecoveryMessageInput {
     general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
 }
 
-impl From<ServerMemberRecoveryMessageInput> for (MessageSocketSender<GeneralMessage>, MessageSocketReceiver<GeneralMessage>) {
+impl From<ServerMemberRecoveryMessageInput>
+    for (
+        MessageSocketSender<GeneralMessage>,
+        MessageSocketReceiver<GeneralMessage>,
+    )
+{
     fn from(input: ServerMemberRecoveryMessageInput) -> Self {
         (input.general_socket_sender, input.general_socket_receiver)
     }

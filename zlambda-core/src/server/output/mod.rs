@@ -152,7 +152,14 @@ pub struct ServerRecoveryMessageSuccessOutput {
     member_queue_sender: MessageQueueSender<ServerMemberMessage>,
 }
 
-impl From<ServerRecoveryMessageSuccessOutput> for (ServerId, Vec<Option<SocketAddr>>, LogTerm, MessageQueueSender<ServerMemberMessage>) {
+impl From<ServerRecoveryMessageSuccessOutput>
+    for (
+        ServerId,
+        Vec<Option<SocketAddr>>,
+        LogTerm,
+        MessageQueueSender<ServerMemberMessage>,
+    )
+{
     fn from(output: ServerRecoveryMessageSuccessOutput) -> Self {
         (
             output.leader_server_id,

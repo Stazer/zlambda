@@ -1,4 +1,4 @@
-use crate::server::{ServerId, LogEntryId, LogTerm, LogEntry};
+use crate::server::{LogEntry, LogEntryId, LogTerm, ServerId};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -262,12 +262,8 @@ impl From<GeneralLogEntriesAppendRequestInput> for (Vec<LogEntry>,) {
 }
 
 impl GeneralLogEntriesAppendRequestInput {
-    pub fn new(
-        log_entries: Vec<LogEntry>,
-    ) -> Self {
-        Self {
-            log_entries,
-        }
+    pub fn new(log_entries: Vec<LogEntry>) -> Self {
+        Self { log_entries }
     }
 
     pub fn log_entries(&self) -> &Vec<LogEntry> {
@@ -289,9 +285,7 @@ impl From<GeneralLogEntriesAppendResponseInput> for (Vec<LogEntryId>,) {
 }
 
 impl GeneralLogEntriesAppendResponseInput {
-    pub fn new(
-        acknowledged_log_entry_ids: Vec<LogEntryId>,
-    ) -> Self {
+    pub fn new(acknowledged_log_entry_ids: Vec<LogEntryId>) -> Self {
         Self {
             acknowledged_log_entry_ids,
         }

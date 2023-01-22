@@ -26,7 +26,8 @@ pub type GeneralRecoveryResponseMessage = AsynchronousMessage<GeneralRecoveryRes
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type GeneralLogEntriesAppendRequestMessage = AsynchronousMessage<GeneralLogEntriesAppendRequestInput>;
+pub type GeneralLogEntriesAppendRequestMessage =
+    AsynchronousMessage<GeneralLogEntriesAppendRequestInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

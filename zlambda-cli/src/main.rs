@@ -17,6 +17,8 @@ use zlambda_core::server::{ServerId, ServerTask};
 struct MainArguments {
     #[clap(subcommand)]
     command: MainCommand,
+    #[arg(short, long, default_value="false")]
+    tokio_console: bool,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,10 +77,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             listener_address,
             command,
         } => {
-            //tracing_subscriber::fmt::init();
-
-            if matches!(command, ServerCommand::Leader) {
+            if arguments.tokio_console {
                 console_subscriber::init();
+            } else {
+                tracing_subscriber::fmt::init();
             }
 
             ServerTask::new(
@@ -95,7 +97,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .run()
             .await
         }
-        MainCommand::Client { address: _, command: _ } => {
+        MainCommand::Client {
+            address: _,
+            command: _,
+        } => {
             /*let mut client = match Client::new(address).await {
                 Err(error) => return Err(error),
                 Ok(client) => client,

@@ -1,19 +1,28 @@
-use crate::general::{GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestInput, GeneralMessage, GeneralLogEntriesAppendResponseMessage};
-use crate::message::{
-    message_queue, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
-    MessageSocketSender, MessageError,
+use crate::general::{
+    GeneralLogEntriesAppendRequestInput, GeneralLogEntriesAppendRequestMessage,
+    GeneralLogEntriesAppendResponseMessage, GeneralMessage,
 };
-use crate::server::member::{ServerMemberMessage, ServerMemberRecoveryMessage, ServerMemberReplicationMessage, ServerMemberRegistrationMessage};
-use crate::server::{ServerLogEntriesAcknowledgementMessageInput, ServerId, ServerMessage};
-use tracing::{info, error};
-use tokio::{spawn, select};
+use crate::message::{
+    message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
+    MessageSocketSender,
+};
+use crate::server::member::{
+    ServerMemberMessage, ServerMemberRecoveryMessage, ServerMemberRegistrationMessage,
+    ServerMemberReplicationMessage,
+};
+use crate::server::{ServerId, ServerLogEntriesAcknowledgementMessageInput, ServerMessage};
+use tokio::{select, spawn};
+use tracing::{error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct ServerMemberTask {
     server_id: ServerId,
     server_queue_sender: MessageQueueSender<ServerMessage>,
-    general_socket: Option<(MessageSocketSender<GeneralMessage>, MessageSocketReceiver<GeneralMessage>)>,
+    general_socket: Option<(
+        MessageSocketSender<GeneralMessage>,
+        MessageSocketReceiver<GeneralMessage>,
+    )>,
     sender: MessageQueueSender<ServerMemberMessage>,
     receiver: MessageQueueReceiver<ServerMemberMessage>,
 }
@@ -22,7 +31,10 @@ impl ServerMemberTask {
     pub fn new(
         server_id: ServerId,
         server_queue_sender: MessageQueueSender<ServerMessage>,
-        general_socket: Option<(MessageSocketSender<GeneralMessage>, MessageSocketReceiver<GeneralMessage>)>,
+        general_socket: Option<(
+            MessageSocketSender<GeneralMessage>,
+            MessageSocketReceiver<GeneralMessage>,
+        )>,
     ) -> Self {
         let (sender, receiver) = message_queue();
 
@@ -49,8 +61,8 @@ impl ServerMemberTask {
         }
     }
 
-    async fn select(&mut self)  {
-        match &mut self.general_socket{
+    async fn select(&mut self) {
+        match &mut self.general_socket {
             Some(ref mut general_socket) => {
                 select!(
                     result = general_socket.1.receive() => {
@@ -86,35 +98,47 @@ impl ServerMemberTask {
 
     async fn on_server_member_message(&mut self, message: ServerMemberMessage) {
         match message {
-            ServerMemberMessage::Replication(message) => self.on_server_member_replication_message(message).await,
-            ServerMemberMessage::Registration(message) => self.on_server_member_registration_message(message).await,
-            ServerMemberMessage::Recovery(message) => self.on_server_member_recovery_message(message).await,
+            ServerMemberMessage::Replication(message) => {
+                self.on_server_member_replication_message(message).await
+            }
+            ServerMemberMessage::Registration(message) => {
+                self.on_server_member_registration_message(message).await
+            }
+            ServerMemberMessage::Recovery(message) => {
+                self.on_server_member_recovery_message(message).await
+            }
         }
     }
 
-    async fn on_server_member_replication_message(&mut self, message: ServerMemberReplicationMessage) {
+    async fn on_server_member_replication_message(
+        &mut self,
+        message: ServerMemberReplicationMessage,
+    ) {
         match &mut self.general_socket {
             Some(ref mut general_socket) => {
                 let (input,) = message.into();
                 let (log_entries,) = input.into();
 
-                if let Err(error) = general_socket.0.send(
-                    GeneralLogEntriesAppendRequestMessage::new(
-                        GeneralLogEntriesAppendRequestInput::new(
-                            log_entries,
-                        )
-                    )
-                ).await {
+                if let Err(error) = general_socket
+                    .0
+                    .send(GeneralLogEntriesAppendRequestMessage::new(
+                        GeneralLogEntriesAppendRequestInput::new(log_entries),
+                    ))
+                    .await
+                {
                     error!("{}", error);
                     let _ = general_socket;
                     self.general_socket = None;
                 }
             }
-            None => {},
+            None => {}
         }
     }
 
-    async fn on_server_member_registration_message(&mut self, message: ServerMemberRegistrationMessage) {
+    async fn on_server_member_registration_message(
+        &mut self,
+        message: ServerMemberRegistrationMessage,
+    ) {
         if self.general_socket.is_some() {
             panic!("Expect socket to be none");
         }
@@ -138,23 +162,30 @@ impl ServerMemberTask {
     async fn on_general_message(&mut self, message: GeneralMessage) {
         match message {
             GeneralMessage::LogEntriesAppendResponse(message) => {
-                self.on_general_log_entries_append_response_message(message).await
+                self.on_general_log_entries_append_response_message(message)
+                    .await
             }
             message => {
-                error!("{}", MessageError::UnexpectedMessage(format!("{:?}", message)));
+                error!(
+                    "{}",
+                    MessageError::UnexpectedMessage(format!("{:?}", message))
+                );
             }
         }
     }
 
-    async fn on_general_log_entries_append_response_message(&mut self, message: GeneralLogEntriesAppendResponseMessage) {
+    async fn on_general_log_entries_append_response_message(
+        &mut self,
+        message: GeneralLogEntriesAppendResponseMessage,
+    ) {
         let (input,) = message.into();
         let (log_entry_ids,) = input.into();
 
-        self.server_queue_sender.do_send_asynchronous(
-            ServerLogEntriesAcknowledgementMessageInput::new(
+        self.server_queue_sender
+            .do_send_asynchronous(ServerLogEntriesAcknowledgementMessageInput::new(
                 log_entry_ids,
                 self.server_id,
-            )
-        ).await;
+            ))
+            .await;
     }
 }

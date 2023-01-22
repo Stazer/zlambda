@@ -4,7 +4,6 @@ use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
 use std::marker::PhantomData;
 use tokio::io::AsyncWriteExt;
-use tokio::io::BufWriter;
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio_stream::StreamExt;
@@ -17,7 +16,7 @@ pub struct MessageSocketSender<T>
 where
     T: Serialize,
 {
-    writer: BufWriter<OwnedWriteHalf>,
+    writer: OwnedWriteHalf,
     r#type: PhantomData<T>,
 }
 
@@ -27,7 +26,7 @@ where
 {
     pub fn new(writer: OwnedWriteHalf) -> Self {
         Self {
-            writer: BufWriter::new(writer),
+            writer,
             r#type: PhantomData::<T>,
         }
     }

@@ -84,40 +84,47 @@ impl LeadingLog {
     }
 
     pub fn acknowledge(&mut self, id: LogEntryId, server_id: ServerId) -> Result<(), LogError> {
-        let server_ids = match self.acknowledgeable_server_ids.get(id) {
+        let acknowledgeable_server_ids = match self.acknowledgeable_server_ids.get(id) {
             Some(server_ids) => server_ids,
             None => return Err(LogError::NotExisting),
         };
 
-        if !server_ids.contains(&server_id) {
+        if !acknowledgeable_server_ids.contains(&server_id) {
             return Err(LogError::NotAcknowledgeable);
         }
 
-        let server_ids = match self.acknowledged_server_ids.get_mut(id) {
+        let acknowledged_server_ids = match self.acknowledged_server_ids.get_mut(id) {
             Some(server_ids) => server_ids,
             None => return Err(LogError::NotExisting),
         };
 
-        if server_ids.contains(&server_id) {
+        if acknowledged_server_ids.contains(&server_id) {
             return Err(LogError::AlreadyAcknowledged);
         }
 
-        server_ids.insert(server_id);
+        acknowledged_server_ids.insert(server_id);
+
+        let mut current_log_entry_id = id;
 
         loop {
-            if self.is_committed(self.next_committing_log_entry_id) {
+            if self.is_acknowledged(current_log_entry_id) && self.next_committing_log_entry_id == current_log_entry_id {
                 self.next_committing_log_entry_id += 1;
+                current_log_entry_id += 1;
             } else {
-                break;
+                break
             }
         }
 
         Ok(())
     }
 
-    pub fn append(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {
+    pub fn append(
+        &mut self,
+        log_entries_data: Vec<LogEntryData>,
+        acknowledgeable_server_ids: HashSet<ServerId>,
+    ) -> Vec<LogEntryId> {
         self.entries.reserve(log_entries_data.len());
-        let start = self.entries.len() - 1;
+        let start = self.entries.len();
 
         self.entries.extend(
             log_entries_data
@@ -126,6 +133,15 @@ impl LeadingLog {
                 .map(|(index, data)| LogEntry::new(start + index, self.current_term, data)),
         );
 
-        (start..self.entries.len()).collect()
+        let log_entry_ids = (start..self.entries.len()).collect::<Vec<_>>();
+
+        for log_entry_id in &log_entry_ids {
+            self.acknowledgeable_server_ids
+                .insert(*log_entry_id, acknowledgeable_server_ids.clone());
+            self.acknowledged_server_ids
+                .insert(*log_entry_id, HashSet::default());
+        }
+
+        log_entry_ids
     }
 }

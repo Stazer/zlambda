@@ -1,9 +1,9 @@
 use crate::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
-    ServerLogEntriesAcknowledgementMessageInput, ServerCommitRegistrationMessageInput,
+    ServerCommitRegistrationMessageInput, ServerLogEntriesAcknowledgementMessageInput,
+    ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
     ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
-    ServerRegistrationMessageOutput, ServerLogEntriesReplicationMessageInput,
-    ServerLogEntriesReplicationMessageOutput, ServerSocketAcceptMessageInput,
+    ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

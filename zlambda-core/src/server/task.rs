@@ -14,21 +14,21 @@ use crate::server::member::{
 };
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, NewServerError,
-    ServerLogEntriesAcknowledgementMessage, ServerCommitRegistrationMessage,
-    ServerCommitRegistrationMessageInput, ServerFollowerType, ServerId, ServerLeaderType,
-    ServerMessage, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
-    ServerRegistrationMessage, ServerRegistrationMessageNotALeaderOutput,
-    ServerRegistrationMessageSuccessOutput, ServerLogEntriesReplicationMessage,
-    ServerLogEntriesReplicationMessageOutput, ServerSocketAcceptMessage,
-    ServerSocketAcceptMessageInput, ServerType, ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput,
-}
-;
+    ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
+    ServerId, ServerLeaderType, ServerLogEntriesAcknowledgementMessage,
+    ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
+    ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
+    ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
+    ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
+    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
+};
 use async_recursion::async_recursion;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::{select, spawn};
-use tracing::{error, info};
+use std::fmt::Debug;
+use tracing::{debug, error, info, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,8 +48,8 @@ impl ServerTask {
         follower_data: Option<(T, Option<ServerId>)>,
     ) -> Result<Self, NewServerError>
     where
-        S: ToSocketAddrs,
-        T: ToSocketAddrs,
+        S: ToSocketAddrs + Debug,
+        T: ToSocketAddrs + Debug,
     {
         let tcp_listener = TcpListener::bind(listener_address).await?;
         let (queue_sender, queue_receiver) = message_queue();
@@ -275,7 +275,8 @@ impl ServerTask {
             }
             ServerMessage::Recovery(message) => self.on_server_recovery_message(message).await,
             ServerMessage::LogEntriesReplication(message) => {
-                self.on_server_log_entries_replication_message(message).await
+                self.on_server_log_entries_replication_message(message)
+                    .await
             }
             ServerMessage::LogEntriesAcknowledgement(message) => {
                 self.on_server_log_entries_acknowledgement_message(message)
@@ -325,6 +326,14 @@ impl ServerTask {
                 let sender = task.sender().clone();
                 task.spawn();
 
+                let log_entry_ids = self
+                    .replicate(vec![AddServerLogEntryData::new(
+                        member_server_id,
+                        input.server_socket_address(),
+                    )
+                    .into()])
+                    .await;
+
                 if member_server_id >= self.server_members.len() {
                     self.server_members
                         .resize_with(member_server_id + 1, || None);
@@ -334,14 +343,6 @@ impl ServerTask {
                     .server_members
                     .get_mut(member_server_id)
                     .expect("valid entry") = Some((input.server_socket_address(), Some(sender)));
-
-                let log_entry_ids = self
-                    .replicate(vec![AddServerLogEntryData::new(
-                        member_server_id,
-                        input.server_socket_address(),
-                    )
-                    .into()])
-                    .await;
 
                 self.commit_messages
                     .entry(*log_entry_ids.first().expect("valid log entry id"))
@@ -383,23 +384,20 @@ impl ServerTask {
                     None | Some(None) => {
                         sender.do_send(ServerRecoveryMessageOutput::Unknown).await;
                     }
-                    Some(Some(member)) => {
-                        match &member.1 {
-                            None => sender.do_send(ServerRecoveryMessageOutput::Unknown).await,
-                            Some(member_sender) => {
-                                sender.do_send(
-                                    ServerRecoveryMessageSuccessOutput::new(
-                                        self.server_id,
-                                        self.server_members
-                                            .iter()
-                                            .map(|member| member.as_ref().map(|x| x.0))
-                                            .collect(),
-                                        leader.log().current_term(),
-                                        member_sender.clone(),
-
-                                    )
-                                ).await;
-                            }
+                    Some(Some(member)) => match &member.1 {
+                        None => sender.do_send(ServerRecoveryMessageOutput::Unknown).await,
+                        Some(member_sender) => {
+                            sender
+                                .do_send(ServerRecoveryMessageSuccessOutput::new(
+                                    self.server_id,
+                                    self.server_members
+                                        .iter()
+                                        .map(|member| member.as_ref().map(|x| x.0))
+                                        .collect(),
+                                    leader.log().current_term(),
+                                    member_sender.clone(),
+                                ))
+                                .await;
                         }
                     },
                 };
@@ -487,7 +485,17 @@ impl ServerTask {
     async fn replicate(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {
         match &mut self.r#type {
             ServerType::Leader(ref mut leader) => {
-                let log_entry_ids = leader.log_mut().append(log_entries_data);
+                let log_entry_ids = leader.log_mut().append(
+                    log_entries_data,
+                    self.server_members
+                        .iter()
+                        .enumerate()
+                        .flat_map(|member| match member.1 {
+                            Some(_) => Some(member.0),
+                            None => None,
+                        })
+                        .collect(),
+                );
 
                 let log_entries = log_entry_ids
                     .iter()
@@ -540,21 +548,23 @@ impl ServerTask {
                     if let Err(error) = leader.log_mut().acknowledge(*log_entry_id, server_id) {
                         error!("{}", error);
                     }
+
+                    debug!("Log entry {} acknowledged by server {}", log_entry_id, server_id);
                 }
 
                 let to_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
 
-                let committed_log_entry_ids = match (
+                let committed_log_entry_id_range = match (
                     from_last_committed_log_entry_id,
                     to_last_committed_log_entry_id,
                 ) {
-                    (None, Some(to)) => Some(0..to),
-                    (Some(from), Some(to)) => Some(from..to),
+                    (None, Some(to)) => Some(0..(to + 1)),
+                    (Some(from), Some(to)) => Some(from..(to + 1)),
                     _ => None,
                 };
 
-                if let Some(committed_log_entry_ids) = committed_log_entry_ids {
-                    for committed_log_entry_id in committed_log_entry_ids {
+                if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
+                    for committed_log_entry_id in committed_log_entry_id_range {
                         for message in self
                             .commit_messages
                             .remove(&committed_log_entry_id)
@@ -562,6 +572,8 @@ impl ServerTask {
                         {
                             self.on_server_message(message).await;
                         }
+
+                        debug!("Committed log entry {}", committed_log_entry_id);
                     }
                 }
             }
