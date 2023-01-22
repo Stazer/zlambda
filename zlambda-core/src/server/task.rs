@@ -513,7 +513,6 @@ impl ServerTask {
         let follower = match &mut self.r#type {
             ServerType::Leader(_) => {
                 panic!("Cannot append entries to leader node");
-                return;
             }
             ServerType::Follower(ref mut follower) => follower,
         };
