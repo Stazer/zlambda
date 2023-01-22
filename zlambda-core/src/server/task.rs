@@ -527,14 +527,31 @@ impl ServerTask {
             follower.log_mut().push(log_entry);
         }
 
-        let missing_log_entry_ids = match last_committed_log_entry_id {
-            Some(last_committed_log_entry_id) => follower
-                .log_mut()
-                .commit(last_committed_log_entry_id, log_current_term),
-            None => Vec::default(),
+        let (missing_log_entry_ids, committed_log_entry_id_range) = match last_committed_log_entry_id {
+            Some(last_committed_log_entry_id) => {
+                let from_last_committed_log_entry_id = follower.log().last_committed_log_entry_id();
+
+                let missing_log_entry_ids = follower
+                    .log_mut()
+                    .commit(last_committed_log_entry_id, log_current_term);
+
+                let to_last_committed_log_entry_id = follower.log().last_committed_log_entry_id();
+
+                let committed_log_entry_id_range = match (
+                    from_last_committed_log_entry_id,
+                    to_last_committed_log_entry_id,
+                ) {
+                    (None, Some(to)) => Some(0..(to + 1)),
+                    (Some(from), Some(to)) => Some(from..(to + 1)),
+                    _ => None,
+                };
+
+                (missing_log_entry_ids, committed_log_entry_id_range)
+            },
+            None => (Vec::default(), None),
         };
 
-        if let Err(error) = follower
+        let result = follower
             .sender_mut()
             .send(GeneralLogEntriesAppendResponseMessage::new(
                 GeneralLogEntriesAppendResponseMessageInput::new(
@@ -542,8 +559,23 @@ impl ServerTask {
                     missing_log_entry_ids,
                 ),
             ))
-            .await
-        {
+            .await;
+
+        if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
+            for committed_log_entry_id in committed_log_entry_id_range {
+                for message in self
+                    .commit_messages
+                    .remove(&committed_log_entry_id)
+                    .unwrap_or_default()
+                {
+                    self.on_server_message(message).await;
+                }
+
+                debug!("Committed log entry {}", committed_log_entry_id);
+            }
+        }
+
+        if let Err(error) = result {
             error!("{}", error);
             unimplemented!("Switch to candidate");
         }
