@@ -35,6 +35,7 @@ pub struct ServerRegistrationMessageSuccessOutput {
     server_id: ServerId,
     leader_server_id: ServerId,
     server_socket_addresses: Vec<Option<SocketAddr>>,
+    last_committed_log_entry_id: Option<LogEntryId>,
     current_log_term: LogTerm,
     member_sender: MessageQueueSender<ServerMemberMessage>,
 }
@@ -44,6 +45,7 @@ impl From<ServerRegistrationMessageSuccessOutput>
         ServerId,
         ServerId,
         Vec<Option<SocketAddr>>,
+        Option<LogEntryId>,
         LogTerm,
         MessageQueueSender<ServerMemberMessage>,
     )
@@ -53,6 +55,7 @@ impl From<ServerRegistrationMessageSuccessOutput>
             output.server_id,
             output.leader_server_id,
             output.server_socket_addresses,
+            output.last_committed_log_entry_id,
             output.current_log_term,
             output.member_sender,
         )
@@ -64,6 +67,7 @@ impl ServerRegistrationMessageSuccessOutput {
         server_id: ServerId,
         leader_server_id: ServerId,
         server_socket_addresses: Vec<Option<SocketAddr>>,
+        last_committed_log_entry_id: Option<LogEntryId>,
         current_log_term: LogTerm,
         member_sender: MessageQueueSender<ServerMemberMessage>,
     ) -> Self {
@@ -71,6 +75,7 @@ impl ServerRegistrationMessageSuccessOutput {
             server_id,
             leader_server_id,
             server_socket_addresses,
+            last_committed_log_entry_id,
             current_log_term,
             member_sender,
         }
@@ -86,6 +91,10 @@ impl ServerRegistrationMessageSuccessOutput {
 
     pub fn server_socket_addresses(&self) -> &Vec<Option<SocketAddr>> {
         &self.server_socket_addresses
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
+        self.last_committed_log_entry_id
     }
 
     pub fn curremt_log_term(&self) -> LogTerm {
@@ -148,6 +157,7 @@ impl ServerRecoveryMessageNotALeaderOutput {
 pub struct ServerRecoveryMessageSuccessOutput {
     leader_server_id: ServerId,
     server_socket_addresses: Vec<Option<SocketAddr>>,
+    last_committed_log_entry_id: Option<LogEntryId>,
     current_log_term: LogTerm,
     member_queue_sender: MessageQueueSender<ServerMemberMessage>,
 }
@@ -156,6 +166,7 @@ impl From<ServerRecoveryMessageSuccessOutput>
     for (
         ServerId,
         Vec<Option<SocketAddr>>,
+        Option<LogEntryId>,
         LogTerm,
         MessageQueueSender<ServerMemberMessage>,
     )
@@ -164,6 +175,7 @@ impl From<ServerRecoveryMessageSuccessOutput>
         (
             output.leader_server_id,
             output.server_socket_addresses,
+            output.last_committed_log_entry_id,
             output.current_log_term,
             output.member_queue_sender,
         )
@@ -174,12 +186,14 @@ impl ServerRecoveryMessageSuccessOutput {
     pub fn new(
         leader_server_id: ServerId,
         server_socket_addresses: Vec<Option<SocketAddr>>,
+        last_committed_log_entry_id: Option<LogEntryId>,
         current_log_term: LogTerm,
         member_queue_sender: MessageQueueSender<ServerMemberMessage>,
     ) -> Self {
         Self {
             leader_server_id,
             server_socket_addresses,
+            last_committed_log_entry_id,
             current_log_term,
             member_queue_sender,
         }
@@ -191,6 +205,10 @@ impl ServerRecoveryMessageSuccessOutput {
 
     pub fn server_socket_addresses(&self) -> &Vec<Option<SocketAddr>> {
         &self.server_socket_addresses
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
+        self.last_committed_log_entry_id
     }
 
     pub fn current_log_term(&self) -> LogTerm {

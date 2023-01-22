@@ -102,7 +102,8 @@ impl ServerConnectionTask {
                     server_id,
                     leader_server_id,
                     server_socket_addresses,
-                    log_term,
+                    last_committed_log_entry_id,
+                    current_log_term,
                     member_queue_sender,
                 ) = output.into();
 
@@ -113,7 +114,7 @@ impl ServerConnectionTask {
                             server_id,
                             leader_server_id,
                             server_socket_addresses,
-                            log_term,
+                            current_log_term,
                         ),
                     ))
                     .await
@@ -124,6 +125,8 @@ impl ServerConnectionTask {
                         .do_send_asynchronous(ServerMemberRegistrationMessageInput::new(
                             self.general_socket_sender,
                             self.general_socket_receiver,
+                            last_committed_log_entry_id,
+                            current_log_term,
                         ))
                         .await;
                 }
@@ -172,8 +175,13 @@ impl ServerConnectionTask {
                 }
             }
             ServerRecoveryMessageOutput::Success(output) => {
-                let (leader_server_id, server_socket_address, log_term, member_queue_sender) =
-                    output.into();
+                let (
+                    leader_server_id,
+                    server_socket_address,
+                    last_committed_log_entry_id,
+                    current_log_term,
+                    member_queue_sender,
+                ) = output.into();
 
                 if let Err(error) = self
                     .general_socket_sender
@@ -181,7 +189,7 @@ impl ServerConnectionTask {
                         GeneralRecoveryResponseMessageSuccessInput::new(
                             leader_server_id,
                             server_socket_address,
-                            log_term,
+                            current_log_term,
                         ),
                     ))
                     .await
@@ -192,6 +200,8 @@ impl ServerConnectionTask {
                         .do_send_asynchronous(ServerMemberRecoveryMessageInput::new(
                             self.general_socket_sender,
                             self.general_socket_receiver,
+                            last_committed_log_entry_id,
+                            current_log_term,
                         ))
                         .await;
                 }

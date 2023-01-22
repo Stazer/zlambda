@@ -2,7 +2,7 @@ use crate::message::{
     synchronous_message_output_channel, AsynchronousMessage, DoReceive, DoSend, SynchronousMessage,
 };
 use std::fmt::Debug;
-use tokio::sync::{mpsc};
+use tokio::sync::mpsc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

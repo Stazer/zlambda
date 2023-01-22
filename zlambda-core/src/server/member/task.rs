@@ -147,12 +147,26 @@ impl ServerMemberTask {
             panic!("Expect socket to be none");
         }
 
+        info!("Server {} registered", self.server_id);
+
         let (input,) = message.into();
-        let (sender, receiver) = input.into();
+        let (mut sender, receiver, last_committed_log_entry_id, log_current_term) = input.into();
+
+        if let Err(error) = sender
+            .send(GeneralLogEntriesAppendRequestMessage::new(
+                GeneralLogEntriesAppendRequestMessageInput::new(
+                    Vec::default(),
+                    last_committed_log_entry_id,
+                    log_current_term,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+            return;
+        }
 
         self.general_socket = Some((sender, receiver));
-
-        info!("Server {} registered", self.server_id);
     }
 
     async fn on_server_member_recovery_message(&mut self, message: ServerMemberRecoveryMessage) {
@@ -161,7 +175,22 @@ impl ServerMemberTask {
         }
 
         let (input,) = message.into();
-        let (sender, receiver) = input.into();
+        let (mut sender, receiver, last_committed_log_entry_id, log_current_term) = input.into();
+
+        if let Err(error) = sender
+            .send(GeneralLogEntriesAppendRequestMessage::new(
+                GeneralLogEntriesAppendRequestMessageInput::new(
+                    Vec::default(),
+                    last_committed_log_entry_id,
+                    log_current_term,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+            return;
+        }
+
         self.general_socket = Some((sender, receiver));
 
         info!("Server {} recovered", self.server_id);

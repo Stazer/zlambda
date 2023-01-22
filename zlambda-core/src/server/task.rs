@@ -418,6 +418,7 @@ impl ServerTask {
                                         .iter()
                                         .map(|member| member.as_ref().map(|x| x.0))
                                         .collect(),
+                                    leader.log().last_committed_log_entry_id(),
                                     leader.log().current_term(),
                                     member_sender.clone(),
                                 ))
@@ -500,6 +501,7 @@ impl ServerTask {
                     .iter()
                     .map(|member| member.as_ref().map(|x| x.0))
                     .collect(),
+                leader.log().last_committed_log_entry_id(),
                 leader.log().current_term(),
                 member_sender,
             ))
@@ -527,29 +529,32 @@ impl ServerTask {
             follower.log_mut().push(log_entry);
         }
 
-        let (missing_log_entry_ids, committed_log_entry_id_range) = match last_committed_log_entry_id {
-            Some(last_committed_log_entry_id) => {
-                let from_last_committed_log_entry_id = follower.log().last_committed_log_entry_id();
+        let (missing_log_entry_ids, committed_log_entry_id_range) =
+            match last_committed_log_entry_id {
+                Some(last_committed_log_entry_id) => {
+                    let from_last_committed_log_entry_id =
+                        follower.log().last_committed_log_entry_id();
 
-                let missing_log_entry_ids = follower
-                    .log_mut()
-                    .commit(last_committed_log_entry_id, log_current_term);
+                    let missing_log_entry_ids = follower
+                        .log_mut()
+                        .commit(last_committed_log_entry_id, log_current_term);
 
-                let to_last_committed_log_entry_id = follower.log().last_committed_log_entry_id();
+                    let to_last_committed_log_entry_id =
+                        follower.log().last_committed_log_entry_id();
 
-                let committed_log_entry_id_range = match (
-                    from_last_committed_log_entry_id,
-                    to_last_committed_log_entry_id,
-                ) {
-                    (None, Some(to)) => Some(0..(to + 1)),
-                    (Some(from), Some(to)) => Some(from..(to + 1)),
-                    _ => None,
-                };
+                    let committed_log_entry_id_range = match (
+                        from_last_committed_log_entry_id,
+                        to_last_committed_log_entry_id,
+                    ) {
+                        (None, Some(to)) => Some(0..(to + 1)),
+                        (Some(from), Some(to)) => Some(from..(to + 1)),
+                        _ => None,
+                    };
 
-                (missing_log_entry_ids, committed_log_entry_id_range)
-            },
-            None => (Vec::default(), None),
-        };
+                    (missing_log_entry_ids, committed_log_entry_id_range)
+                }
+                None => (Vec::default(), None),
+            };
 
         let result = follower
             .sender_mut()
