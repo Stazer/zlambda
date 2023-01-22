@@ -1,5 +1,5 @@
 use crate::general::{
-    GeneralLogEntriesAppendRequestInput, GeneralLogEntriesAppendRequestMessage,
+    GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
     GeneralLogEntriesAppendResponseMessage, GeneralMessage,
 };
 use crate::message::{
@@ -117,12 +117,16 @@ impl ServerMemberTask {
         match &mut self.general_socket {
             Some(ref mut general_socket) => {
                 let (input,) = message.into();
-                let (log_entries,) = input.into();
+                let (log_entries, last_committed_log_entry_id, log_current_term) = input.into();
 
                 if let Err(error) = general_socket
                     .0
                     .send(GeneralLogEntriesAppendRequestMessage::new(
-                        GeneralLogEntriesAppendRequestInput::new(log_entries),
+                        GeneralLogEntriesAppendRequestMessageInput::new(
+                            log_entries,
+                            last_committed_log_entry_id,
+                            log_current_term,
+                        ),
                     ))
                     .await
                 {
@@ -147,6 +151,8 @@ impl ServerMemberTask {
         let (sender, receiver) = input.into();
 
         self.general_socket = Some((sender, receiver));
+
+        info!("Server {} registered", self.server_id);
     }
 
     async fn on_server_member_recovery_message(&mut self, message: ServerMemberRecoveryMessage) {
@@ -157,6 +163,8 @@ impl ServerMemberTask {
         let (input,) = message.into();
         let (sender, receiver) = input.into();
         self.general_socket = Some((sender, receiver));
+
+        info!("Server {} recovered", self.server_id);
     }
 
     async fn on_general_message(&mut self, message: GeneralMessage) {
@@ -179,11 +187,11 @@ impl ServerMemberTask {
         message: GeneralLogEntriesAppendResponseMessage,
     ) {
         let (input,) = message.into();
-        let (log_entry_ids,) = input.into();
+        let (acknowledged_log_entry_ids, missing_log_entry_ids) = input.into();
 
         self.server_queue_sender
             .do_send_asynchronous(ServerLogEntriesAcknowledgementMessageInput::new(
-                log_entry_ids,
+                acknowledged_log_entry_ids,
                 self.server_id,
             ))
             .await;

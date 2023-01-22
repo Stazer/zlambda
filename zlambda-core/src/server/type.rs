@@ -64,16 +64,16 @@ impl ServerFollowerType {
         &self.sender
     }
 
-    pub fn sender_mut(&mut self) -> &MessageSocketSender<GeneralMessage> {
-        &self.sender
+    pub fn sender_mut(&mut self) -> &mut MessageSocketSender<GeneralMessage> {
+        &mut self.sender
     }
 
     pub fn receiver(&self) -> &MessageSocketReceiver<GeneralMessage> {
         &self.receiver
     }
 
-    pub fn receiver_mut(&mut self) -> &MessageSocketReceiver<GeneralMessage> {
-        &self.receiver
+    pub fn receiver_mut(&mut self) -> &mut MessageSocketReceiver<GeneralMessage> {
+        &mut self.receiver
     }
 }
 

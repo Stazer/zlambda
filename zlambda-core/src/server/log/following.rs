@@ -33,4 +33,26 @@ impl FollowingLog {
     pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
         self.last_committed_log_entry_id
     }
+
+    pub fn push(&mut self, log_entry: LogEntry) {
+        if self.entries.len() - 1 < log_entry.id() {
+            self.entries.resize(log_entry.id() - 1, None);
+        }
+    }
+
+    pub fn commit(&mut self, log_entry_id: LogEntryId, term: LogTerm) -> Vec<LogEntryId> {
+        let mut missing_log_entry_ids = Vec::default();
+
+        for log_entry_id in self.last_committed_log_entry_id.unwrap_or_default()..log_entry_id + 1 {
+            match self.entries.get(log_entry_id) {
+                Some(None) | None => missing_log_entry_ids.push(log_entry_id),
+                Some(Some(ref log_entry)) if log_entry.term() < term => {
+                    missing_log_entry_ids.push(log_entry.id())
+                }
+                _ => {}
+            }
+        }
+
+        missing_log_entry_ids
+    }
 }

@@ -1,5 +1,5 @@
 use crate::general::{
-    GeneralLogEntriesAppendRequestInput, GeneralLogEntriesAppendResponseInput,
+    GeneralLogEntriesAppendRequestMessageInput, GeneralLogEntriesAppendResponseMessageInput,
     GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
     GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
 };
@@ -27,12 +27,12 @@ pub type GeneralRecoveryResponseMessage = AsynchronousMessage<GeneralRecoveryRes
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type GeneralLogEntriesAppendRequestMessage =
-    AsynchronousMessage<GeneralLogEntriesAppendRequestInput>;
+    AsynchronousMessage<GeneralLogEntriesAppendRequestMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type GeneralLogEntriesAppendResponseMessage =
-    AsynchronousMessage<GeneralLogEntriesAppendResponseInput>;
+    AsynchronousMessage<GeneralLogEntriesAppendResponseMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

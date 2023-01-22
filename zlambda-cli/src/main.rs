@@ -17,7 +17,7 @@ use zlambda_core::server::{ServerId, ServerTask};
 struct MainArguments {
     #[clap(subcommand)]
     command: MainCommand,
-    #[arg(short, long, default_value="false")]
+    #[arg(short, long, default_value = "false")]
     tokio_console: bool,
 }
 

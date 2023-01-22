@@ -1,3 +1,4 @@
+use crate::general::GeneralMessage;
 use crate::server::member::ServerMemberMessage;
 use crate::server::{LogEntryData, LogEntryId, ServerId, ServerRegistrationMessageOutput};
 use std::net::SocketAddr;
@@ -31,6 +32,29 @@ impl ServerSocketAcceptMessageInput {
 
     pub fn socket_address(&self) -> &SocketAddr {
         &self.socket_address
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLeaderGeneralMessageMessageInput {
+    message: GeneralMessage,
+}
+
+impl From<ServerLeaderGeneralMessageMessageInput> for (GeneralMessage,) {
+    fn from(input: ServerLeaderGeneralMessageMessageInput) -> Self {
+        (input.message,)
+    }
+}
+
+impl ServerLeaderGeneralMessageMessageInput {
+    pub fn new(message: GeneralMessage) -> Self {
+        Self { message }
+    }
+
+    pub fn message(&self) -> &GeneralMessage {
+        &self.message
     }
 }
 

@@ -1,7 +1,9 @@
 use crate::general::{
-    GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryRequestMessageInput,
-    GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessage,
-    GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
+    GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendResponseMessage,
+    GeneralLogEntriesAppendResponseMessageInput, GeneralMessage, GeneralRecoveryRequestMessage,
+    GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
+    GeneralRegistrationRequestMessage, GeneralRegistrationRequestMessageInput,
+    GeneralRegistrationResponseMessageInput,
 };
 use crate::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
@@ -15,19 +17,20 @@ use crate::server::member::{
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, NewServerError,
     ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
-    ServerId, ServerLeaderType, ServerLogEntriesAcknowledgementMessage,
-    ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
-    ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
+    ServerId, ServerLeaderGeneralMessageMessage, ServerLeaderType,
+    ServerLogEntriesAcknowledgementMessage, ServerLogEntriesReplicationMessage,
+    ServerLogEntriesReplicationMessageOutput, ServerMessage, ServerRecoveryMessage,
+    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
 };
 use async_recursion::async_recursion;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::{select, spawn};
-use std::fmt::Debug;
 use tracing::{debug, error, info, trace};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,10 +214,7 @@ impl ServerTask {
                     }
                 };
 
-                info!(
-                    "Recovered with leader {} and term {}",
-                    leader_server_id, term
-                );
+                info!("Recovered at leader {} and term {}", leader_server_id, term);
 
                 Ok(Self {
                     server_id,
@@ -270,6 +270,9 @@ impl ServerTask {
             ServerMessage::SocketAccept(message) => {
                 self.on_server_socket_accept_message(message).await
             }
+            ServerMessage::LeaderGeneralMessage(message) => {
+                self.on_server_leader_general_message_message(message).await
+            }
             ServerMessage::Registration(message) => {
                 self.on_server_registration_message(message).await
             }
@@ -302,6 +305,27 @@ impl ServerTask {
             MessageSocketReceiver::new(reader),
         )
         .spawn()
+    }
+
+    async fn on_server_leader_general_message_message(
+        &mut self,
+        message: ServerLeaderGeneralMessageMessage,
+    ) {
+        let (input,) = message.into();
+        let (message,) = input.into();
+
+        match message {
+            GeneralMessage::LogEntriesAppendRequest(message) => {
+                self.on_general_log_entries_append_request_message(message)
+                    .await
+            }
+            message => {
+                error!(
+                    "{}",
+                    MessageError::UnexpectedMessage(format!("{:?}", message))
+                );
+            }
+        }
     }
 
     async fn on_server_registration_message(&mut self, message: ServerRegistrationMessage) {
@@ -482,6 +506,51 @@ impl ServerTask {
             .await;
     }
 
+    async fn on_general_log_entries_append_request_message(
+        &mut self,
+        message: GeneralLogEntriesAppendRequestMessage,
+    ) {
+        let follower = match &mut self.r#type {
+            ServerType::Leader(_) => {
+                panic!("Cannot append entries to leader node");
+                return;
+            }
+            ServerType::Follower(ref mut follower) => follower,
+        };
+
+        let (input,) = message.into();
+        let (log_entries, last_committed_log_entry_id, log_current_term) = input.into();
+
+        let mut log_entry_ids = Vec::with_capacity(log_entries.len());
+
+        for log_entry in log_entries.into_iter() {
+            log_entry_ids.push(log_entry.id());
+            follower.log_mut().push(log_entry);
+        }
+
+        let missing_log_entry_ids = match last_committed_log_entry_id {
+            Some(last_committed_log_entry_id) => follower
+                .log_mut()
+                .commit(last_committed_log_entry_id, log_current_term),
+            None => Vec::default(),
+        };
+
+        if let Err(error) = follower
+            .sender_mut()
+            .send(GeneralLogEntriesAppendResponseMessage::new(
+                GeneralLogEntriesAppendResponseMessageInput::new(
+                    log_entry_ids,
+                    missing_log_entry_ids,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+            unimplemented!("Switch to candidate");
+            return;
+        }
+    }
+
     async fn replicate(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {
         match &mut self.r#type {
             ServerType::Leader(ref mut leader) => {
@@ -508,7 +577,11 @@ impl ServerTask {
                     if let Some(Some(sender)) = server_member.as_ref().map(|member| &member.1) {
                         sender
                             .do_send(ServerMemberReplicationMessage::new(
-                                ServerMemberReplicationMessageInput::new(log_entries.clone()),
+                                ServerMemberReplicationMessageInput::new(
+                                    log_entries.clone(),
+                                    leader.log().last_committed_log_entry_id(),
+                                    leader.log().current_term(),
+                                ),
                             ))
                             .await;
                     }
@@ -533,7 +606,7 @@ impl ServerTask {
 
                 log_entry_ids
             }
-            ServerType::Follower(follower) => {
+            ServerType::Follower(_follower) => {
                 unimplemented!()
             }
         }
@@ -549,7 +622,10 @@ impl ServerTask {
                         error!("{}", error);
                     }
 
-                    debug!("Log entry {} acknowledged by server {}", log_entry_id, server_id);
+                    debug!(
+                        "Log entry {} acknowledged by server {}",
+                        log_entry_id, server_id
+                    );
                 }
 
                 let to_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
@@ -577,7 +653,7 @@ impl ServerTask {
                     }
                 }
             }
-            ServerType::Follower(follower) => {
+            ServerType::Follower(_follower) => {
                 unimplemented!()
             }
         }

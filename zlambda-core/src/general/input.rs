@@ -251,47 +251,83 @@ impl From<GeneralRecoveryResponseMessageSuccessInput> for GeneralRecoveryRespons
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GeneralLogEntriesAppendRequestInput {
+pub struct GeneralLogEntriesAppendRequestMessageInput {
     log_entries: Vec<LogEntry>,
+    last_committed_log_entry_id: Option<LogEntryId>,
+    log_current_term: LogTerm,
 }
 
-impl From<GeneralLogEntriesAppendRequestInput> for (Vec<LogEntry>,) {
-    fn from(input: GeneralLogEntriesAppendRequestInput) -> Self {
-        (input.log_entries,)
+impl From<GeneralLogEntriesAppendRequestMessageInput>
+    for (Vec<LogEntry>, Option<LogEntryId>, LogTerm)
+{
+    fn from(input: GeneralLogEntriesAppendRequestMessageInput) -> Self {
+        (
+            input.log_entries,
+            input.last_committed_log_entry_id,
+            input.log_current_term,
+        )
     }
 }
 
-impl GeneralLogEntriesAppendRequestInput {
-    pub fn new(log_entries: Vec<LogEntry>) -> Self {
-        Self { log_entries }
+impl GeneralLogEntriesAppendRequestMessageInput {
+    pub fn new(
+        log_entries: Vec<LogEntry>,
+        last_committed_log_entry_id: Option<LogEntryId>,
+        log_current_term: LogTerm,
+    ) -> Self {
+        Self {
+            log_entries,
+            last_committed_log_entry_id,
+            log_current_term,
+        }
     }
 
     pub fn log_entries(&self) -> &Vec<LogEntry> {
         &self.log_entries
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
+        self.last_committed_log_entry_id
+    }
+
+    pub fn log_current_term(&self) -> LogTerm {
+        self.log_current_term
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GeneralLogEntriesAppendResponseInput {
+pub struct GeneralLogEntriesAppendResponseMessageInput {
     acknowledged_log_entry_ids: Vec<LogEntryId>,
+    missing_log_entry_ids: Vec<LogEntryId>,
 }
 
-impl From<GeneralLogEntriesAppendResponseInput> for (Vec<LogEntryId>,) {
-    fn from(input: GeneralLogEntriesAppendResponseInput) -> Self {
-        (input.acknowledged_log_entry_ids,)
+impl From<GeneralLogEntriesAppendResponseMessageInput> for (Vec<LogEntryId>, Vec<LogEntryId>) {
+    fn from(input: GeneralLogEntriesAppendResponseMessageInput) -> Self {
+        (
+            input.acknowledged_log_entry_ids,
+            input.missing_log_entry_ids,
+        )
     }
 }
 
-impl GeneralLogEntriesAppendResponseInput {
-    pub fn new(acknowledged_log_entry_ids: Vec<LogEntryId>) -> Self {
+impl GeneralLogEntriesAppendResponseMessageInput {
+    pub fn new(
+        acknowledged_log_entry_ids: Vec<LogEntryId>,
+        missing_log_entry_ids: Vec<LogEntryId>,
+    ) -> Self {
         Self {
             acknowledged_log_entry_ids,
+            missing_log_entry_ids,
         }
     }
 
     pub fn acknowledged_log_entry_ids(&self) -> &Vec<LogEntryId> {
         &self.acknowledged_log_entry_ids
+    }
+
+    pub fn missing_log_entry_ids(&self) -> &Vec<LogEntryId> {
+        &self.missing_log_entry_ids
     }
 }

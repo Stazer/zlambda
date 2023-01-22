@@ -107,11 +107,13 @@ impl LeadingLog {
         let mut current_log_entry_id = id;
 
         loop {
-            if self.is_acknowledged(current_log_entry_id) && self.next_committing_log_entry_id == current_log_entry_id {
+            if self.is_acknowledged(current_log_entry_id)
+                && self.next_committing_log_entry_id == current_log_entry_id
+            {
                 self.next_committing_log_entry_id += 1;
                 current_log_entry_id += 1;
             } else {
-                break
+                break;
             }
         }
 

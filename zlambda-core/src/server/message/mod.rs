@@ -1,14 +1,20 @@
 use crate::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
-    ServerCommitRegistrationMessageInput, ServerLogEntriesAcknowledgementMessageInput,
-    ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
-    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
-    ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
+    ServerCommitRegistrationMessageInput, ServerLeaderGeneralMessageMessageInput,
+    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesReplicationMessageInput,
+    ServerLogEntriesReplicationMessageOutput, ServerRecoveryMessageInput,
+    ServerRecoveryMessageOutput, ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
+    ServerSocketAcceptMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type ServerSocketAcceptMessage = AsynchronousMessage<ServerSocketAcceptMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerLeaderGeneralMessageMessage =
+    AsynchronousMessage<ServerLeaderGeneralMessageMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,6 +48,7 @@ pub type ServerCommitRegistrationMessage =
 #[derive(Debug)]
 pub enum ServerMessage {
     SocketAccept(ServerSocketAcceptMessage),
+    LeaderGeneralMessage(ServerLeaderGeneralMessageMessage),
     Registration(ServerRegistrationMessage),
     CommitRegistration(ServerCommitRegistrationMessage),
     Recovery(ServerRecoveryMessage),

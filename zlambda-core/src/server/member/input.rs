@@ -1,27 +1,49 @@
 use crate::general::GeneralMessage;
 use crate::message::{MessageSocketReceiver, MessageSocketSender};
-use crate::server::LogEntry;
+use crate::server::{LogEntry, LogEntryId, LogTerm};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct ServerMemberReplicationMessageInput {
     log_entries: Vec<LogEntry>,
+    last_committed_log_entry_id: Option<LogEntryId>,
+    log_current_term: LogTerm,
 }
 
-impl From<ServerMemberReplicationMessageInput> for (Vec<LogEntry>,) {
+impl From<ServerMemberReplicationMessageInput> for (Vec<LogEntry>, Option<LogEntryId>, LogTerm) {
     fn from(input: ServerMemberReplicationMessageInput) -> Self {
-        (input.log_entries,)
+        (
+            input.log_entries,
+            input.last_committed_log_entry_id,
+            input.log_current_term,
+        )
     }
 }
 
 impl ServerMemberReplicationMessageInput {
-    pub fn new(log_entries: Vec<LogEntry>) -> Self {
-        Self { log_entries }
+    pub fn new(
+        log_entries: Vec<LogEntry>,
+        last_committed_log_entry_id: Option<LogEntryId>,
+        log_current_term: LogTerm,
+    ) -> Self {
+        Self {
+            log_entries,
+            last_committed_log_entry_id,
+            log_current_term,
+        }
     }
 
     pub fn log_entries(&self) -> &Vec<LogEntry> {
         &self.log_entries
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
+        self.last_committed_log_entry_id
+    }
+
+    pub fn log_current_term(&self) -> LogTerm {
+        self.log_current_term
     }
 }
 
