@@ -140,7 +140,7 @@ impl ServerTask {
                     server_id,
                     r#type: ServerFollowerType::new(
                         leader_server_id,
-                        FollowingLog::new(term, Vec::default(), None),
+                        FollowingLog::new(term, Vec::default(), 0),
                         socket_sender,
                         socket_receiver,
                     )
@@ -220,7 +220,7 @@ impl ServerTask {
                     server_id,
                     r#type: ServerFollowerType::new(
                         leader_server_id,
-                        FollowingLog::new(term, Vec::default(), None),
+                        FollowingLog::new(term, Vec::default(), 0),
                         socket_sender,
                         socket_receiver,
                     )
@@ -599,8 +599,8 @@ impl ServerTask {
                         from_last_committed_log_entry_id,
                         to_last_committed_log_entry_id,
                     ) {
-                        (None, Some(to)) => Some(0..(to + 1)),
-                        (Some(from), Some(to)) => Some(from..(to + 1)),
+                        (None, Some(to)) => Some(to..(to + 1)),
+                        (Some(from), Some(to)) => Some((from + 1)..(to + 1)),
                         _ => None,
                     };
 
@@ -608,6 +608,8 @@ impl ServerTask {
                 }
                 None => (Vec::default(), None),
             };
+
+        println!("{:?} {:?}", committed_log_entry_id_range, missing_log_entry_ids);
 
         let result = follower
             .sender_mut()

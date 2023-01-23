@@ -6,19 +6,19 @@ use crate::server::{LogEntry, LogEntryId, LogTerm};
 pub struct FollowingLog {
     current_term: LogTerm,
     entries: Vec<Option<LogEntry>>,
-    last_committed_log_entry_id: Option<LogEntryId>,
+    next_committing_log_entry_id: LogEntryId,
 }
 
 impl FollowingLog {
     pub fn new(
         current_term: LogTerm,
         entries: Vec<Option<LogEntry>>,
-        last_committed_log_entry_id: Option<LogEntryId>,
+        next_committing_log_entry_id: LogEntryId,
     ) -> Self {
         Self {
             current_term,
             entries,
-            last_committed_log_entry_id,
+            next_committing_log_entry_id,
         }
     }
 
@@ -30,8 +30,15 @@ impl FollowingLog {
         &self.entries
     }
 
+    pub fn next_committing_log_entry_id(&self) -> LogEntryId {
+        self.next_committing_log_entry_id
+    }
+
     pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
-        self.last_committed_log_entry_id
+        match self.next_committing_log_entry_id {
+            0 => None,
+            next_committing_log_entry_id => Some(next_committing_log_entry_id - 1),
+        }
     }
 
     pub fn push(&mut self, log_entry: LogEntry) {
@@ -43,15 +50,15 @@ impl FollowingLog {
     pub fn commit(&mut self, log_entry_id: LogEntryId, term: LogTerm) -> Vec<LogEntryId> {
         let mut missing_log_entry_ids = Vec::default();
 
-        for log_entry_id in self.last_committed_log_entry_id.unwrap_or_default()..log_entry_id + 1 {
+        for log_entry_id in self.next_committing_log_entry_id..log_entry_id + 1 {
             match self.entries.get(log_entry_id) {
                 Some(None) | None => missing_log_entry_ids.push(log_entry_id),
                 Some(Some(ref log_entry)) if log_entry.term() < term => {
                     missing_log_entry_ids.push(log_entry.id())
                 }
                 _ => {
-                    if self.last_committed_log_entry_id.map(|x| x + 1) == Some(log_entry_id) {
-                        self.last_committed_log_entry_id = Some(log_entry_id)
+                    if self.next_committing_log_entry_id == log_entry_id {
+                        self.next_committing_log_entry_id += 1;
                     }
                 }
             }
