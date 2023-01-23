@@ -241,26 +241,67 @@ impl ServerTask {
 
     pub async fn run(mut self) {
         loop {
-            select!(
-                result = self.tcp_listener.accept() => {
-                    let (socket_stream, socket_address) = match result {
-                        Ok(socket) => socket,
-                        Err(error) => {
-                            error!("{}", error);
-                            continue;
-                        }
-                    };
+            match &mut self.r#type {
+                ServerType::Leader(_) => {
+                    select!(
+                        result = self.tcp_listener.accept() => {
+                            let (socket_stream, socket_address) = match result {
+                                Ok(socket) => socket,
+                                Err(error) => {
+                                    error!("{}", error);
+                                    continue;
+                                }
+                            };
 
-                    self.on_server_message(
-                        ServerSocketAcceptMessage::new(
-                            ServerSocketAcceptMessageInput::new(socket_stream, socket_address),
-                        ).into(),
-                    ).await;
+                            self.on_server_message(
+                                ServerSocketAcceptMessage::new(
+                                    ServerSocketAcceptMessageInput::new(socket_stream, socket_address),
+                                ).into(),
+                            ).await;
+                        }
+                        message = self.receiver.do_receive() => {
+                            self.on_server_message(message).await;
+                        }
+                    )
                 }
-                message = self.receiver.do_receive() => {
-                    self.on_server_message(message).await;
+                ServerType::Follower(follower) => {
+                    select!(
+                        result = self.tcp_listener.accept() => {
+                            let (socket_stream, socket_address) = match result {
+                                Ok(socket) => socket,
+                                Err(error) => {
+                                    error!("{}", error);
+                                    continue;
+                                }
+                            };
+
+                            self.on_server_message(
+                                ServerSocketAcceptMessage::new(
+                                    ServerSocketAcceptMessageInput::new(socket_stream, socket_address),
+                                ).into(),
+                            ).await
+                        }
+                        message = self.receiver.do_receive() => {
+                            self.on_server_message(message).await
+                        }
+                        result = follower.receiver_mut().receive() => {
+                            let message = match result {
+                                Ok(Some(message)) => message,
+                                Ok(None) => {
+                                    unimplemented!("switch to candiate");
+                                }
+                                Err(error) => {
+                                    error!("{}", error);
+                                    unimplemented!("switch to candiate");
+                                    //continue;
+                                }
+                            };
+
+                            self.on_general_message(message).await
+                        }
+                    )
                 }
-            )
+            }
         }
     }
 
@@ -508,6 +549,18 @@ impl ServerTask {
             .await;
     }
 
+    async fn on_general_message(
+        &mut self,
+        message: GeneralMessage
+    ) {
+        match message {
+            GeneralMessage::LogEntriesAppendRequest(message) => self.on_general_log_entries_append_request_message(message).await,
+            message => {
+                error!("{}", MessageError::UnexpectedMessage(format!("{message:?}")));
+            }
+        }
+    }
+
     async fn on_general_log_entries_append_request_message(
         &mut self,
         message: GeneralLogEntriesAppendRequestMessage,
@@ -665,8 +718,8 @@ impl ServerTask {
                     from_last_committed_log_entry_id,
                     to_last_committed_log_entry_id,
                 ) {
-                    (None, Some(to)) => Some(0..(to + 1)),
-                    (Some(from), Some(to)) => Some(from..(to + 1)),
+                    (None, Some(to)) => Some(to..(to + 1)),
+                    (Some(from), Some(to)) => Some((from + 1)..(to + 1)),
                     _ => None,
                 };
 
@@ -680,7 +733,7 @@ impl ServerTask {
                             self.on_server_message(message).await;
                         }
 
-                        debug!("Committed log entry {}", committed_log_entry_id);
+                        debug!("Committed log entry {} by acknowledgement of server {}", committed_log_entry_id, server_id);
                     }
                 }
             }
