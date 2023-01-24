@@ -182,3 +182,34 @@ impl ServerLogEntriesAcknowledgementMessageInput {
         self.server_id
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLogEntriesRecoveryMessageInput {
+    server_id: ServerId,
+    log_entry_ids: Vec<LogEntryId>,
+}
+
+impl From<ServerLogEntriesRecoveryMessageInput> for (ServerId, Vec<LogEntryId>) {
+    fn from(input: ServerLogEntriesRecoveryMessageInput) -> Self {
+        (input.server_id, input.log_entry_ids)
+    }
+}
+
+impl ServerLogEntriesRecoveryMessageInput {
+    pub fn new(server_id: ServerId, log_entry_ids: Vec<LogEntryId>) -> Self {
+        Self {
+            server_id,
+            log_entry_ids,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn log_entry_ids(&self) -> &Vec<LogEntryId> {
+        &self.log_entry_ids
+    }
+}

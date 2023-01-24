@@ -18,12 +18,12 @@ use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, NewServerError,
     ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
     ServerId, ServerLeaderGeneralMessageMessage, ServerLeaderType,
-    ServerLogEntriesAcknowledgementMessage, ServerLogEntriesReplicationMessage,
-    ServerLogEntriesReplicationMessageOutput, ServerMessage, ServerRecoveryMessage,
-    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
+    ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
+    ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
+    ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
-    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
+    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType, LogError,
 };
 use async_recursion::async_recursion;
 use std::collections::HashMap;
@@ -317,6 +317,9 @@ impl ServerTask {
             ServerMessage::Registration(message) => {
                 self.on_server_registration_message(message).await
             }
+            ServerMessage::CommitRegistration(message) => {
+                self.on_server_commit_registration_message(message).await
+            }
             ServerMessage::Recovery(message) => self.on_server_recovery_message(message).await,
             ServerMessage::LogEntriesReplication(message) => {
                 self.on_server_log_entries_replication_message(message)
@@ -326,8 +329,8 @@ impl ServerTask {
                 self.on_server_log_entries_acknowledgement_message(message)
                     .await
             }
-            ServerMessage::CommitRegistration(message) => {
-                self.on_server_commit_registration_message(message).await
+            ServerMessage::LogEntriesRecovery(message) => {
+                self.on_server_log_entries_recovery_message(message).await
             }
         }
     }
@@ -440,6 +443,45 @@ impl ServerTask {
         }
     }
 
+    async fn on_server_commit_registration_message(
+        &mut self,
+        message: ServerCommitRegistrationMessage,
+    ) {
+        let (input, output_sender) = message.into();
+
+        let leader = match &self.r#type {
+            ServerType::Leader(leader) => leader,
+            ServerType::Follower(_) => panic!("Server should be leader"),
+        };
+
+        let member = match self.server_members.get(input.member_server_id()) {
+            Some(Some(member)) => member,
+            None | Some(None) => panic!("Server member {} should exist", input.member_server_id()),
+        };
+
+        let member_sender = match &member.1 {
+            Some(member_sender) => member_sender.clone(),
+            None => panic!(
+                "Server member {} should have assigned sender",
+                input.member_server_id()
+            ),
+        };
+
+        output_sender
+            .do_send(ServerRegistrationMessageSuccessOutput::new(
+                input.member_server_id(),
+                self.server_id,
+                self.server_members
+                    .iter()
+                    .map(|member| member.as_ref().map(|x| x.0))
+                    .collect(),
+                leader.log().last_committed_log_entry_id(),
+                leader.log().current_term(),
+                member_sender,
+            ))
+            .await;
+    }
+
     async fn on_server_recovery_message(&mut self, message: ServerRecoveryMessage) {
         let (input, sender) = message.into();
 
@@ -510,53 +552,60 @@ impl ServerTask {
             .await;
     }
 
-    async fn on_server_commit_registration_message(
+    async fn on_server_log_entries_recovery_message(
         &mut self,
-        message: ServerCommitRegistrationMessage,
+        message: ServerLogEntriesRecoveryMessage,
     ) {
-        let (input, output_sender) = message.into();
-
         let leader = match &self.r#type {
             ServerType::Leader(leader) => leader,
-            ServerType::Follower(_) => panic!("Server should be leader"),
+            ServerType::Follower(_) => {
+                panic!("Server must be leader");
+            }
         };
 
-        let member = match self.server_members.get(input.member_server_id()) {
-            Some(Some(member)) => member,
-            None | Some(None) => panic!("Server member {} should exist", input.member_server_id()),
+        let (input,) = message.into();
+
+        let log_entries = input
+            .log_entry_ids()
+            .iter()
+            .filter_map(|log_entry_id| leader.log().entries().get(*log_entry_id))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let member_queue_sender = match self
+            .server_members
+            .get(input.server_id())
+            .map(|entry| entry.as_ref().map(|member| &member.1))
+            .flatten()
+        {
+            Some(Some(member_queue_sender)) => member_queue_sender,
+            None | Some(None) => {
+                panic!("Member does not exist");
+            }
         };
 
-        let member_sender = match &member.1 {
-            Some(member_sender) => member_sender.clone(),
-            None => panic!(
-                "Server member {} should have assigned sender",
-                input.member_server_id()
-            ),
-        };
-
-        output_sender
-            .do_send(ServerRegistrationMessageSuccessOutput::new(
-                input.member_server_id(),
-                self.server_id,
-                self.server_members
-                    .iter()
-                    .map(|member| member.as_ref().map(|x| x.0))
-                    .collect(),
-                leader.log().last_committed_log_entry_id(),
-                leader.log().current_term(),
-                member_sender,
+        member_queue_sender
+            .do_send(ServerMemberReplicationMessage::new(
+                ServerMemberReplicationMessageInput::new(
+                    log_entries,
+                    leader.log().last_committed_log_entry_id(),
+                    leader.log().current_term(),
+                ),
             ))
             .await;
     }
 
-    async fn on_general_message(
-        &mut self,
-        message: GeneralMessage
-    ) {
+    async fn on_general_message(&mut self, message: GeneralMessage) {
         match message {
-            GeneralMessage::LogEntriesAppendRequest(message) => self.on_general_log_entries_append_request_message(message).await,
+            GeneralMessage::LogEntriesAppendRequest(message) => {
+                self.on_general_log_entries_append_request_message(message)
+                    .await
+            }
             message => {
-                error!("{}", MessageError::UnexpectedMessage(format!("{message:?}")));
+                error!(
+                    "{}",
+                    MessageError::UnexpectedMessage(format!("{message:?}"))
+                );
             }
         }
     }
@@ -599,8 +648,8 @@ impl ServerTask {
                         from_last_committed_log_entry_id,
                         to_last_committed_log_entry_id,
                     ) {
-                        (None, Some(to)) => Some(to..(to + 1)),
-                        (Some(from), Some(to)) => Some((from + 1)..(to + 1)),
+                        (None, Some(to)) => Some(0..(to + 1)),
+                        (Some(from), Some(to)) => Some((from)..(to + 1)),
                         _ => None,
                     };
 
@@ -609,7 +658,10 @@ impl ServerTask {
                 None => (Vec::default(), None),
             };
 
-        println!("{:?} {:?}", committed_log_entry_id_range, missing_log_entry_ids);
+        println!(
+            "{:?} {:?}",
+            committed_log_entry_id_range, missing_log_entry_ids
+        );
 
         let result = follower
             .sender_mut()
@@ -705,7 +757,14 @@ impl ServerTask {
 
                 for log_entry_id in log_entry_ids {
                     if let Err(error) = leader.log_mut().acknowledge(*log_entry_id, server_id) {
-                        error!("{}", error);
+                        match error {
+                            LogError::NotAcknowledgeable | LogError::AlreadyAcknowledged => {},
+                            error => {
+                                error!("{}", error);
+                            }
+                        }
+
+                        continue;
                     }
 
                     debug!(
@@ -735,7 +794,10 @@ impl ServerTask {
                             self.on_server_message(message).await;
                         }
 
-                        debug!("Committed log entry {} by acknowledgement of server {}", committed_log_entry_id, server_id);
+                        debug!(
+                            "Committed log entry {} by acknowledgement of server {}",
+                            committed_log_entry_id, server_id
+                        );
                     }
                 }
             }

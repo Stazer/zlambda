@@ -1,10 +1,10 @@
 use crate::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
     ServerCommitRegistrationMessageInput, ServerLeaderGeneralMessageMessageInput,
-    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesReplicationMessageInput,
-    ServerLogEntriesReplicationMessageOutput, ServerRecoveryMessageInput,
-    ServerRecoveryMessageOutput, ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
-    ServerSocketAcceptMessageInput,
+    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
+    ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
+    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
+    ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,6 +45,11 @@ pub type ServerCommitRegistrationMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerLogEntriesRecoveryMessage =
+    AsynchronousMessage<ServerLogEntriesRecoveryMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     SocketAccept(ServerSocketAcceptMessage),
@@ -54,6 +59,7 @@ pub enum ServerMessage {
     Recovery(ServerRecoveryMessage),
     LogEntriesReplication(ServerLogEntriesReplicationMessage),
     LogEntriesAcknowledgement(ServerLogEntriesAcknowledgementMessage),
+    LogEntriesRecovery(ServerLogEntriesRecoveryMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -89,5 +95,11 @@ impl From<ServerLogEntriesReplicationMessage> for ServerMessage {
 impl From<ServerLogEntriesAcknowledgementMessage> for ServerMessage {
     fn from(message: ServerLogEntriesAcknowledgementMessage) -> Self {
         Self::LogEntriesAcknowledgement(message)
+    }
+}
+
+impl From<ServerLogEntriesRecoveryMessage> for ServerMessage {
+    fn from(message: ServerLogEntriesRecoveryMessage) -> Self {
+        Self::LogEntriesRecovery(message)
     }
 }

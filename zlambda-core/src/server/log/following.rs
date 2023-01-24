@@ -42,22 +42,29 @@ impl FollowingLog {
     }
 
     pub fn push(&mut self, log_entry: LogEntry) {
-        if self.entries.len() < log_entry.id() {
-            self.entries.resize(log_entry.id() - 1, None);
+        let id = log_entry.id();
+
+        if self.entries.len() < id + 1 {
+            self.entries.resize_with(id + 1, || None);
         }
+
+        *self.entries.get_mut(id).expect("valid entry") = Some(log_entry);
     }
 
     pub fn commit(&mut self, log_entry_id: LogEntryId, term: LogTerm) -> Vec<LogEntryId> {
         let mut missing_log_entry_ids = Vec::default();
 
         for log_entry_id in self.next_committing_log_entry_id..log_entry_id + 1 {
-            match self.entries.get(log_entry_id) {
-                Some(None) | None => missing_log_entry_ids.push(log_entry_id),
-                Some(Some(ref log_entry)) if log_entry.term() < term => {
-                    missing_log_entry_ids.push(log_entry.id())
+            match self.entries.get_mut(log_entry_id) {
+                None | Some(None) => {
+                    missing_log_entry_ids.push(log_entry_id);
                 }
-                _ => {
+                Some(Some(log_entry)) if log_entry.term() < term => {
+                    missing_log_entry_ids.push(log_entry_id);
+                }
+                Some(Some(_)) => {
                     if self.next_committing_log_entry_id == log_entry_id {
+                        println!("{}", self.next_committing_log_entry_id);
                         self.next_committing_log_entry_id += 1;
                     }
                 }

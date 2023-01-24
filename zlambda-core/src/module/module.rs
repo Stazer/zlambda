@@ -1,2 +1,1 @@
-pub trait Module {
-}
+pub trait Module {}

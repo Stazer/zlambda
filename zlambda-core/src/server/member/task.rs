@@ -10,7 +10,10 @@ use crate::server::member::{
     ServerMemberMessage, ServerMemberRecoveryMessage, ServerMemberRegistrationMessage,
     ServerMemberReplicationMessage,
 };
-use crate::server::{ServerId, ServerLogEntriesAcknowledgementMessageInput, ServerMessage};
+use crate::server::{
+    ServerId, ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
+    ServerMessage,
+};
 use tokio::{select, spawn};
 use tracing::{error, info};
 
@@ -216,7 +219,7 @@ impl ServerMemberTask {
         message: GeneralLogEntriesAppendResponseMessage,
     ) {
         let (input,) = message.into();
-        let (acknowledged_log_entry_ids, _missing_log_entry_ids) = input.into();
+        let (acknowledged_log_entry_ids, missing_log_entry_ids) = input.into();
 
         self.server_queue_sender
             .do_send_asynchronous(ServerLogEntriesAcknowledgementMessageInput::new(
@@ -224,5 +227,14 @@ impl ServerMemberTask {
                 self.server_id,
             ))
             .await;
+
+        if !missing_log_entry_ids.is_empty() {
+            self.server_queue_sender
+                .do_send_asynchronous(ServerLogEntriesRecoveryMessageInput::new(
+                    self.server_id,
+                    missing_log_entry_ids,
+                ))
+                .await;
+        }
     }
 }
