@@ -64,7 +64,6 @@ impl FollowingLog {
                 }
                 Some(Some(_)) => {
                     if self.next_committing_log_entry_id == log_entry_id {
-                        println!("{}", self.next_committing_log_entry_id);
                         self.next_committing_log_entry_id += 1;
                     }
                 }

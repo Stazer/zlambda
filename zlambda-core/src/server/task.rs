@@ -649,7 +649,7 @@ impl ServerTask {
                         to_last_committed_log_entry_id,
                     ) {
                         (None, Some(to)) => Some(0..(to + 1)),
-                        (Some(from), Some(to)) => Some((from)..(to + 1)),
+                        (Some(from), Some(to)) if from < to => Some((from + 1)..(to + 1)),
                         _ => None,
                     };
 
@@ -658,12 +658,8 @@ impl ServerTask {
                 None => (Vec::default(), None),
             };
 
-        println!(
-            "{:?} {:?}",
-            committed_log_entry_id_range, missing_log_entry_ids
-        );
-
-        let result = follower
+        let result = if !log_entry_ids.is_empty() || !missing_log_entry_ids.is_empty() {
+            follower
             .sender_mut()
             .send(GeneralLogEntriesAppendResponseMessage::new(
                 GeneralLogEntriesAppendResponseMessageInput::new(
@@ -671,7 +667,10 @@ impl ServerTask {
                     missing_log_entry_ids,
                 ),
             ))
-            .await;
+            .await
+        } else {
+            Ok(())
+        };
 
         if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
             for committed_log_entry_id in committed_log_entry_id_range {
@@ -751,58 +750,75 @@ impl ServerTask {
     }
 
     async fn acknowledge(&mut self, log_entry_ids: &Vec<LogEntryId>, server_id: ServerId) {
-        match &mut self.r#type {
-            ServerType::Leader(ref mut leader) => {
-                let from_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
-
-                for log_entry_id in log_entry_ids {
-                    if let Err(error) = leader.log_mut().acknowledge(*log_entry_id, server_id) {
-                        match error {
-                            LogError::NotAcknowledgeable | LogError::AlreadyAcknowledged => {},
-                            error => {
-                                error!("{}", error);
-                            }
-                        }
-
-                        continue;
-                    }
-
-                    debug!(
-                        "Log entry {} acknowledged by server {}",
-                        log_entry_id, server_id
-                    );
-                }
-
-                let to_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
-
-                let committed_log_entry_id_range = match (
-                    from_last_committed_log_entry_id,
-                    to_last_committed_log_entry_id,
-                ) {
-                    (None, Some(to)) => Some(to..(to + 1)),
-                    (Some(from), Some(to)) => Some((from + 1)..(to + 1)),
-                    _ => None,
-                };
-
-                if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
-                    for committed_log_entry_id in committed_log_entry_id_range {
-                        for message in self
-                            .commit_messages
-                            .remove(&committed_log_entry_id)
-                            .unwrap_or_default()
-                        {
-                            self.on_server_message(message).await;
-                        }
-
-                        debug!(
-                            "Committed log entry {} by acknowledgement of server {}",
-                            committed_log_entry_id, server_id
-                        );
-                    }
-                }
-            }
+        let leader = match &mut self.r#type {
+            ServerType::Leader(leader) => leader,
             ServerType::Follower(_follower) => {
-                unimplemented!()
+                panic!("Cannot acknowledge as follower");
+            }
+        };
+
+        let from_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
+
+        for log_entry_id in log_entry_ids {
+            if let Err(error) = leader.log_mut().acknowledge(*log_entry_id, server_id) {
+                match error {
+                    LogError::NotAcknowledgeable | LogError::AlreadyAcknowledged => {},
+                    error => {
+                        error!("{}", error);
+                    }
+                }
+
+                continue;
+            }
+
+            debug!(
+                "Log entry {} acknowledged by server {}",
+                log_entry_id, server_id
+            );
+        }
+
+        let to_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
+
+        let committed_log_entry_id_range = match (
+            from_last_committed_log_entry_id,
+            to_last_committed_log_entry_id,
+        ) {
+            (None, Some(to)) => Some(to..(to + 1)),
+            (Some(from), Some(to)) => Some((from + 1)..(to + 1)),
+            _ => None,
+        };
+
+        if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
+            let last_committed_log_entry_id = leader.log_mut().last_committed_log_entry_id();
+            let current_term = leader.log_mut().current_term();
+
+            for committed_log_entry_id in committed_log_entry_id_range {
+                for message in self
+                    .commit_messages
+                    .remove(&committed_log_entry_id)
+                    .unwrap_or_default()
+                {
+                    self.on_server_message(message).await;
+                }
+
+                debug!(
+                    "Committed log entry {} by acknowledgement of server {}",
+                    committed_log_entry_id, server_id
+                );
+            }
+
+            for server_member in &mut self.server_members {
+                if let Some(Some(sender)) = server_member.as_ref().map(|member| &member.1) {
+                    sender
+                        .do_send(ServerMemberReplicationMessage::new(
+                            ServerMemberReplicationMessageInput::new(
+                                Vec::default(),
+                                last_committed_log_entry_id,
+                                current_term,
+                            ),
+                        ))
+                        .await;
+                }
             }
         }
     }
