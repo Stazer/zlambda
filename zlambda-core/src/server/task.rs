@@ -15,15 +15,15 @@ use crate::server::member::{
     ServerMemberTask,
 };
 use crate::server::{
-    AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, NewServerError,
-    ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
-    ServerId, ServerLeaderGeneralMessageMessage, ServerLeaderType,
+    AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
+    NewServerError, ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput,
+    ServerFollowerType, ServerId, ServerLeaderGeneralMessageMessage, ServerLeaderType,
     ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
     ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
-    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType, LogError,
+    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
 };
 use async_recursion::async_recursion;
 use std::collections::HashMap;
@@ -660,14 +660,14 @@ impl ServerTask {
 
         let result = if !log_entry_ids.is_empty() || !missing_log_entry_ids.is_empty() {
             follower
-            .sender_mut()
-            .send(GeneralLogEntriesAppendResponseMessage::new(
-                GeneralLogEntriesAppendResponseMessageInput::new(
-                    log_entry_ids,
-                    missing_log_entry_ids,
-                ),
-            ))
-            .await
+                .sender_mut()
+                .send(GeneralLogEntriesAppendResponseMessage::new(
+                    GeneralLogEntriesAppendResponseMessageInput::new(
+                        log_entry_ids,
+                        missing_log_entry_ids,
+                    ),
+                ))
+                .await
         } else {
             Ok(())
         };
@@ -762,7 +762,7 @@ impl ServerTask {
         for log_entry_id in log_entry_ids {
             if let Err(error) = leader.log_mut().acknowledge(*log_entry_id, server_id) {
                 match error {
-                    LogError::NotAcknowledgeable | LogError::AlreadyAcknowledged => {},
+                    LogError::NotAcknowledgeable | LogError::AlreadyAcknowledged => {}
                     error => {
                         error!("{}", error);
                     }
