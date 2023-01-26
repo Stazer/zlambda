@@ -53,6 +53,25 @@ impl LeadingLog {
         }
     }
 
+    pub fn acknowledgeable_log_entries_for_server(
+        &self,
+        server_id: ServerId,
+    ) -> impl Iterator<Item = &LogEntry> {
+        self.entries
+            .iter()
+            .skip(self.last_committed_log_entry_id().unwrap_or_default())
+            .filter(move |log_entry| {
+                self.remaining_acknowledgeable_server_ids(log_entry.id())
+                    .map(|remaining_acknowledgeable_server_ids| {
+                        remaining_acknowledgeable_server_ids
+                            .filter(|remaining_server_id| **remaining_server_id == server_id)
+                            .next()
+                            .is_some()
+                    })
+                    .unwrap_or(false)
+            })
+    }
+
     pub fn next_committing_log_entry_id(&self) -> LogEntryId {
         self.next_committing_log_entry_id
     }

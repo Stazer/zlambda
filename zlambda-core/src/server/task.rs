@@ -569,6 +569,11 @@ impl ServerTask {
             .log_entry_ids()
             .iter()
             .filter_map(|log_entry_id| leader.log().entries().get(*log_entry_id))
+            .chain(
+                leader
+                    .log()
+                    .acknowledgeable_log_entries_for_server(input.server_id()),
+            )
             .cloned()
             .collect::<Vec<_>>();
 
