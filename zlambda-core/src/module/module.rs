@@ -1,3 +1,4 @@
+use std::any::Any;
 use crate::module::{
     ModuleCommitEventInput, ModuleCommitEventOutput, ModuleDispatchEventInput,
     ModuleDispatchEventOutput, ModuleInitializeEventInput,
@@ -8,34 +9,44 @@ use crate::module::{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub trait Module {
-    async fn on_startup(_event: ModuleStartupEventInput) -> ModuleStartupEventOutput {
+#[async_trait::async_trait]
+pub trait Module: Any + Send + Sync + 'static {
+    async fn on_startup(&self, _event: ModuleStartupEventInput) -> ModuleStartupEventOutput
+    {
     }
 
     async fn on_shutdown(
+        &self,
         _event: ModuleShutdownEventInput,
-    ) -> ModuleShutdownEventOutput {
+    ) -> ModuleShutdownEventOutput
+    {
     }
 
     async fn on_initialize(
+        &self,
         _event: ModuleInitializeEventInput,
-    ) -> ModuleInitializeEventOutput {
+    ) -> ModuleInitializeEventOutput
+    {
     }
 
     async fn on_finalize(
+        &self,
         _event: ModuleInitializeEventInput,
-    ) -> ModuleInitializeEventOutput {
+    ) -> ModuleInitializeEventOutput
+    {
     }
 
     async fn on_dispach(
         &self,
         _event: ModuleDispatchEventInput,
-    ) -> ModuleDispatchEventOutput {
+    ) -> ModuleDispatchEventOutput
+    {
     }
 
     async fn on_commit(
         &self,
         _event: ModuleCommitEventInput,
-    ) -> ModuleCommitEventOutput {
+    ) -> ModuleCommitEventOutput
+    {
     }
 }
