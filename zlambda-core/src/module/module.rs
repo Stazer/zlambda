@@ -4,7 +4,8 @@ use crate::module::{
     ModuleDispatchEventOutput, ModuleInitializeEventInput,
     ModuleInitializeEventOutput, ModuleShutdownEventInput,
     ModuleShutdownEventOutput, ModuleStartupEventInput,
-    ModuleStartupEventOutput,
+    ModuleStartupEventOutput,ModuleFinalizeEventInput,
+    ModuleFinalizeEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,8 +32,8 @@ pub trait Module: Any + Send + Sync + 'static {
 
     async fn on_finalize(
         &self,
-        _event: ModuleInitializeEventInput,
-    ) -> ModuleInitializeEventOutput
+        _event: ModuleFinalizeEventInput,
+    ) -> ModuleFinalizeEventOutput
     {
     }
 
