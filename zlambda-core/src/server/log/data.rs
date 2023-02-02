@@ -1,4 +1,5 @@
 use crate::server::ServerId;
+use crate::utility::Bytes;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -62,6 +63,7 @@ impl RemoveServerLogEntryData {
 pub enum LogEntryData {
     AddServer(AddServerLogEntryData),
     RemoveServer(RemoveServerLogEntryData),
+    Data(Bytes),
 }
 
 impl From<AddServerLogEntryData> for LogEntryData {
@@ -73,5 +75,11 @@ impl From<AddServerLogEntryData> for LogEntryData {
 impl From<RemoveServerLogEntryData> for LogEntryData {
     fn from(data: RemoveServerLogEntryData) -> Self {
         Self::RemoveServer(data)
+    }
+}
+
+impl From<Bytes> for LogEntryData {
+    fn from(data: Bytes) -> Self {
+        Self::Data(data)
     }
 }

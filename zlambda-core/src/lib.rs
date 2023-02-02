@@ -8,3 +8,9 @@ pub mod general;
 pub mod message;
 pub mod module;
 pub mod server;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub mod utility {
+    pub use bytes::{Bytes, BytesMut};
+}

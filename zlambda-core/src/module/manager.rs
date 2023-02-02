@@ -1,16 +1,14 @@
 use crate::module::{
-    LoadModuleError, Module, ModuleId, ModuleInitializeEventInput, ModuleInitializeEventOutput,
-    UnloadModuleError,
+    LoadModuleError, Module, ModuleFinalizeEventInput, ModuleId, ModuleInitializeEventInput,
+    ModuleInitializeEventOutput, UnloadModuleError,
 };
 use crate::server::ServerHandle;
 use std::any::Any;
-use std::mem::replace;
 use std::sync::Arc;
-use tokio::spawn;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct ModuleManager {
+pub(crate) struct ModuleManager {
     server: ServerHandle,
     modules: Vec<Option<Arc<dyn Module>>>,
 }
@@ -40,47 +38,30 @@ impl ModuleManager {
         }
     }
 
-    /*pub async fn trigger_startup(&self, module_id: ModuleId)*/
-
-    /*pub async fn trigger_dispatch(&self, module_id: ModuleId, server_handle: ServerHandle) {
-        let module = match self.modules.get(module_id) {
-            None | Some(None) => return,
-            Some(Some(module)) => module.clone(),
-        };
-
-        /*tokio::spawn(async move {
-            server_handle.ping().await;
-
-            module.on_dispatch(()).await;
-        });*/
-    }*/
-
-    pub async fn load<T>(&mut self, module: T) -> Result<ModuleId, LoadModuleError>
-    where
-        T: Module + 'static,
-    {
+    pub async fn load(&mut self, module: Box<dyn Module>) -> Result<ModuleId, LoadModuleError> {
         let module_id = self.modules.len();
-        self.modules.push(Some(Arc::new(module)));
+        let module = Arc::<dyn Module>::from(module);
+        self.modules.push(Some(module.clone()));
 
-        module.on_initialize(ModuleInitializeEventInput::new(server)).await;
+        module
+            .on_initialize(ModuleInitializeEventInput::new(
+                module_id,
+                self.server.clone(),
+            ))
+            .await;
 
         Ok(module_id)
-    }
-
-    pub async fn load_default<T>(&mut self) -> Result<ModuleId, LoadModuleError>
-    where
-        T: Default + Module + 'static,
-    {
-        self.load(T::default()).await
     }
 
     pub async fn unload(&mut self, module_id: ModuleId) -> Result<(), UnloadModuleError> {
         let module = match self.modules.get_mut(module_id) {
             None | Some(None) => return Err(UnloadModuleError::ModuleNotFound),
-            Some(module) => replace(module, None).ok_or(UnloadModuleError::ModuleNotFound)?,
+            Some(module) => module.take().ok_or(UnloadModuleError::ModuleNotFound)?,
         };
 
-        module.on_finalize(()).await;
+        module
+            .on_finalize(ModuleFinalizeEventInput::new(self.server.clone()))
+            .await;
 
         Ok(())
     }

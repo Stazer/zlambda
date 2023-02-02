@@ -1,4 +1,5 @@
 use crate::message::MessageError;
+use crate::module::LoadModuleError;
 use crate::server::ServerId;
 use std::error;
 use std::fmt::{self, Display, Formatter};
@@ -12,6 +13,7 @@ pub enum NewServerError {
     Message(MessageError),
     IsOnline(ServerId),
     Unknown(ServerId),
+    LoadModule(LoadModuleError),
 }
 
 impl error::Error for NewServerError {}
@@ -27,6 +29,7 @@ impl Display for NewServerError {
             Self::Unknown(server_id) => {
                 write!(formatter, "Server id {server_id} is unknown")
             }
+            Self::LoadModule(error) => Display::fmt(error, formatter),
         }
     }
 }
@@ -40,5 +43,11 @@ impl From<io::Error> for NewServerError {
 impl From<MessageError> for NewServerError {
     fn from(error: MessageError) -> Self {
         Self::Message(error)
+    }
+}
+
+impl From<LoadModuleError> for NewServerError {
+    fn from(error: LoadModuleError) -> Self {
+        Self::LoadModule(error)
     }
 }

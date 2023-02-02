@@ -9,7 +9,7 @@ use crate::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };
-use crate::module::ModuleManager;
+use crate::module::{Module, ModuleManager};
 use crate::server::connection::ServerConnectionTask;
 use crate::server::member::{
     ServerMemberMessage, ServerMemberReplicationMessage, ServerMemberReplicationMessageInput,
@@ -30,7 +30,9 @@ use async_recursion::async_recursion;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::sync::RwLock;
 use tokio::{select, spawn};
 use tracing::{debug, error, info};
 
@@ -44,13 +46,14 @@ pub struct ServerTask {
     sender: MessageQueueSender<ServerMessage>,
     receiver: MessageQueueReceiver<ServerMessage>,
     commit_messages: HashMap<LogEntryId, Vec<ServerMessage>>,
-    module_manager: ModuleManager,
+    module_manager: Arc<RwLock<ModuleManager>>,
 }
 
 impl ServerTask {
     pub async fn new<S, T>(
         listener_address: S,
         follower_data: Option<(T, Option<ServerId>)>,
+        modules: impl Iterator<Item = Box<dyn Module>>,
     ) -> Result<Self, NewServerError>
     where
         S: ToSocketAddrs + Debug,
@@ -58,6 +61,17 @@ impl ServerTask {
     {
         let tcp_listener = TcpListener::bind(listener_address).await?;
         let (queue_sender, queue_receiver) = message_queue();
+        let module_manager = Arc::new(RwLock::new(ModuleManager::new(ServerHandle::new(
+            queue_sender.clone(),
+        ))));
+
+        {
+            let mut module_manager_writer = module_manager.write().await;
+
+            for module in modules {
+                module_manager_writer.load(module).await?;
+            }
+        }
 
         match follower_data {
             None => Ok(Self {
@@ -65,10 +79,10 @@ impl ServerTask {
                 server_members: vec![Some((tcp_listener.local_addr()?, None))],
                 r#type: ServerLeaderType::new(LeadingLog::default()).into(),
                 tcp_listener,
-                sender: queue_sender.clone(),
+                sender: queue_sender,
                 receiver: queue_receiver,
                 commit_messages: HashMap::default(),
-                module_manager: ModuleManager::new(ServerHandle::new(queue_sender)),
+                module_manager,
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -150,10 +164,10 @@ impl ServerTask {
                     .into(),
                     server_members: Vec::default(),
                     tcp_listener,
-                    sender: queue_sender.clone(),
+                    sender: queue_sender,
                     receiver: queue_receiver,
                     commit_messages: HashMap::default(),
-                    module_manager: ModuleManager::new(ServerHandle::new(queue_sender)),
+                    module_manager,
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -231,10 +245,10 @@ impl ServerTask {
                     .into(),
                     server_members: Vec::default(),
                     tcp_listener,
-                    sender: queue_sender.clone(),
+                    sender: queue_sender,
                     receiver: queue_receiver,
                     commit_messages: HashMap::default(),
-                    module_manager: ModuleManager::new(ServerHandle::new(queue_sender)),
+                    module_manager,
                 })
             }
         }
