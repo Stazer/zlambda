@@ -9,6 +9,7 @@ use crate::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };
+use crate::module::ModuleManager;
 use crate::server::connection::ServerConnectionTask;
 use crate::server::member::{
     ServerMemberMessage, ServerMemberReplicationMessage, ServerMemberReplicationMessageInput,
@@ -17,8 +18,8 @@ use crate::server::member::{
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
     NewServerError, ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput,
-    ServerFollowerType, ServerId, ServerLeaderGeneralMessageMessage, ServerLeaderType,
-    ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
+    ServerFollowerType, ServerHandle, ServerId, ServerLeaderGeneralMessageMessage,
+    ServerLeaderType, ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
     ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
@@ -43,6 +44,7 @@ pub struct ServerTask {
     sender: MessageQueueSender<ServerMessage>,
     receiver: MessageQueueReceiver<ServerMessage>,
     commit_messages: HashMap<LogEntryId, Vec<ServerMessage>>,
+    module_manager: ModuleManager,
 }
 
 impl ServerTask {
@@ -63,9 +65,10 @@ impl ServerTask {
                 server_members: vec![Some((tcp_listener.local_addr()?, None))],
                 r#type: ServerLeaderType::new(LeadingLog::default()).into(),
                 tcp_listener,
-                sender: queue_sender,
+                sender: queue_sender.clone(),
                 receiver: queue_receiver,
                 commit_messages: HashMap::default(),
+                module_manager: ModuleManager::new(ServerHandle::new(queue_sender)),
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -147,9 +150,10 @@ impl ServerTask {
                     .into(),
                     server_members: Vec::default(),
                     tcp_listener,
-                    sender: queue_sender,
+                    sender: queue_sender.clone(),
                     receiver: queue_receiver,
                     commit_messages: HashMap::default(),
+                    module_manager: ModuleManager::new(ServerHandle::new(queue_sender)),
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -227,12 +231,17 @@ impl ServerTask {
                     .into(),
                     server_members: Vec::default(),
                     tcp_listener,
-                    sender: queue_sender,
+                    sender: queue_sender.clone(),
                     receiver: queue_receiver,
                     commit_messages: HashMap::default(),
+                    module_manager: ModuleManager::new(ServerHandle::new(queue_sender)),
                 })
             }
         }
+    }
+
+    pub fn handle(&self) -> ServerHandle {
+        ServerHandle::new(self.sender.clone())
     }
 
     pub async fn spawn(self) {
@@ -308,6 +317,7 @@ impl ServerTask {
     #[async_recursion]
     async fn on_server_message(&mut self, message: ServerMessage) {
         match message {
+            ServerMessage::Ping => {}
             ServerMessage::SocketAccept(message) => {
                 self.on_server_socket_accept_message(message).await
             }

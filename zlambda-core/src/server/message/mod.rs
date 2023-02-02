@@ -52,6 +52,7 @@ pub type ServerLogEntriesRecoveryMessage =
 
 #[derive(Debug)]
 pub enum ServerMessage {
+    Ping,
     SocketAccept(ServerSocketAcceptMessage),
     LeaderGeneralMessage(ServerLeaderGeneralMessageMessage),
     Registration(ServerRegistrationMessage),

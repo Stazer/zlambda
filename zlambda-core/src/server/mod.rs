@@ -1,5 +1,6 @@
 mod connection;
 mod error;
+mod handle;
 mod id;
 mod input;
 mod log;
@@ -13,6 +14,7 @@ mod r#type;
 
 pub use connection::*;
 pub use error::*;
+pub use handle::*;
 pub use id::*;
 pub use input::*;
 pub use log::*;

@@ -1,40 +1,4 @@
-use crate::server::ServerMessage;
-use crate::message::MessageQueueSender;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub struct ModuleManager {
-    sender: MessageQueueSender<ServerMessage>,
-}
-
-impl ModuleManager {
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub struct Server {
-    sender: MessageQueueSender<ServerMessage>,
-    module_manager: ModuleManager,
-}
-
-impl Server {
-    pub fn new(sender: MessageQueueSender<ServerMessage>) -> Self {
-        Self {
-            sender: sender.clone(),
-            module_manager: ModuleManager {
-                sender,
-            }
-        }
-    }
-
-    pub fn module_manager(&self) -> &ModuleManager {
-        &self.module_manager
-    }
-
-    pub fn module_manager_mut(&mut self) -> &mut ModuleManager {
-        &mut self.module_manager
-    }
-}
+use crate::server::ServerHandle;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -46,30 +10,29 @@ pub type ModuleShutdownEventInput = ();
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct ModuleInitializeEventInput {
-    server: Server,
+    server: ServerHandle,
 }
 
-impl From<ModuleInitializeEventInput> for (Server,) {
+impl From<ModuleInitializeEventInput> for (ServerHandle,) {
     fn from(input: ModuleInitializeEventInput) -> Self {
         (input.server,)
     }
 }
 
 impl ModuleInitializeEventInput {
-    pub fn new(
-        server: Server,
-    ) -> Self {
+    pub fn new(server: ServerHandle) -> Self {
         Self {
             server,
         }
     }
 
-    pub fn server(&self) -> &Server {
+    pub fn server(&self) -> &ServerHandle {
         &self.server
     }
 
-    pub fn server_mut(&mut self) -> &mut Server {
+    pub fn server_mut(&mut self) -> &mut ServerHandle {
         &mut self.server
     }
 }
