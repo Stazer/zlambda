@@ -1,6 +1,6 @@
 use crate::module::{
-    LoadModuleError, Module, ModuleFinalizeEventInput, ModuleId, ModuleInitializeEventInput,
-    ModuleInitializeEventOutput, UnloadModuleError,
+    LoadModuleError, Module, ModuleUnloadEventInput, ModuleId, ModuleLoadEventInput,
+    ModuleLoadEventOutput, UnloadModuleError,
 };
 use crate::server::ServerHandle;
 use std::any::Any;
@@ -32,19 +32,20 @@ impl ModuleManager {
 
         let any = unsafe { &*Arc::into_raw(module.clone()) as &dyn Any };
 
-        match any.downcast_ref::<T>() {
-            None => None,
-            Some(reference) => unsafe { Some(Arc::from_raw(reference as *const T)) },
-        }
+        any.downcast_ref::<T>()
+            .map(|reference| unsafe { Arc::from_raw(reference as *const T) })
     }
 
-    pub async fn load(&mut self, module: Box<dyn Module>) -> Result<ModuleId, LoadModuleError> {
+    pub async fn load<T>(&mut self, module: T) -> Result<ModuleId, LoadModuleError>
+    where
+        T: Into<Arc<dyn Module>>,
+    {
         let module_id = self.modules.len();
-        let module = Arc::<dyn Module>::from(module);
+        let module = module.into();
         self.modules.push(Some(module.clone()));
 
         module
-            .on_initialize(ModuleInitializeEventInput::new(
+            .on_load(ModuleLoadEventInput::new(
                 module_id,
                 self.server.clone(),
             ))
@@ -60,7 +61,7 @@ impl ModuleManager {
         };
 
         module
-            .on_finalize(ModuleFinalizeEventInput::new(self.server.clone()))
+            .on_unload(ModuleUnloadEventInput::new(self.server.clone()))
             .await;
 
         Ok(())
@@ -72,8 +73,8 @@ impl ModuleManager {
 #[cfg(test)]
 mod test {
     use crate::module::{
-        Module, ModuleFinalizeEventInput, ModuleFinalizeEventOutput, ModuleInitializeEventInput,
-        ModuleInitializeEventOutput, ModuleManager, UnloadModuleError,
+        Module, ModuleUnloadEventInput, ModuleUnloadEventOutput, ModuleLoadEventInput,
+        ModuleLoadEventOutput, ModuleManager, UnloadModuleError,
     };
     use tokio::sync::mpsc::{channel, Sender};
 
@@ -88,17 +89,17 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_load_triggers_on_initialize() {
+    async fn test_load_triggers_on_load() {
         struct TestModule {
             sender: Sender<()>,
         }
 
         #[async_trait::async_trait]
         impl Module for TestModule {
-            async fn on_initialize(
+            async fn on_load(
                 &self,
-                _event: ModuleInitializeEventInput,
-            ) -> ModuleInitializeEventOutput {
+                _event: ModuleLoadEventInput,
+            ) -> ModuleLoadEventOutput {
                 self.sender.send(()).await.unwrap()
             }
         }
@@ -184,17 +185,17 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_unload_triggers_on_finalize() {
+    async fn test_unload_triggers_on_unload() {
         struct TestModule {
             sender: Sender<()>,
         }
 
         #[async_trait::async_trait]
         impl Module for TestModule {
-            async fn on_finalize(
+            async fn on_unload(
                 &self,
-                _event: ModuleFinalizeEventInput,
-            ) -> ModuleFinalizeEventOutput {
+                _event: ModuleUnloadEventInput,
+            ) -> ModuleUnloadEventOutput {
                 self.sender.send(()).await.unwrap()
             }
         }

@@ -1,7 +1,7 @@
 use crate::module::{
     ModuleCommitEventInput, ModuleCommitEventOutput, ModuleDispatchEventInput,
-    ModuleDispatchEventOutput, ModuleFinalizeEventInput, ModuleFinalizeEventOutput,
-    ModuleInitializeEventInput, ModuleInitializeEventOutput, ModuleShutdownEventInput,
+    ModuleDispatchEventOutput, ModuleUnloadEventInput, ModuleUnloadEventOutput,
+    ModuleLoadEventInput, ModuleLoadEventOutput, ModuleShutdownEventInput,
     ModuleShutdownEventOutput, ModuleStartupEventInput, ModuleStartupEventOutput,
 };
 use std::any::Any;
@@ -14,13 +14,13 @@ pub trait Module: Any + Send + Sync + 'static {
 
     async fn on_shutdown(&self, _event: ModuleShutdownEventInput) -> ModuleShutdownEventOutput {}
 
-    async fn on_initialize(
+    async fn on_load(
         &self,
-        _event: ModuleInitializeEventInput,
-    ) -> ModuleInitializeEventOutput {
+        _event: ModuleLoadEventInput,
+    ) -> ModuleLoadEventOutput {
     }
 
-    async fn on_finalize(&self, _event: ModuleFinalizeEventInput) -> ModuleFinalizeEventOutput {}
+    async fn on_unload(&self, _event: ModuleUnloadEventInput) -> ModuleUnloadEventOutput {}
 
     async fn on_dispatch(&self, _event: ModuleDispatchEventInput) -> ModuleDispatchEventOutput {}
 

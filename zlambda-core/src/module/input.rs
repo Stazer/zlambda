@@ -12,18 +12,18 @@ pub type ModuleShutdownEventInput = ();
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ModuleInitializeEventInput {
+pub struct ModuleLoadEventInput {
     module_id: ModuleId,
     server: ServerHandle,
 }
 
-impl From<ModuleInitializeEventInput> for (ModuleId, ServerHandle) {
-    fn from(input: ModuleInitializeEventInput) -> Self {
+impl From<ModuleLoadEventInput> for (ModuleId, ServerHandle) {
+    fn from(input: ModuleLoadEventInput) -> Self {
         (input.module_id, input.server)
     }
 }
 
-impl ModuleInitializeEventInput {
+impl ModuleLoadEventInput {
     pub fn new(module_id: ModuleId, server: ServerHandle) -> Self {
         Self { module_id, server }
     }
@@ -43,17 +43,17 @@ impl ModuleInitializeEventInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct ModuleFinalizeEventInput {
+pub struct ModuleUnloadEventInput {
     server: ServerHandle,
 }
 
-impl From<ModuleFinalizeEventInput> for (ServerHandle,) {
-    fn from(input: ModuleFinalizeEventInput) -> Self {
+impl From<ModuleUnloadEventInput> for (ServerHandle,) {
+    fn from(input: ModuleUnloadEventInput) -> Self {
         (input.server,)
     }
 }
 
-impl ModuleFinalizeEventInput {
+impl ModuleUnloadEventInput {
     pub fn new(server: ServerHandle) -> Self {
         Self { server }
     }
