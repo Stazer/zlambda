@@ -3,8 +3,41 @@ use crate::module::{
     ModuleLoadEventOutput, UnloadModuleError,
 };
 use crate::server::ServerHandle;
-use std::any::Any;
 use std::sync::Arc;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub trait IntoArcModule {
+    fn into_arc_module(self) -> Arc<dyn Module>;
+}
+
+impl<T> IntoArcModule for T
+where
+    T: Module + 'static
+{
+    fn into_arc_module(self) -> Arc<dyn Module> {
+        Arc::from(self)
+    }
+}
+
+impl IntoArcModule for Box<dyn Module>
+{
+    fn into_arc_module(self) -> Arc<dyn Module> {
+        Arc::from(self)
+    }
+}
+
+impl IntoArcModule for Arc<dyn Module> {
+    fn into_arc_module(self) -> Arc<dyn Module> {
+        self
+    }
+}
+
+impl IntoArcModule for &Arc<dyn Module> {
+    fn into_arc_module(self) -> Arc<dyn Module> {
+        self.clone()
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,27 +54,19 @@ impl ModuleManager {
         }
     }
 
-    pub fn get<T>(&self, id: ModuleId) -> Option<Arc<T>>
-    where
-        T: Module + 'static,
-    {
-        let module = match self.modules.get(id) {
-            None | Some(None) => return None,
-            Some(Some(module)) => module,
-        };
-
-        let any = unsafe { &*Arc::into_raw(module.clone()) as &dyn Any };
-
-        any.downcast_ref::<T>()
-            .map(|reference| unsafe { Arc::from_raw(reference as *const T) })
+    pub fn get(&self, id: ModuleId) -> Option<&Arc<dyn Module>> {
+        match self.modules.get(id) {
+            None | Some(None) => None,
+            Some(Some(ref module)) => Some(module),
+        }
     }
 
     pub async fn load<T>(&mut self, module: T) -> Result<ModuleId, LoadModuleError>
     where
-        T: Into<Arc<dyn Module>>,
+        T: IntoArcModule + 'static,
     {
         let module_id = self.modules.len();
-        let module = module.into();
+        let module = module.into_arc_module();
         self.modules.push(Some(module.clone()));
 
         module
@@ -72,30 +97,44 @@ impl ModuleManager {
 
 #[cfg(test)]
 mod test {
+    use crate::message::{MessageQueueSender, message_queue};
+    use crate::server::ServerHandle;
     use crate::module::{
         Module, ModuleUnloadEventInput, ModuleUnloadEventOutput, ModuleLoadEventInput,
         ModuleLoadEventOutput, ModuleManager, UnloadModuleError,
     };
     use tokio::sync::mpsc::{channel, Sender};
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    fn server_handle() -> ServerHandle {
+        ServerHandle::new(
+            message_queue().0
+        )
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    struct EmptyModule {}
+
+    #[async_trait::async_trait]
+    impl Module for EmptyModule {}
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
     #[tokio::test]
     async fn test_load_ok() {
-        struct TestModule {}
-
-        #[async_trait::async_trait]
-        impl Module for TestModule {}
-
-        assert!(ModuleManager::default().load(TestModule {}).await.is_ok())
+        assert!(ModuleManager::new(server_handle()).load(EmptyModule {}).await.is_ok())
     }
 
     #[tokio::test]
     async fn test_load_triggers_on_load() {
-        struct TestModule {
+        struct LoadNotifyModule {
             sender: Sender<()>,
         }
 
         #[async_trait::async_trait]
-        impl Module for TestModule {
+        impl Module for LoadNotifyModule {
             async fn on_load(
                 &self,
                 _event: ModuleLoadEventInput,
@@ -106,8 +145,8 @@ mod test {
 
         let (sender, mut receiver) = channel(1);
 
-        ModuleManager::default()
-            .load(TestModule { sender })
+        ModuleManager::new(server_handle())
+            .load(LoadNotifyModule { sender })
             .await
             .unwrap();
 
@@ -115,70 +154,37 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_get_existing() {
-        struct TestModule {}
+    async fn test_get_some() {
+        let mut manager = ModuleManager::new(server_handle());
+        let module_id = manager.load(EmptyModule {}).await.unwrap();
 
-        #[async_trait::async_trait]
-        impl Module for TestModule {}
-
-        let mut manager = ModuleManager::default();
-        let module_id = manager.load(TestModule {}).await.unwrap();
-
-        assert!(manager.get::<TestModule>(module_id).is_some())
+        assert!(manager.get(module_id).is_some())
     }
 
     #[tokio::test]
-    async fn test_get_not_existing_index() {
-        struct TestModule {}
+    async fn test_get_none() {
+        let mut manager = ModuleManager::new(server_handle());
+        let module_id = manager.load(EmptyModule {}).await.unwrap();
 
-        #[async_trait::async_trait]
-        impl Module for TestModule {}
-
-        let mut manager = ModuleManager::default();
-        let module_id = manager.load(TestModule {}).await.unwrap();
-
-        assert!(manager.get::<TestModule>(module_id + 1).is_none())
-    }
-
-    #[tokio::test]
-    async fn test_get_not_existing_type() {
-        struct TestModule {}
-
-        #[async_trait::async_trait]
-        impl Module for TestModule {}
-
-        struct TestModule2 {}
-
-        #[async_trait::async_trait]
-        impl Module for TestModule2 {}
-
-        let mut manager = ModuleManager::default();
-        let module_id = manager.load(TestModule {}).await.unwrap();
-
-        assert!(manager.get::<TestModule2>(module_id).is_none())
+        assert!(manager.get(module_id + 1).is_none())
     }
 
     #[tokio::test]
     async fn test_unload_ok() {
-        struct TestModule {}
-
-        #[async_trait::async_trait]
-        impl Module for TestModule {}
-
-        let mut manager = ModuleManager::default();
-        let module_id = manager.load(TestModule {}).await.unwrap();
+        let mut manager = ModuleManager::new(server_handle());
+        let module_id = manager.load(EmptyModule {}).await.unwrap();
 
         assert!(manager.unload(module_id).await.is_ok())
     }
 
     #[tokio::test]
-    async fn test_unload_not_existing_index() {
+    async fn test_unload_err_module_not_existing() {
         struct TestModule {}
 
         #[async_trait::async_trait]
         impl Module for TestModule {}
 
-        let mut manager = ModuleManager::default();
+        let mut manager = ModuleManager::new(server_handle());
         let module_id = manager.load(TestModule {}).await.unwrap();
 
         assert!(manager.unload(module_id + 1).await == Err(UnloadModuleError::ModuleNotFound))
@@ -186,12 +192,12 @@ mod test {
 
     #[tokio::test]
     async fn test_unload_triggers_on_unload() {
-        struct TestModule {
+        struct UnloadNotifyModule {
             sender: Sender<()>,
         }
 
         #[async_trait::async_trait]
-        impl Module for TestModule {
+        impl Module for UnloadNotifyModule {
             async fn on_unload(
                 &self,
                 _event: ModuleUnloadEventInput,
@@ -202,8 +208,8 @@ mod test {
 
         let (sender, mut receiver) = channel(1);
 
-        let mut manager = ModuleManager::default();
-        let module_id = manager.load(TestModule { sender }).await.unwrap();
+        let mut manager = ModuleManager::new(server_handle());
+        let module_id = manager.load(UnloadNotifyModule { sender }).await.unwrap();
         manager.unload(module_id).await.unwrap();
 
         assert!(receiver.recv().await.is_some())

@@ -9,6 +9,7 @@ use std::path::PathBuf;
 //use tokio::io::{stdin, stdout};
 use zlambda_core::module::ModuleId;
 use zlambda_core::server::{ServerId, ServerTask};
+use std::iter::empty;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,6 +93,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         server_id,
                     } => Some((leader_address, server_id)),
                 },
+                empty(),
             )
             .await?
             .run()
