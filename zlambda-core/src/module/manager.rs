@@ -178,6 +178,16 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_unload_ok_get_none() {
+        let mut manager = ModuleManager::new(server_handle());
+        let module_id = manager.load(EmptyModule {}).await.unwrap();
+
+        manager.unload(module_id).await.unwrap();
+
+        assert!(manager.get(module_id).is_none())
+    }
+
+    #[tokio::test]
     async fn test_unload_err_module_not_existing() {
         struct TestModule {}
 
