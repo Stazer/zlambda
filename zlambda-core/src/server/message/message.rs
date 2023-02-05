@@ -5,6 +5,9 @@ use crate::server::{
     ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
     ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
     ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
+    ServerModuleLoadMessageInput, ServerModuleLoadMessageOutput,
+    ServerModuleGetMessageInput, ServerModuleGetMessageOutput,
+    ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,6 +53,21 @@ pub type ServerLogEntriesRecoveryMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerModuleGetMessage =
+    SynchronousMessage<ServerModuleGetMessageInput, ServerModuleGetMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerModuleLoadMessage =
+    SynchronousMessage<ServerModuleLoadMessageInput, ServerModuleLoadMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerModuleUnloadMessage =
+    SynchronousMessage<ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
@@ -61,6 +79,9 @@ pub enum ServerMessage {
     LogEntriesReplication(ServerLogEntriesReplicationMessage),
     LogEntriesAcknowledgement(ServerLogEntriesAcknowledgementMessage),
     LogEntriesRecovery(ServerLogEntriesRecoveryMessage),
+    ModuleGet(ServerModuleGetMessage),
+    ModuleLoad(ServerModuleLoadMessage),
+    ModuleUnload(ServerModuleUnloadMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -102,5 +123,23 @@ impl From<ServerLogEntriesAcknowledgementMessage> for ServerMessage {
 impl From<ServerLogEntriesRecoveryMessage> for ServerMessage {
     fn from(message: ServerLogEntriesRecoveryMessage) -> Self {
         Self::LogEntriesRecovery(message)
+    }
+}
+
+impl From<ServerModuleGetMessage> for ServerMessage {
+    fn from(message: ServerModuleGetMessage) -> Self {
+        Self::ModuleGet(message)
+    }
+}
+
+impl From<ServerModuleLoadMessage> for ServerMessage {
+    fn from(message: ServerModuleLoadMessage) -> Self {
+        Self::ModuleLoad(message)
+    }
+}
+
+impl From<ServerModuleUnloadMessage> for ServerMessage {
+    fn from(message: ServerModuleUnloadMessage) -> Self {
+        Self::ModuleUnload(message)
     }
 }

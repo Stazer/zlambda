@@ -24,6 +24,9 @@ use crate::server::{
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType, ServerModule,
+    ServerModuleGetMessage, ServerModuleGetMessageOutput,
+    ServerModuleLoadMessage,
+    ServerModuleUnloadMessage,
 };
 use async_recursion::async_recursion;
 use std::collections::HashMap;
@@ -31,7 +34,6 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::RwLock;
 use tokio::{select, spawn};
 use tracing::{debug, error, info};
 
@@ -45,7 +47,7 @@ pub struct ServerTask {
     sender: MessageQueueSender<ServerMessage>,
     receiver: MessageQueueReceiver<ServerMessage>,
     commit_messages: HashMap<LogEntryId, Vec<ServerMessage>>,
-    module_manager: Arc<RwLock<ModuleManager<dyn ServerModule>>>,
+    module_manager: ModuleManager<dyn ServerModule>,
 }
 
 impl ServerTask {
@@ -60,14 +62,10 @@ impl ServerTask {
     {
         let tcp_listener = TcpListener::bind(listener_address).await?;
         let (queue_sender, queue_receiver) = message_queue();
-        let module_manager = Arc::new(RwLock::new(ModuleManager::default()));
+        let mut module_manager = ModuleManager::default();
 
-        {
-            let mut module_manager_writer = module_manager.write().await;
-
-            for module in modules {
-                module_manager_writer.load(Arc::from(module))?;
-            }
+        for module in modules {
+            module_manager.load(Arc::from(module))?;
         }
 
         match follower_data {
@@ -353,6 +351,15 @@ impl ServerTask {
             ServerMessage::LogEntriesRecovery(message) => {
                 self.on_server_log_entries_recovery_message(message).await
             }
+            ServerMessage::ModuleGet(message) => {
+                self.on_server_module_get_message(message).await
+            }
+            ServerMessage::ModuleLoad(message) => {
+                self.on_server_module_load_message(message).await
+            }
+            ServerMessage::ModuleUnload(message) => {
+                self.on_server_module_unload_message(message).await
+            }
         }
     }
 
@@ -619,6 +626,19 @@ impl ServerTask {
                 ),
             ))
             .await;
+    }
+
+    async fn on_server_module_get_message(&mut self, message: ServerModuleGetMessage) {
+        let (input, sender) = message.into();
+        sender.do_send(ServerModuleGetMessageOutput::new(self.module_manager.get(input.module_id()).cloned())).await;
+    }
+
+    async fn on_server_module_load_message(&mut self, message: ServerModuleLoadMessage) {
+
+    }
+
+    async fn on_server_module_unload_message(&mut self, message: ServerModuleUnloadMessage) {
+
     }
 
     async fn on_general_message(&mut self, message: GeneralMessage) {

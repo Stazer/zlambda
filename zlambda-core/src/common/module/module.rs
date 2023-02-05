@@ -1,9 +1,10 @@
 use std::any::Any;
 use std::sync::Arc;
+use std::fmt::Debug;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub trait Module: Any + Send + Sync {}
+pub trait Module: Any + Debug + Send + Sync {}
 
 impl dyn Module {
     pub fn r#as<T>(self: &Arc<dyn Module>) -> Option<Arc<T>>

@@ -1,6 +1,6 @@
 use crate::message::MessageQueueSender;
-use crate::server::ServerMessage;
-use crate::common::module::{ModuleId, Module};
+use crate::server::{ServerModuleGetMessageInput, ServerModuleLoadMessageInput, ServerModuleUnloadMessageInput, ServerMessage, ServerModule};
+use crate::common::module::{ModuleId};
 use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,17 @@ impl ServerModuleManagerHandle {
         Self { sender }
     }
 
-    pub fn get(&self, module_id: ModuleId) -> Option<Arc<dyn Module>> {
-        None
+    pub async fn get(&self, module_id: ModuleId) -> Option<Arc<dyn ServerModule>> {
+        let (module, ) = self.sender.do_send_synchronous(ServerModuleGetMessageInput::new(module_id)).await.into();
+
+        module
+    }
+
+    pub async fn load(&mut self, module: Arc<dyn ServerModule>) {
+        self.sender.do_send_synchronous(ServerModuleLoadMessageInput::new(module)).await;
+    }
+
+    pub async fn unload(&mut self, module_id: ModuleId) {
+        self.sender.do_send_synchronous(ServerModuleUnloadMessageInput::new(module_id)).await;
     }
 }

@@ -1,8 +1,9 @@
 use crate::general::GeneralMessage;
-
-use crate::server::{LogEntryData, LogEntryId, ServerId};
+use crate::common::module::ModuleId;
+use crate::server::{ServerModule, LogEntryData, LogEntryId, ServerId};
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
+use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -211,5 +212,86 @@ impl ServerLogEntriesRecoveryMessageInput {
 
     pub fn log_entry_ids(&self) -> &Vec<LogEntryId> {
         &self.log_entry_ids
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerModuleGetMessageInput {
+    module_id: ModuleId,
+}
+
+impl From<ServerModuleGetMessageInput> for (ModuleId,) {
+    fn from(input: ServerModuleGetMessageInput) -> Self {
+        (input.module_id,)
+    }
+}
+
+impl ServerModuleGetMessageInput {
+    pub fn new(
+        module_id: ModuleId,
+    ) -> Self {
+        Self {
+            module_id,
+        }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerModuleLoadMessageInput {
+    module: Arc<dyn ServerModule>
+}
+
+impl From<ServerModuleLoadMessageInput> for (Arc<dyn ServerModule>,) {
+    fn from(input: ServerModuleLoadMessageInput) -> Self {
+        (input.module,)
+    }
+}
+
+impl ServerModuleLoadMessageInput {
+    pub fn new(
+        module: Arc<dyn ServerModule>,
+    ) -> Self {
+        Self {
+            module
+        }
+    }
+
+    pub fn module(&self) -> &Arc<dyn ServerModule> {
+        &self.module
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerModuleUnloadMessageInput {
+    module_id: ModuleId,
+}
+
+impl From<ServerModuleUnloadMessageInput> for (ModuleId,) {
+    fn from(input: ServerModuleUnloadMessageInput) -> Self {
+        (input.module_id,)
+    }
+}
+
+impl ServerModuleUnloadMessageInput {
+    pub fn new(
+        module_id: ModuleId,
+    ) -> Self {
+        Self {
+            module_id,
+        }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
     }
 }
