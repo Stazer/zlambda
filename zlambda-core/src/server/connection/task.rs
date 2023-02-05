@@ -1,12 +1,12 @@
+use crate::common::message::{
+    MessageError, MessageQueueSender, MessageSocketReceiver, MessageSocketSender,
+};
 use crate::general::{
     GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryResponseMessageInput,
     GeneralRecoveryResponseMessageNotALeaderInput, GeneralRecoveryResponseMessageSuccessInput,
     GeneralRegistrationRequestMessage, GeneralRegistrationResponseMessageInput,
     GeneralRegistrationResponseMessageNotALeaderInput,
     GeneralRegistrationResponseMessageSuccessInput,
-};
-use crate::common::message::{
-    MessageError, MessageQueueSender, MessageSocketReceiver, MessageSocketSender,
 };
 use crate::server::member::{
     ServerMemberRecoveryMessageInput, ServerMemberRegistrationMessageInput,

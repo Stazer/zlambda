@@ -1,6 +1,6 @@
 use std::any::Any;
-use std::sync::Arc;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,17 +36,17 @@ mod test {
 
     #[test]
     fn test_as_some() {
-        let module: Arc<dyn Module> = Arc::from(EmptyModule{});
+        let module: Arc<dyn Module> = Arc::from(EmptyModule {});
         assert!(module.r#as::<EmptyModule>().is_some())
     }
 
     #[test]
     fn test_as_none() {
-    struct EmptyModule2 {}
+        struct EmptyModule2 {}
 
-    #[async_trait::async_trait]
-    impl Module for EmptyModule2 {}
-        let module: Arc<dyn Module> = Arc::from(EmptyModule{});
+        #[async_trait::async_trait]
+        impl Module for EmptyModule2 {}
+        let module: Arc<dyn Module> = Arc::from(EmptyModule {});
         assert!(module.r#as::<EmptyModule2>().is_none())
     }
 }

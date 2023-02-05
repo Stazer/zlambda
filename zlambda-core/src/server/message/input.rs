@@ -1,9 +1,9 @@
-use crate::general::GeneralMessage;
 use crate::common::module::ModuleId;
-use crate::server::{ServerModule, LogEntryData, LogEntryId, ServerId};
+use crate::general::GeneralMessage;
+use crate::server::{LogEntryData, LogEntryId, ServerId, ServerModule};
 use std::net::SocketAddr;
-use tokio::net::TcpStream;
 use std::sync::Arc;
+use tokio::net::TcpStream;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -229,12 +229,8 @@ impl From<ServerModuleGetMessageInput> for (ModuleId,) {
 }
 
 impl ServerModuleGetMessageInput {
-    pub fn new(
-        module_id: ModuleId,
-    ) -> Self {
-        Self {
-            module_id,
-        }
+    pub fn new(module_id: ModuleId) -> Self {
+        Self { module_id }
     }
 
     pub fn module_id(&self) -> ModuleId {
@@ -246,7 +242,7 @@ impl ServerModuleGetMessageInput {
 
 #[derive(Debug)]
 pub struct ServerModuleLoadMessageInput {
-    module: Arc<dyn ServerModule>
+    module: Arc<dyn ServerModule>,
 }
 
 impl From<ServerModuleLoadMessageInput> for (Arc<dyn ServerModule>,) {
@@ -256,12 +252,8 @@ impl From<ServerModuleLoadMessageInput> for (Arc<dyn ServerModule>,) {
 }
 
 impl ServerModuleLoadMessageInput {
-    pub fn new(
-        module: Arc<dyn ServerModule>,
-    ) -> Self {
-        Self {
-            module
-        }
+    pub fn new(module: Arc<dyn ServerModule>) -> Self {
+        Self { module }
     }
 
     pub fn module(&self) -> &Arc<dyn ServerModule> {
@@ -283,12 +275,8 @@ impl From<ServerModuleUnloadMessageInput> for (ModuleId,) {
 }
 
 impl ServerModuleUnloadMessageInput {
-    pub fn new(
-        module_id: ModuleId,
-    ) -> Self {
-        Self {
-            module_id,
-        }
+    pub fn new(module_id: ModuleId) -> Self {
+        Self { module_id }
     }
 
     pub fn module_id(&self) -> ModuleId {

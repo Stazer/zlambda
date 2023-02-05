@@ -1,2 +1,2 @@
-pub mod module;
 pub mod message;
+pub mod module;

@@ -1,3 +1,8 @@
+use crate::common::message::{
+    message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
+    MessageSocketSender,
+};
+use crate::common::module::ModuleManager;
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendResponseMessage,
     GeneralLogEntriesAppendResponseMessageInput, GeneralMessage, GeneralRecoveryRequestMessage,
@@ -5,28 +10,24 @@ use crate::general::{
     GeneralRegistrationRequestMessage, GeneralRegistrationRequestMessageInput,
     GeneralRegistrationResponseMessageInput,
 };
-use crate::common::message::{
-    message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
-    MessageSocketSender,
-};
-use crate::common::module::{ModuleManager};
 use crate::server::connection::ServerConnectionTask;
-use crate::server::{ServerMemberMessage, ServerMemberReplicationMessage, ServerMemberReplicationMessageInput,
-    ServerMemberTask,
-};
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
     NewServerError, ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput,
     ServerFollowerType, ServerHandle, ServerId, ServerLeaderGeneralMessageMessage,
     ServerLeaderType, ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
-    ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
+    ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
+    ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleShutdownEventInput,
+    ServerModuleStartupEventInput, ServerModuleUnloadMessage, ServerRecoveryMessage,
+    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
-    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType, ServerModule,
-    ServerModuleGetMessage, ServerModuleGetMessageOutput,
-    ServerModuleLoadMessage,
-    ServerModuleUnloadMessage,
+    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
+};
+use crate::server::{
+    ServerMemberMessage, ServerMemberReplicationMessage, ServerMemberReplicationMessageInput,
+    ServerMemberTask,
 };
 use async_recursion::async_recursion;
 use std::collections::HashMap;
@@ -258,6 +259,14 @@ impl ServerTask {
     }
 
     pub async fn run(mut self) {
+        for module in self.module_manager.iter() {
+            module
+                .on_startup(ServerModuleStartupEventInput::new(ServerHandle::new(
+                    self.sender.clone(),
+                )))
+                .await;
+        }
+
         loop {
             match &mut self.r#type {
                 ServerType::Leader(_) => {
@@ -321,6 +330,14 @@ impl ServerTask {
                 }
             }
         }
+
+        for module in self.module_manager.iter() {
+            module
+                .on_shutdown(ServerModuleShutdownEventInput::new(ServerHandle::new(
+                    self.sender.clone(),
+                )))
+                .await;
+        }
     }
 
     #[async_recursion]
@@ -351,12 +368,8 @@ impl ServerTask {
             ServerMessage::LogEntriesRecovery(message) => {
                 self.on_server_log_entries_recovery_message(message).await
             }
-            ServerMessage::ModuleGet(message) => {
-                self.on_server_module_get_message(message).await
-            }
-            ServerMessage::ModuleLoad(message) => {
-                self.on_server_module_load_message(message).await
-            }
+            ServerMessage::ModuleGet(message) => self.on_server_module_get_message(message).await,
+            ServerMessage::ModuleLoad(message) => self.on_server_module_load_message(message).await,
             ServerMessage::ModuleUnload(message) => {
                 self.on_server_module_unload_message(message).await
             }
@@ -630,15 +643,17 @@ impl ServerTask {
 
     async fn on_server_module_get_message(&mut self, message: ServerModuleGetMessage) {
         let (input, sender) = message.into();
-        sender.do_send(ServerModuleGetMessageOutput::new(self.module_manager.get(input.module_id()).cloned())).await;
+        sender
+            .do_send(ServerModuleGetMessageOutput::new(
+                self.module_manager.get(input.module_id()).cloned(),
+            ))
+            .await;
     }
 
     async fn on_server_module_load_message(&mut self, message: ServerModuleLoadMessage) {
-
     }
 
     async fn on_server_module_unload_message(&mut self, message: ServerModuleUnloadMessage) {
-
     }
 
     async fn on_general_message(&mut self, message: GeneralMessage) {
@@ -719,7 +734,35 @@ impl ServerTask {
         };
 
         if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
-            for committed_log_entry_id in committed_log_entry_id_range {
+            for committed_log_entry_id in committed_log_entry_id_range.clone() {
+                let log_entry = match follower
+                    .log()
+                    .entries()
+                    .get(committed_log_entry_id)
+                    .cloned()
+                {
+                    None | Some(None) => continue,
+                    Some(Some(log_entry)) => log_entry,
+                };
+
+                for module in self.module_manager.iter().cloned() {
+                    let sender = self.sender.clone();
+                    let log_entry = log_entry.clone();
+
+                    spawn(async move {
+                        module
+                            .on_commit(ServerModuleCommitEventInput::new(
+                                ServerHandle::new(sender),
+                                log_entry,
+                            ))
+                            .await;
+                    });
+                }
+
+                debug!("Committed log entry {}", committed_log_entry_id);
+            }
+
+            for committed_log_entry_id in committed_log_entry_id_range.clone() {
                 for message in self
                     .commit_messages
                     .remove(&committed_log_entry_id)
@@ -727,10 +770,6 @@ impl ServerTask {
                 {
                     self.on_server_message(message).await;
                 }
-
-                //self.module_manager.read().await.trigger_commit();
-
-                debug!("Committed log entry {}", committed_log_entry_id);
             }
         }
 
@@ -840,6 +879,32 @@ impl ServerTask {
             let last_committed_log_entry_id = leader.log_mut().last_committed_log_entry_id();
             let current_term = leader.log_mut().current_term();
 
+            for committed_log_entry_id in committed_log_entry_id_range.clone() {
+                let log_entry = match leader.log().entries().get(committed_log_entry_id).cloned() {
+                    Some(log_entry) => log_entry,
+                    None => continue,
+                };
+
+                for module in self.module_manager.iter().cloned() {
+                    let sender = self.sender.clone();
+                    let log_entry = log_entry.clone();
+
+                    spawn(async move {
+                        module
+                            .on_commit(ServerModuleCommitEventInput::new(
+                                ServerHandle::new(sender),
+                                log_entry,
+                            ))
+                            .await;
+                    });
+                }
+
+                debug!(
+                    "Committed log entry {} by acknowledgement of server {}",
+                    committed_log_entry_id, server_id
+                );
+            }
+
             for committed_log_entry_id in committed_log_entry_id_range {
                 for message in self
                     .commit_messages
@@ -848,11 +913,6 @@ impl ServerTask {
                 {
                     self.on_server_message(message).await;
                 }
-
-                debug!(
-                    "Committed log entry {} by acknowledgement of server {}",
-                    committed_log_entry_id, server_id
-                );
             }
 
             for server_member in &mut self.server_members {

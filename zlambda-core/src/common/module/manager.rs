@@ -1,26 +1,22 @@
-use crate::common::module::{
-    LoadModuleError, Module, ModuleId, UnloadModuleError,
-};
+use crate::common::module::{LoadModuleError, Module, ModuleId, UnloadModuleError};
 use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub trait IntoArcModule
-{
+pub trait IntoArcModule {
     fn into_arc_module(self) -> Arc<dyn Module>;
 }
 
 impl<T> IntoArcModule for T
 where
-    T: Module + 'static
+    T: Module + 'static,
 {
     fn into_arc_module(self) -> Arc<dyn Module> {
         Arc::from(self)
     }
 }
 
-impl IntoArcModule for Box<dyn Module>
-{
+impl IntoArcModule for Box<dyn Module> {
     fn into_arc_module(self) -> Arc<dyn Module> {
         Arc::from(self)
     }
@@ -73,8 +69,7 @@ where
         self.modules.iter().flatten()
     }
 
-    pub fn load(&mut self, module: Arc<T>) -> Result<ModuleId, LoadModuleError>
-    {
+    pub fn load(&mut self, module: Arc<T>) -> Result<ModuleId, LoadModuleError> {
         let module_id = self.modules.len();
         self.modules.push(Some(module));
 
@@ -84,7 +79,10 @@ where
     pub fn unload(&mut self, module_id: ModuleId) -> Result<(), UnloadModuleError> {
         match self.modules.get_mut(module_id) {
             None | Some(None) => Err(UnloadModuleError::ModuleNotFound),
-            Some(module) => module.take().map(|_| ()).ok_or(UnloadModuleError::ModuleNotFound),
+            Some(module) => module
+                .take()
+                .map(|_| ())
+                .ok_or(UnloadModuleError::ModuleNotFound),
         }
     }
 }
@@ -94,8 +92,8 @@ where
 #[cfg(test)]
 mod test {
     use crate::module::{
-        Module, ModuleUnloadEventInput, ModuleUnloadEventOutput, ModuleLoadEventInput,
-        ModuleLoadEventOutput, ModuleManager, UnloadModuleError,
+        Module, ModuleLoadEventInput, ModuleLoadEventOutput, ModuleManager, ModuleUnloadEventInput,
+        ModuleUnloadEventOutput, UnloadModuleError,
     };
 
     ////////////////////////////////////////////////////////////////////////////////////////////////

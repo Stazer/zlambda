@@ -5,8 +5,8 @@ mod id;
 mod log;
 mod member;
 mod message;
-mod task;
 mod module;
+mod task;
 mod r#type;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,6 +18,6 @@ pub use id::*;
 pub use log::*;
 pub use member::*;
 pub use message::*;
+pub use module::*;
 pub use r#type::*;
 pub use task::*;
-pub use module::*;

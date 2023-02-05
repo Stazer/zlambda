@@ -3,11 +3,10 @@ use crate::server::{
     ServerCommitRegistrationMessageInput, ServerLeaderGeneralMessageMessageInput,
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
     ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
+    ServerModuleGetMessageInput, ServerModuleGetMessageOutput, ServerModuleLoadMessageInput,
+    ServerModuleLoadMessageOutput, ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
     ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
     ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
-    ServerModuleLoadMessageInput, ServerModuleLoadMessageOutput,
-    ServerModuleGetMessageInput, ServerModuleGetMessageOutput,
-    ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

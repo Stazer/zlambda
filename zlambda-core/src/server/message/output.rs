@@ -1,6 +1,6 @@
 use crate::common::message::MessageQueueSender;
 use crate::server::member::ServerMemberMessage;
-use crate::server::{ServerModule, LogEntryId, LogTerm, ServerId};
+use crate::server::{LogEntryId, LogTerm, ServerId, ServerModule};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -280,12 +280,8 @@ impl From<ServerModuleGetMessageOutput> for (Option<Arc<dyn ServerModule>>,) {
 }
 
 impl ServerModuleGetMessageOutput {
-    pub fn new(
-        module: Option<Arc<dyn ServerModule>>
-    ) -> Self {
-        Self {
-            module,
-        }
+    pub fn new(module: Option<Arc<dyn ServerModule>>) -> Self {
+        Self { module }
     }
 
     pub fn module(&self) -> &Option<Arc<dyn ServerModule>> {

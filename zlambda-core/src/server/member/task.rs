@@ -1,10 +1,10 @@
-use crate::general::{
-    GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
-    GeneralLogEntriesAppendResponseMessage, GeneralMessage,
-};
 use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
+};
+use crate::general::{
+    GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
+    GeneralLogEntriesAppendResponseMessage, GeneralMessage,
 };
 use crate::server::member::{
     ServerMemberMessage, ServerMemberRecoveryMessage, ServerMemberRegistrationMessage,

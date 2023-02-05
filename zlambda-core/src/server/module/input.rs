@@ -1,13 +1,59 @@
 use crate::common::module::ModuleId;
-use crate::server::{ServerHandle, LogEntry};
+use crate::server::{LogEntry, ServerHandle};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerModuleStartupEventInput = ();
+#[derive(Debug)]
+pub struct ServerModuleStartupEventInput {
+    server: ServerHandle,
+}
+
+impl From<ServerModuleStartupEventInput> for (ServerHandle,) {
+    fn from(input: ServerModuleStartupEventInput) -> Self {
+        (input.server,)
+    }
+}
+
+impl ServerModuleStartupEventInput {
+    pub fn new(server: ServerHandle) -> Self {
+        Self { server }
+    }
+
+    pub fn server(&self) -> &ServerHandle {
+        &self.server
+    }
+
+    pub fn server_mut(&mut self) -> &mut ServerHandle {
+        &mut self.server
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerModuleShutdownEventInput = ();
+#[derive(Debug)]
+pub struct ServerModuleShutdownEventInput {
+    server: ServerHandle,
+}
+
+impl From<ServerModuleShutdownEventInput> for (ServerHandle,) {
+    fn from(input: ServerModuleShutdownEventInput) -> Self {
+        (input.server,)
+    }
+}
+
+impl ServerModuleShutdownEventInput {
+    pub fn new(server: ServerHandle) -> Self {
+        Self { server }
+    }
+
+    pub fn server(&self) -> &ServerHandle {
+        &self.server
+    }
+
+    pub fn server_mut(&mut self) -> &mut ServerHandle {
+        &mut self.server
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -80,14 +126,8 @@ pub struct ServerModuleCommitEventInput {
 }
 
 impl ServerModuleCommitEventInput {
-    pub fn new(
-        server: ServerHandle,
-        log_entry: LogEntry,
-    ) -> Self {
-        Self {
-            server,
-            log_entry,
-        }
+    pub fn new(server: ServerHandle, log_entry: LogEntry) -> Self {
+        Self { server, log_entry }
     }
 
     pub fn server(&self) -> &ServerHandle {
