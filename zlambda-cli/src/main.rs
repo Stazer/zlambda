@@ -7,7 +7,7 @@ use std::error::Error;
 use std::path::PathBuf;
 //use tokio::io::AsyncWriteExt;
 //use tokio::io::{stdin, stdout};
-use zlambda_core::module::ModuleId;
+use zlambda_core::common::module::ModuleId;
 use zlambda_core::server::{ServerId, ServerTask};
 use std::iter::empty;
 

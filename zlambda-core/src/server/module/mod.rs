@@ -1,9 +1,9 @@
 mod input;
-mod message;
+mod module;
 mod output;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub use input::*;
-pub use message::*;
+pub use module::*;
 pub use output::*;

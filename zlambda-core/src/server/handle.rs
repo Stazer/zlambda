@@ -1,5 +1,7 @@
 use crate::message::MessageQueueSender;
 use crate::server::ServerMessage;
+use crate::common::module::{ModuleId, Module};
+use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,5 +42,9 @@ pub struct ServerModuleManagerHandle {
 impl ServerModuleManagerHandle {
     pub(crate) fn new(sender: MessageQueueSender<ServerMessage>) -> Self {
         Self { sender }
+    }
+
+    pub fn get(&self, module_id: ModuleId) -> Option<Arc<dyn Module>> {
+        None
     }
 }

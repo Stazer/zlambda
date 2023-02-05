@@ -2,12 +2,11 @@ mod connection;
 mod error;
 mod handle;
 mod id;
-mod input;
 mod log;
 mod member;
 mod message;
-mod output;
 mod task;
+mod module;
 mod r#type;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,10 +15,9 @@ pub use connection::*;
 pub use error::*;
 pub use handle::*;
 pub use id::*;
-pub use input::*;
 pub use log::*;
 pub use member::*;
 pub use message::*;
-pub use output::*;
 pub use r#type::*;
 pub use task::*;
+pub use module::*;

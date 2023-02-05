@@ -1,29 +1,29 @@
-use crate::module::ModuleId;
-use crate::server::ServerHandle;
+use crate::common::module::ModuleId;
+use crate::server::{ServerHandle, LogEntry};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ModuleStartupEventInput = ();
+pub type ServerModuleStartupEventInput = ();
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ModuleShutdownEventInput = ();
+pub type ServerModuleShutdownEventInput = ();
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ModuleLoadEventInput {
+pub struct ServerModuleLoadEventInput {
     module_id: ModuleId,
     server: ServerHandle,
 }
 
-impl From<ModuleLoadEventInput> for (ModuleId, ServerHandle) {
-    fn from(input: ModuleLoadEventInput) -> Self {
+impl From<ServerModuleLoadEventInput> for (ModuleId, ServerHandle) {
+    fn from(input: ServerModuleLoadEventInput) -> Self {
         (input.module_id, input.server)
     }
 }
 
-impl ModuleLoadEventInput {
+impl ServerModuleLoadEventInput {
     pub fn new(module_id: ModuleId, server: ServerHandle) -> Self {
         Self { module_id, server }
     }
@@ -43,17 +43,17 @@ impl ModuleLoadEventInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct ModuleUnloadEventInput {
+pub struct ServerModuleUnloadEventInput {
     server: ServerHandle,
 }
 
-impl From<ModuleUnloadEventInput> for (ServerHandle,) {
-    fn from(input: ModuleUnloadEventInput) -> Self {
+impl From<ServerModuleUnloadEventInput> for (ServerHandle,) {
+    fn from(input: ServerModuleUnloadEventInput) -> Self {
         (input.server,)
     }
 }
 
-impl ModuleUnloadEventInput {
+impl ServerModuleUnloadEventInput {
     pub fn new(server: ServerHandle) -> Self {
         Self { server }
     }
@@ -69,8 +69,40 @@ impl ModuleUnloadEventInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ModuleDispatchEventInput = ();
+pub type ServerModuleDispatchEventInput = ();
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ModuleCommitEventInput = ();
+#[derive(Debug)]
+pub struct ServerModuleCommitEventInput {
+    server: ServerHandle,
+    log_entry: LogEntry,
+}
+
+impl ServerModuleCommitEventInput {
+    pub fn new(
+        server: ServerHandle,
+        log_entry: LogEntry,
+    ) -> Self {
+        Self {
+            server,
+            log_entry,
+        }
+    }
+
+    pub fn server(&self) -> &ServerHandle {
+        &self.server
+    }
+
+    pub fn server_mut(&mut self) -> &mut ServerHandle {
+        &mut self.server
+    }
+
+    pub fn log_entry(&self) -> &LogEntry {
+        &self.log_entry
+    }
+
+    pub fn log_entry_mut(&mut self) -> &mut LogEntry {
+        &mut self.log_entry
+    }
+}

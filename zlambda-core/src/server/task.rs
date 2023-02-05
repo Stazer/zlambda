@@ -9,10 +9,9 @@ use crate::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };
-use crate::module::{Module, ModuleManager};
+use crate::common::module::{ModuleManager};
 use crate::server::connection::ServerConnectionTask;
-use crate::server::member::{
-    ServerMemberMessage, ServerMemberReplicationMessage, ServerMemberReplicationMessageInput,
+use crate::server::{ServerMemberMessage, ServerMemberReplicationMessage, ServerMemberReplicationMessageInput,
     ServerMemberTask,
 };
 use crate::server::{
@@ -24,7 +23,7 @@ use crate::server::{
     ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
-    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
+    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType, ServerModule,
 };
 use async_recursion::async_recursion;
 use std::collections::HashMap;
@@ -46,14 +45,14 @@ pub struct ServerTask {
     sender: MessageQueueSender<ServerMessage>,
     receiver: MessageQueueReceiver<ServerMessage>,
     commit_messages: HashMap<LogEntryId, Vec<ServerMessage>>,
-    module_manager: Arc<RwLock<ModuleManager>>,
+    module_manager: Arc<RwLock<ModuleManager<dyn ServerModule>>>,
 }
 
 impl ServerTask {
     pub async fn new<S, T>(
         listener_address: S,
         follower_data: Option<(T, Option<ServerId>)>,
-        modules: impl Iterator<Item = Box<dyn Module>>,
+        modules: impl Iterator<Item = Box<dyn ServerModule>>,
     ) -> Result<Self, NewServerError>
     where
         S: ToSocketAddrs + Debug,
@@ -61,15 +60,13 @@ impl ServerTask {
     {
         let tcp_listener = TcpListener::bind(listener_address).await?;
         let (queue_sender, queue_receiver) = message_queue();
-        let module_manager = Arc::new(RwLock::new(ModuleManager::new(ServerHandle::new(
-            queue_sender.clone(),
-        ))));
+        let module_manager = Arc::new(RwLock::new(ModuleManager::default()));
 
         {
             let mut module_manager_writer = module_manager.write().await;
 
             for module in modules {
-                module_manager_writer.load(module).await?;
+                module_manager_writer.load(Arc::from(module))?;
             }
         }
 
@@ -710,6 +707,8 @@ impl ServerTask {
                 {
                     self.on_server_message(message).await;
                 }
+
+                //self.module_manager.read().await.trigger_commit();
 
                 debug!("Committed log entry {}", committed_log_entry_id);
             }
