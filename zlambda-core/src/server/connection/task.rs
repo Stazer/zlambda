@@ -5,7 +5,7 @@ use crate::general::{
     GeneralRegistrationResponseMessageNotALeaderInput,
     GeneralRegistrationResponseMessageSuccessInput,
 };
-use crate::message::{
+use crate::common::message::{
     MessageError, MessageQueueSender, MessageSocketReceiver, MessageSocketSender,
 };
 use crate::server::member::{

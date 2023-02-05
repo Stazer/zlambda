@@ -1,4 +1,4 @@
-use crate::message::MessageQueueSender;
+use crate::common::message::MessageQueueSender;
 use crate::server::{ServerModuleGetMessageInput, ServerModuleLoadMessageInput, ServerModuleUnloadMessageInput, ServerMessage, ServerModule};
 use crate::common::module::{ModuleId};
 use std::sync::Arc;

@@ -1,4 +1,4 @@
-use crate::message::MessageError;
+use crate::common::message::MessageError;
 use bytes::BytesMut;
 use postcard::take_from_bytes;
 use serde::de::DeserializeOwned;

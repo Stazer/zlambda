@@ -2,7 +2,7 @@ use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
     GeneralLogEntriesAppendResponseMessage, GeneralMessage,
 };
-use crate::message::{
+use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };

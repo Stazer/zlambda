@@ -3,7 +3,7 @@ use crate::general::{
     GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
     GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
 };
-use crate::message::AsynchronousMessage;
+use crate::common::message::AsynchronousMessage;
 use serde::{Deserialize, Serialize};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

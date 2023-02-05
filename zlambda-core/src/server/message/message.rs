@@ -1,4 +1,4 @@
-use crate::message::{AsynchronousMessage, SynchronousMessage};
+use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
     ServerCommitRegistrationMessageInput, ServerLeaderGeneralMessageMessageInput,
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,

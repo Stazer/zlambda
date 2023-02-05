@@ -1,4 +1,4 @@
-use crate::message::{
+use crate::common::message::{
     synchronous_message_output_channel, AsynchronousMessage, DoReceive, DoSend, SynchronousMessage,
 };
 use std::fmt::Debug;

@@ -1,4 +1,4 @@
-use crate::message::{DoReceive, DoSend};
+use crate::common::message::{DoReceive, DoSend};
 use std::fmt::{self, Debug, Formatter};
 use tokio::sync::oneshot;
 

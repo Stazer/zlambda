@@ -1,4 +1,4 @@
-use crate::message::AsynchronousMessage;
+use crate::common::message::AsynchronousMessage;
 use crate::server::member::{
     ServerMemberRecoveryMessageInput, ServerMemberRegistrationMessageInput,
     ServerMemberReplicationMessageInput,

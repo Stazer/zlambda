@@ -1,4 +1,4 @@
-use crate::message::MessageError;
+use crate::common::message::MessageError;
 use crate::common::module::LoadModuleError;
 use crate::server::ServerId;
 use std::error;

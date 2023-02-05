@@ -1,4 +1,4 @@
-use crate::message::{AsynchronousMessage, MessageBufferReader, MessageError};
+use crate::common::message::{AsynchronousMessage, MessageBufferReader, MessageError};
 use postcard::to_allocvec;
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;

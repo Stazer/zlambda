@@ -1,5 +1,5 @@
 use crate::general::GeneralMessage;
-use crate::message::{MessageSocketReceiver, MessageSocketSender};
+use crate::common::message::{MessageSocketReceiver, MessageSocketSender};
 use crate::server::{FollowingLog, LeadingLog, ServerId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

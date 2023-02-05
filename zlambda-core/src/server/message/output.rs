@@ -1,4 +1,4 @@
-use crate::message::MessageQueueSender;
+use crate::common::message::MessageQueueSender;
 use crate::server::member::ServerMemberMessage;
 use crate::server::{ServerModule, LogEntryId, LogTerm, ServerId};
 use std::net::SocketAddr;
