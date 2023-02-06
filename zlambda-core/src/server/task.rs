@@ -32,6 +32,7 @@ use crate::server::{
     ServerNodeMessage, ServerNodeReplicationMessage, ServerNodeReplicationMessageInput,
     ServerNodeTask,
 };
+use crate::server::client::{ServerClientTask, ServerClientMessage};
 use async_recursion::async_recursion;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -51,6 +52,7 @@ pub struct ServerTask {
     receiver: MessageQueueReceiver<ServerMessage>,
     commit_messages: HashMap<LogEntryId, Vec<ServerMessage>>,
     module_manager: ModuleManager<dyn ServerModule>,
+    clients: Vec<Option<MessageQueueSender<ServerClientMessage>>>,
 }
 
 impl ServerTask {
@@ -81,6 +83,7 @@ impl ServerTask {
                 receiver: queue_receiver,
                 commit_messages: HashMap::default(),
                 module_manager,
+                clients: Vec::default(),
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -166,6 +169,7 @@ impl ServerTask {
                     receiver: queue_receiver,
                     commit_messages: HashMap::default(),
                     module_manager,
+                    clients: Vec::default(),
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -247,6 +251,7 @@ impl ServerTask {
                     receiver: queue_receiver,
                     commit_messages: HashMap::default(),
                     module_manager,
+                    clients: Vec::default(),
                 })
             }
         }
