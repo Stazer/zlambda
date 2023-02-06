@@ -14,6 +14,7 @@ pub struct ServerHandle {
     module_manager: ServerModuleManagerHandle,
     log_manager: ServerLogManagerHandle,
     node_manager: ServerNodeManagerHandle,
+    client_manager: ServerClientManagerHandle,
 }
 
 impl ServerHandle {
@@ -22,7 +23,8 @@ impl ServerHandle {
             sender: sender.clone(),
             module_manager: ServerModuleManagerHandle::new(sender.clone()),
             log_manager: ServerLogManagerHandle::new(sender.clone()),
-            node_manager: ServerNodeManagerHandle::new(sender),
+            node_manager: ServerNodeManagerHandle::new(sender.clone()),
+            client_manager: ServerClientManagerHandle::new(sender),
         }
     }
 
@@ -48,6 +50,14 @@ impl ServerHandle {
 
     pub fn node_manager_mut(&mut self) -> &mut ServerNodeManagerHandle {
         &mut self.node_manager
+    }
+
+    pub fn client_manager(&self) -> &ServerClientManagerHandle {
+        &self.client_manager
+    }
+
+    pub fn client_manager_mut(&mut self) -> &mut ServerClientManagerHandle {
+        &mut self.client_manager
     }
 
     pub async fn ping(&self) {
@@ -122,6 +132,19 @@ pub struct ServerNodeManagerHandle {
 }
 
 impl ServerNodeManagerHandle {
+    pub(crate) fn new(sender: MessageQueueSender<ServerMessage>) -> Self {
+        Self { sender }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Clone)]
+pub struct ServerClientManagerHandle {
+    sender: MessageQueueSender<ServerMessage>,
+}
+
+impl ServerClientManagerHandle {
     pub(crate) fn new(sender: MessageQueueSender<ServerMessage>) -> Self {
         Self { sender }
     }

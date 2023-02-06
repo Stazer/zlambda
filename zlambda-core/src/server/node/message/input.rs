@@ -1,18 +1,20 @@
 use crate::common::message::{MessageSocketReceiver, MessageSocketSender};
+use crate::common::module::ModuleId;
+use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::{LogEntry, LogEntryId, LogTerm};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerMemberReplicationMessageInput {
+pub struct ServerNodeReplicationMessageInput {
     log_entries: Vec<LogEntry>,
     last_committed_log_entry_id: Option<LogEntryId>,
     log_current_term: LogTerm,
 }
 
-impl From<ServerMemberReplicationMessageInput> for (Vec<LogEntry>, Option<LogEntryId>, LogTerm) {
-    fn from(input: ServerMemberReplicationMessageInput) -> Self {
+impl From<ServerNodeReplicationMessageInput> for (Vec<LogEntry>, Option<LogEntryId>, LogTerm) {
+    fn from(input: ServerNodeReplicationMessageInput) -> Self {
         (
             input.log_entries,
             input.last_committed_log_entry_id,
@@ -21,7 +23,7 @@ impl From<ServerMemberReplicationMessageInput> for (Vec<LogEntry>, Option<LogEnt
     }
 }
 
-impl ServerMemberReplicationMessageInput {
+impl ServerNodeReplicationMessageInput {
     pub fn new(
         log_entries: Vec<LogEntry>,
         last_committed_log_entry_id: Option<LogEntryId>,
@@ -50,14 +52,14 @@ impl ServerMemberReplicationMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerMemberRegistrationMessageInput {
+pub struct ServerNodeRegistrationMessageInput {
     general_socket_sender: MessageSocketSender<GeneralMessage>,
     general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
     last_committed_log_entry_id: Option<LogEntryId>,
     log_current_term: LogTerm,
 }
 
-impl From<ServerMemberRegistrationMessageInput>
+impl From<ServerNodeRegistrationMessageInput>
     for (
         MessageSocketSender<GeneralMessage>,
         MessageSocketReceiver<GeneralMessage>,
@@ -65,7 +67,7 @@ impl From<ServerMemberRegistrationMessageInput>
         LogTerm,
     )
 {
-    fn from(input: ServerMemberRegistrationMessageInput) -> Self {
+    fn from(input: ServerNodeRegistrationMessageInput) -> Self {
         (
             input.general_socket_sender,
             input.general_socket_receiver,
@@ -75,7 +77,7 @@ impl From<ServerMemberRegistrationMessageInput>
     }
 }
 
-impl ServerMemberRegistrationMessageInput {
+impl ServerNodeRegistrationMessageInput {
     pub fn new(
         general_socket_sender: MessageSocketSender<GeneralMessage>,
         general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
@@ -110,14 +112,14 @@ impl ServerMemberRegistrationMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerMemberRecoveryMessageInput {
+pub struct ServerNodeRecoveryMessageInput {
     general_socket_sender: MessageSocketSender<GeneralMessage>,
     general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
     last_committed_log_entry_id: Option<LogEntryId>,
     log_current_term: LogTerm,
 }
 
-impl From<ServerMemberRecoveryMessageInput>
+impl From<ServerNodeRecoveryMessageInput>
     for (
         MessageSocketSender<GeneralMessage>,
         MessageSocketReceiver<GeneralMessage>,
@@ -125,7 +127,7 @@ impl From<ServerMemberRecoveryMessageInput>
         LogTerm,
     )
 {
-    fn from(input: ServerMemberRecoveryMessageInput) -> Self {
+    fn from(input: ServerNodeRecoveryMessageInput) -> Self {
         (
             input.general_socket_sender,
             input.general_socket_receiver,
@@ -135,7 +137,7 @@ impl From<ServerMemberRecoveryMessageInput>
     }
 }
 
-impl ServerMemberRecoveryMessageInput {
+impl ServerNodeRecoveryMessageInput {
     pub fn new(
         general_socket_sender: MessageSocketSender<GeneralMessage>,
         general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
@@ -164,5 +166,39 @@ impl ServerMemberRecoveryMessageInput {
 
     pub fn log_current_term(&self) -> LogTerm {
         self.log_current_term
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerNodeNotifyMessageInput {
+    module_id: ModuleId,
+    body: Bytes,
+}
+
+impl From<ServerNodeNotifyMessageInput> for (ModuleId, Bytes) {
+    fn from(input: ServerNodeNotifyMessageInput) -> Self {
+        (input.module_id, input.body)
+    }
+}
+
+impl ServerNodeNotifyMessageInput {
+    pub fn new(
+        module_id: ModuleId,
+        body: Bytes,
+    ) -> Self {
+        Self {
+            module_id,
+            body,
+        }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
     }
 }

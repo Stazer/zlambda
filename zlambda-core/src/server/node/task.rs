@@ -4,11 +4,11 @@ use crate::common::message::{
 };
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
-    GeneralLogEntriesAppendResponseMessage, GeneralMessage, GeneralNotifyMessage,
+    GeneralLogEntriesAppendResponseMessage, GeneralMessage, GeneralNotifyMessage, GeneralNotifyMessageInput,
 };
-use crate::server::member::{
-    ServerMemberMessage, ServerMemberRecoveryMessage, ServerMemberRegistrationMessage,
-    ServerMemberReplicationMessage,
+use crate::server::node::{
+    ServerNodeMessage, ServerNodeRecoveryMessage, ServerNodeRegistrationMessage,
+    ServerNodeReplicationMessage, ServerNodeNotifyMessage,
 };
 use crate::server::{
     ServerId, ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
@@ -19,18 +19,18 @@ use tracing::{error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct ServerMemberTask {
+pub struct ServerNodeTask {
     server_id: ServerId,
     server_queue_sender: MessageQueueSender<ServerMessage>,
     general_socket: Option<(
         MessageSocketSender<GeneralMessage>,
         MessageSocketReceiver<GeneralMessage>,
     )>,
-    sender: MessageQueueSender<ServerMemberMessage>,
-    receiver: MessageQueueReceiver<ServerMemberMessage>,
+    sender: MessageQueueSender<ServerNodeMessage>,
+    receiver: MessageQueueReceiver<ServerNodeMessage>,
 }
 
-impl ServerMemberTask {
+impl ServerNodeTask {
     pub fn new(
         server_id: ServerId,
         server_queue_sender: MessageQueueSender<ServerMessage>,
@@ -50,7 +50,7 @@ impl ServerMemberTask {
         }
     }
 
-    pub fn sender(&self) -> &MessageQueueSender<ServerMemberMessage> {
+    pub fn sender(&self) -> &MessageQueueSender<ServerNodeMessage> {
         &self.sender
     }
 
@@ -85,37 +85,40 @@ impl ServerMemberTask {
                         }
                     }
                     message = self.receiver.do_receive() => {
-                        self.on_server_member_message(message).await
+                        self.on_server_node_message(message).await
                     }
                 )
             }
             None => {
                 select!(
                     message = self.receiver.do_receive() => {
-                        self.on_server_member_message(message).await
+                        self.on_server_node_message(message).await
                     }
                 )
             }
         }
     }
 
-    async fn on_server_member_message(&mut self, message: ServerMemberMessage) {
+    async fn on_server_node_message(&mut self, message: ServerNodeMessage) {
         match message {
-            ServerMemberMessage::Replication(message) => {
-                self.on_server_member_replication_message(message).await
+            ServerNodeMessage::Replication(message) => {
+                self.on_server_node_replication_message(message).await
             }
-            ServerMemberMessage::Registration(message) => {
-                self.on_server_member_registration_message(message).await
+            ServerNodeMessage::Registration(message) => {
+                self.on_server_node_registration_message(message).await
             }
-            ServerMemberMessage::Recovery(message) => {
-                self.on_server_member_recovery_message(message).await
+            ServerNodeMessage::Recovery(message) => {
+                self.on_server_node_recovery_message(message).await
+            }
+            ServerNodeMessage::Notify(message) => {
+                self.on_server_node_notify_message(message).await
             }
         }
     }
 
-    async fn on_server_member_replication_message(
+    async fn on_server_node_replication_message(
         &mut self,
-        message: ServerMemberReplicationMessage,
+        message: ServerNodeReplicationMessage,
     ) {
         match &mut self.general_socket {
             Some(ref mut general_socket) => {
@@ -142,9 +145,9 @@ impl ServerMemberTask {
         }
     }
 
-    async fn on_server_member_registration_message(
+    async fn on_server_node_registration_message(
         &mut self,
-        message: ServerMemberRegistrationMessage,
+        message: ServerNodeRegistrationMessage,
     ) {
         if self.general_socket.is_some() {
             panic!("Expect socket to be none");
@@ -172,7 +175,7 @@ impl ServerMemberTask {
         self.general_socket = Some((sender, receiver));
     }
 
-    async fn on_server_member_recovery_message(&mut self, message: ServerMemberRecoveryMessage) {
+    async fn on_server_node_recovery_message(&mut self, message: ServerNodeRecoveryMessage) {
         if self.general_socket.is_some() {
             panic!("Expect socket to be none");
         }
@@ -197,6 +200,28 @@ impl ServerMemberTask {
         self.general_socket = Some((sender, receiver));
 
         info!("Server {} recovered", self.server_id);
+    }
+
+    async fn on_server_node_notify_message(&mut self, message: ServerNodeNotifyMessage) {
+        let socket = match &mut self.general_socket {
+            None => return,
+            Some(socket) => socket,
+        };
+
+        let (input,) = message.into();
+        let (module_id, body) = input.into();
+
+        if let Err(error) = socket.0.send(
+            GeneralNotifyMessage::new(
+                GeneralNotifyMessageInput::new(
+                    module_id,
+                    body,
+                )
+            )
+        ).await {
+            error!("{}", error);
+            return;
+        }
     }
 
     async fn on_general_message(&mut self, message: GeneralMessage) {

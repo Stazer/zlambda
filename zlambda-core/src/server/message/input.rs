@@ -89,22 +89,22 @@ impl ServerRegistrationMessageInput {
 
 #[derive(Clone, Debug)]
 pub struct ServerCommitRegistrationMessageInput {
-    member_server_id: ServerId,
+    node_server_id: ServerId,
 }
 
 impl From<ServerCommitRegistrationMessageInput> for (ServerId,) {
     fn from(input: ServerCommitRegistrationMessageInput) -> Self {
-        (input.member_server_id,)
+        (input.node_server_id,)
     }
 }
 
 impl ServerCommitRegistrationMessageInput {
-    pub fn new(member_server_id: ServerId) -> Self {
-        Self { member_server_id }
+    pub fn new(node_server_id: ServerId) -> Self {
+        Self { node_server_id }
     }
 
-    pub fn member_server_id(&self) -> ServerId {
-        self.member_server_id
+    pub fn node_server_id(&self) -> ServerId {
+        self.node_server_id
     }
 }
 

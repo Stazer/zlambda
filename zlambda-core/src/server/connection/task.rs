@@ -8,8 +8,8 @@ use crate::general::{
     GeneralRegistrationResponseMessageNotALeaderInput,
     GeneralRegistrationResponseMessageSuccessInput,
 };
-use crate::server::member::{
-    ServerMemberRecoveryMessageInput, ServerMemberRegistrationMessageInput,
+use crate::server::node::{
+    ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput,
 };
 use crate::server::{
     ServerMessage, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
@@ -104,7 +104,7 @@ impl ServerConnectionTask {
                     server_socket_addresses,
                     last_committed_log_entry_id,
                     current_log_term,
-                    member_queue_sender,
+                    node_queue_sender,
                 ) = output.into();
 
                 if let Err(error) = self
@@ -121,8 +121,8 @@ impl ServerConnectionTask {
                 {
                     error!("{}", error);
                 } else {
-                    member_queue_sender
-                        .do_send_asynchronous(ServerMemberRegistrationMessageInput::new(
+                    node_queue_sender
+                        .do_send_asynchronous(ServerNodeRegistrationMessageInput::new(
                             self.general_socket_sender,
                             self.general_socket_receiver,
                             last_committed_log_entry_id,
@@ -180,7 +180,7 @@ impl ServerConnectionTask {
                     server_socket_address,
                     last_committed_log_entry_id,
                     current_log_term,
-                    member_queue_sender,
+                    node_queue_sender,
                 ) = output.into();
 
                 if let Err(error) = self
@@ -196,8 +196,8 @@ impl ServerConnectionTask {
                 {
                     error!("{}", error);
                 } else {
-                    member_queue_sender
-                        .do_send_asynchronous(ServerMemberRecoveryMessageInput::new(
+                    node_queue_sender
+                        .do_send_asynchronous(ServerNodeRecoveryMessageInput::new(
                             self.general_socket_sender,
                             self.general_socket_receiver,
                             last_committed_log_entry_id,

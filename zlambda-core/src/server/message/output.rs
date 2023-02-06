@@ -1,6 +1,6 @@
 use crate::common::message::MessageQueueSender;
 use crate::common::module::{LoadModuleError, ModuleId, UnloadModuleError};
-use crate::server::member::ServerMemberMessage;
+use crate::server::node::ServerNodeMessage;
 use crate::server::{LogEntryId, LogTerm, ServerId, ServerModule};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -39,7 +39,7 @@ pub struct ServerRegistrationMessageSuccessOutput {
     server_socket_addresses: Vec<Option<SocketAddr>>,
     last_committed_log_entry_id: Option<LogEntryId>,
     current_log_term: LogTerm,
-    member_sender: MessageQueueSender<ServerMemberMessage>,
+    node_sender: MessageQueueSender<ServerNodeMessage>,
 }
 
 impl From<ServerRegistrationMessageSuccessOutput>
@@ -49,7 +49,7 @@ impl From<ServerRegistrationMessageSuccessOutput>
         Vec<Option<SocketAddr>>,
         Option<LogEntryId>,
         LogTerm,
-        MessageQueueSender<ServerMemberMessage>,
+        MessageQueueSender<ServerNodeMessage>,
     )
 {
     fn from(output: ServerRegistrationMessageSuccessOutput) -> Self {
@@ -59,7 +59,7 @@ impl From<ServerRegistrationMessageSuccessOutput>
             output.server_socket_addresses,
             output.last_committed_log_entry_id,
             output.current_log_term,
-            output.member_sender,
+            output.node_sender,
         )
     }
 }
@@ -71,7 +71,7 @@ impl ServerRegistrationMessageSuccessOutput {
         server_socket_addresses: Vec<Option<SocketAddr>>,
         last_committed_log_entry_id: Option<LogEntryId>,
         current_log_term: LogTerm,
-        member_sender: MessageQueueSender<ServerMemberMessage>,
+        node_sender: MessageQueueSender<ServerNodeMessage>,
     ) -> Self {
         Self {
             server_id,
@@ -79,7 +79,7 @@ impl ServerRegistrationMessageSuccessOutput {
             server_socket_addresses,
             last_committed_log_entry_id,
             current_log_term,
-            member_sender,
+            node_sender,
         }
     }
 
@@ -103,8 +103,8 @@ impl ServerRegistrationMessageSuccessOutput {
         self.current_log_term
     }
 
-    pub fn member_sender(&self) -> &MessageQueueSender<ServerMemberMessage> {
-        &self.member_sender
+    pub fn node_sender(&self) -> &MessageQueueSender<ServerNodeMessage> {
+        &self.node_sender
     }
 }
 
@@ -161,7 +161,7 @@ pub struct ServerRecoveryMessageSuccessOutput {
     server_socket_addresses: Vec<Option<SocketAddr>>,
     last_committed_log_entry_id: Option<LogEntryId>,
     current_log_term: LogTerm,
-    member_queue_sender: MessageQueueSender<ServerMemberMessage>,
+    node_queue_sender: MessageQueueSender<ServerNodeMessage>,
 }
 
 impl From<ServerRecoveryMessageSuccessOutput>
@@ -170,7 +170,7 @@ impl From<ServerRecoveryMessageSuccessOutput>
         Vec<Option<SocketAddr>>,
         Option<LogEntryId>,
         LogTerm,
-        MessageQueueSender<ServerMemberMessage>,
+        MessageQueueSender<ServerNodeMessage>,
     )
 {
     fn from(output: ServerRecoveryMessageSuccessOutput) -> Self {
@@ -179,7 +179,7 @@ impl From<ServerRecoveryMessageSuccessOutput>
             output.server_socket_addresses,
             output.last_committed_log_entry_id,
             output.current_log_term,
-            output.member_queue_sender,
+            output.node_queue_sender,
         )
     }
 }
@@ -190,14 +190,14 @@ impl ServerRecoveryMessageSuccessOutput {
         server_socket_addresses: Vec<Option<SocketAddr>>,
         last_committed_log_entry_id: Option<LogEntryId>,
         current_log_term: LogTerm,
-        member_queue_sender: MessageQueueSender<ServerMemberMessage>,
+        node_queue_sender: MessageQueueSender<ServerNodeMessage>,
     ) -> Self {
         Self {
             leader_server_id,
             server_socket_addresses,
             last_committed_log_entry_id,
             current_log_term,
-            member_queue_sender,
+            node_queue_sender,
         }
     }
 
@@ -217,8 +217,8 @@ impl ServerRecoveryMessageSuccessOutput {
         self.current_log_term
     }
 
-    pub fn member_queue_sender(&self) -> &MessageQueueSender<ServerMemberMessage> {
-        &self.member_queue_sender
+    pub fn node_queue_sender(&self) -> &MessageQueueSender<ServerNodeMessage> {
+        &self.node_queue_sender
     }
 }
 

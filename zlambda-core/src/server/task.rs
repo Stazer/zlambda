@@ -29,8 +29,8 @@ use crate::server::{
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
 };
 use crate::server::{
-    ServerMemberMessage, ServerMemberReplicationMessage, ServerMemberReplicationMessageInput,
-    ServerMemberTask,
+    ServerNodeMessage, ServerNodeReplicationMessage, ServerNodeReplicationMessageInput,
+    ServerNodeTask,
 };
 use async_recursion::async_recursion;
 use std::collections::HashMap;
@@ -44,7 +44,7 @@ use tracing::{debug, error, info};
 
 pub struct ServerTask {
     server_id: ServerId,
-    server_members: Vec<Option<(SocketAddr, Option<MessageQueueSender<ServerMemberMessage>>)>>,
+    server_nodes: Vec<Option<(SocketAddr, Option<MessageQueueSender<ServerNodeMessage>>)>>,
     r#type: ServerType,
     tcp_listener: TcpListener,
     sender: MessageQueueSender<ServerMessage>,
@@ -73,8 +73,8 @@ impl ServerTask {
 
         match follower_data {
             None => Ok(Self {
-                server_id: 0,
-                server_members: vec![Some((tcp_listener.local_addr()?, None))],
+                server_id: ServerId::default(),
+                server_nodes: vec![Some((tcp_listener.local_addr()?, None))],
                 r#type: ServerLeaderType::new(LeadingLog::default()).into(),
                 tcp_listener,
                 sender: queue_sender,
@@ -160,7 +160,7 @@ impl ServerTask {
                         socket_receiver,
                     )
                     .into(),
-                    server_members: Vec::default(),
+                    server_nodes: Vec::default(),
                     tcp_listener,
                     sender: queue_sender,
                     receiver: queue_receiver,
@@ -241,7 +241,7 @@ impl ServerTask {
                         socket_receiver,
                     )
                     .into(),
-                    server_members: Vec::default(),
+                    server_nodes: Vec::default(),
                     tcp_listener,
                     sender: queue_sender,
                     receiver: queue_receiver,
@@ -421,8 +421,8 @@ impl ServerTask {
 
         match &self.r#type {
             ServerType::Leader(_) => {
-                let member_server_id = {
-                    let mut iterator = self.server_members.iter();
+                let node_server_id = {
+                    let mut iterator = self.server_nodes.iter();
                     let mut index = 0;
 
                     loop {
@@ -434,26 +434,27 @@ impl ServerTask {
                     }
                 };
 
-                let task = ServerMemberTask::new(member_server_id, self.sender.clone(), None);
+                let task =
+                    ServerNodeTask::new(node_server_id.into(), self.sender.clone(), None);
                 let sender = task.sender().clone();
                 task.spawn();
 
                 let log_entry_ids = self
                     .replicate(vec![AddServerLogEntryData::new(
-                        member_server_id,
+                        node_server_id.into(),
                         input.server_socket_address(),
                     )
                     .into()])
                     .await;
 
-                if member_server_id >= self.server_members.len() {
-                    self.server_members
-                        .resize_with(member_server_id + 1, || None);
+                if node_server_id >= self.server_nodes.len() {
+                    self.server_nodes
+                        .resize_with(node_server_id + 1, || None);
                 }
 
                 *self
-                    .server_members
-                    .get_mut(member_server_id)
+                    .server_nodes
+                    .get_mut(node_server_id)
                     .expect("valid entry") = Some((input.server_socket_address(), Some(sender)));
 
                 self.commit_messages
@@ -461,7 +462,7 @@ impl ServerTask {
                     .or_insert(Vec::default())
                     .push(
                         ServerCommitRegistrationMessage::new(
-                            ServerCommitRegistrationMessageInput::new(member_server_id),
+                            ServerCommitRegistrationMessageInput::new(node_server_id.into()),
                             output_sender,
                         )
                         .into(),
@@ -470,13 +471,15 @@ impl ServerTask {
                 self.acknowledge(&log_entry_ids, self.server_id).await;
             }
             ServerType::Follower(follower) => {
-                let leader_server_socket_address =
-                    match self.server_members.get(follower.leader_server_id()) {
-                        Some(Some(member)) => member.0,
-                        _ => {
-                            panic!("Expected leader server socket address");
-                        }
-                    };
+                let leader_server_socket_address = match self
+                    .server_nodes
+                    .get(usize::from(follower.leader_server_id()))
+                {
+                    Some(Some(node)) => node.0,
+                    _ => {
+                        panic!("Expected leader server socket address");
+                    }
+                };
 
                 output_sender
                     .do_send(ServerRegistrationMessageNotALeaderOutput::new(
@@ -498,30 +501,33 @@ impl ServerTask {
             ServerType::Follower(_) => panic!("Server should be leader"),
         };
 
-        let member = match self.server_members.get(input.member_server_id()) {
-            Some(Some(member)) => member,
-            None | Some(None) => panic!("Server member {} should exist", input.member_server_id()),
+        let node = match self
+            .server_nodes
+            .get(usize::from(input.node_server_id()))
+        {
+            Some(Some(node)) => node,
+            None | Some(None) => panic!("Server node {} should exist", input.node_server_id()),
         };
 
-        let member_sender = match &member.1 {
-            Some(member_sender) => member_sender.clone(),
+        let node_sender = match &node.1 {
+            Some(node_sender) => node_sender.clone(),
             None => panic!(
-                "Server member {} should have assigned sender",
-                input.member_server_id()
+                "Server node {} should have assigned sender",
+                input.node_server_id()
             ),
         };
 
         output_sender
             .do_send(ServerRegistrationMessageSuccessOutput::new(
-                input.member_server_id(),
+                input.node_server_id(),
                 self.server_id,
-                self.server_members
+                self.server_nodes
                     .iter()
-                    .map(|member| member.as_ref().map(|x| x.0))
+                    .map(|node| node.as_ref().map(|x| x.0))
                     .collect(),
                 leader.log().last_committed_log_entry_id(),
                 leader.log().current_term(),
-                member_sender,
+                node_sender,
             ))
             .await;
     }
@@ -531,23 +537,23 @@ impl ServerTask {
 
         match &self.r#type {
             ServerType::Leader(leader) => {
-                match self.server_members.get(input.server_id()) {
+                match self.server_nodes.get(usize::from(input.server_id())) {
                     None | Some(None) => {
                         sender.do_send(ServerRecoveryMessageOutput::Unknown).await;
                     }
-                    Some(Some(member)) => match &member.1 {
+                    Some(Some(node)) => match &node.1 {
                         None => sender.do_send(ServerRecoveryMessageOutput::Unknown).await,
-                        Some(member_sender) => {
+                        Some(node_sender) => {
                             sender
                                 .do_send(ServerRecoveryMessageSuccessOutput::new(
                                     self.server_id,
-                                    self.server_members
+                                    self.server_nodes
                                         .iter()
-                                        .map(|member| member.as_ref().map(|x| x.0))
+                                        .map(|node| node.as_ref().map(|x| x.0))
                                         .collect(),
                                     leader.log().last_committed_log_entry_id(),
                                     leader.log().current_term(),
-                                    member_sender.clone(),
+                                    node_sender.clone(),
                                 ))
                                 .await;
                         }
@@ -555,13 +561,15 @@ impl ServerTask {
                 };
             }
             ServerType::Follower(follower) => {
-                let leader_server_socket_address =
-                    match self.server_members.get(follower.leader_server_id()) {
-                        Some(Some(member)) => member.0,
-                        _ => {
-                            panic!("Expected leader server socket address");
-                        }
-                    };
+                let leader_server_socket_address = match self
+                    .server_nodes
+                    .get(usize::from(follower.leader_server_id()))
+                {
+                    Some(Some(node)) => node.0,
+                    _ => {
+                        panic!("Expected leader server socket address");
+                    }
+                };
 
                 sender
                     .do_send(ServerRecoveryMessageNotALeaderOutput::new(
@@ -621,21 +629,21 @@ impl ServerTask {
             .cloned()
             .collect::<Vec<_>>();
 
-        let member_queue_sender = match self
-            .server_members
-            .get(input.server_id())
-            .map(|entry| entry.as_ref().map(|member| &member.1))
+        let node_queue_sender = match self
+            .server_nodes
+            .get(usize::from(input.server_id()))
+            .map(|entry| entry.as_ref().map(|node| &node.1))
             .flatten()
         {
-            Some(Some(member_queue_sender)) => member_queue_sender,
+            Some(Some(node_queue_sender)) => node_queue_sender,
             None | Some(None) => {
-                panic!("Member does not exist");
+                panic!("Node does not exist");
             }
         };
 
-        member_queue_sender
-            .do_send(ServerMemberReplicationMessage::new(
-                ServerMemberReplicationMessageInput::new(
+        node_queue_sender
+            .do_send(ServerNodeReplicationMessage::new(
+                ServerNodeReplicationMessageInput::new(
                     log_entries,
                     leader.log().last_committed_log_entry_id(),
                     leader.log().current_term(),
@@ -856,10 +864,11 @@ impl ServerTask {
             ServerType::Leader(ref mut leader) => {
                 let log_entry_ids = leader.log_mut().append(
                     log_entries_data,
-                    self.server_members
+                    self.server_nodes
                         .iter()
                         .enumerate()
-                        .flat_map(|member| member.1.as_ref().map(|_| member.0))
+                        .flat_map(|node| node.1.as_ref().map(|_| node.0))
+                        .map(ServerId::from)
                         .collect(),
                 );
 
@@ -869,11 +878,11 @@ impl ServerTask {
                     .cloned()
                     .collect::<Vec<_>>();
 
-                for server_member in &self.server_members {
-                    if let Some(Some(sender)) = server_member.as_ref().map(|member| &member.1) {
+                for server_node in &self.server_nodes {
+                    if let Some(Some(sender)) = server_node.as_ref().map(|node| &node.1) {
                         sender
-                            .do_send(ServerMemberReplicationMessage::new(
-                                ServerMemberReplicationMessageInput::new(
+                            .do_send(ServerNodeReplicationMessage::new(
+                                ServerNodeReplicationMessageInput::new(
                                     log_entries.clone(),
                                     leader.log().last_committed_log_entry_id(),
                                     leader.log().current_term(),
@@ -886,16 +895,16 @@ impl ServerTask {
                 /*
                    causes compiler bug:
                 */
-                /*for member_sender in self
-                    .server_members
+                /*for node_sender in self
+                    .server_nodes
                     .iter()
                     .flatten()
-                    .map(|member| &member.1)
+                    .map(|node| &node.1)
                     .flatten()
                 {
-                    member_sender
-                        .do_send(ServerMemberReplicationMessage::new(
-                            ServerMemberReplicationMessageInput::new(vec![]),
+                    node_sender
+                        .do_send(ServerNodeReplicationMessage::new(
+                            ServerNodeReplicationMessageInput::new(vec![]),
                         ))
                         .await;
                 }*/
@@ -987,11 +996,11 @@ impl ServerTask {
                 }
             }
 
-            for server_member in &mut self.server_members {
-                if let Some(Some(sender)) = server_member.as_ref().map(|member| &member.1) {
+            for server_node in &mut self.server_nodes {
+                if let Some(Some(sender)) = server_node.as_ref().map(|node| &node.1) {
                     sender
-                        .do_send(ServerMemberReplicationMessage::new(
-                            ServerMemberReplicationMessageInput::new(
+                        .do_send(ServerNodeReplicationMessage::new(
+                            ServerNodeReplicationMessageInput::new(
                                 Vec::default(),
                                 last_committed_log_entry_id,
                                 current_term,
