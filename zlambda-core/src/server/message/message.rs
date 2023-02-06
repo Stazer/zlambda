@@ -5,8 +5,9 @@ use crate::server::{
     ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
     ServerModuleGetMessageInput, ServerModuleGetMessageOutput, ServerModuleLoadMessageInput,
     ServerModuleLoadMessageOutput, ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
-    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
-    ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
+    ServerNotifyMessageInput, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
+    ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
+    ServerSocketAcceptMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,6 +68,10 @@ pub type ServerModuleUnloadMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerNotifyMessage = AsynchronousMessage<ServerNotifyMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
@@ -81,6 +86,7 @@ pub enum ServerMessage {
     ModuleGet(ServerModuleGetMessage),
     ModuleLoad(ServerModuleLoadMessage),
     ModuleUnload(ServerModuleUnloadMessage),
+    Notify(ServerNotifyMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -140,5 +146,11 @@ impl From<ServerModuleLoadMessage> for ServerMessage {
 impl From<ServerModuleUnloadMessage> for ServerMessage {
     fn from(message: ServerModuleUnloadMessage) -> Self {
         Self::ModuleUnload(message)
+    }
+}
+
+impl From<ServerNotifyMessage> for ServerMessage {
+    fn from(message: ServerNotifyMessage) -> Self {
+        Self::Notify(message)
     }
 }

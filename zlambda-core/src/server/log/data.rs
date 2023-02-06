@@ -1,5 +1,5 @@
+use crate::common::utility::Bytes;
 use crate::server::ServerId;
-use crate::utility::Bytes;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 

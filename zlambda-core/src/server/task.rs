@@ -3,12 +3,13 @@ use crate::common::message::{
     MessageSocketSender,
 };
 use crate::common::module::ModuleManager;
+use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendResponseMessage,
-    GeneralLogEntriesAppendResponseMessageInput, GeneralMessage, GeneralRecoveryRequestMessage,
-    GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
-    GeneralRegistrationRequestMessage, GeneralRegistrationRequestMessageInput,
-    GeneralRegistrationResponseMessageInput,
+    GeneralLogEntriesAppendResponseMessageInput, GeneralMessage, GeneralNotifyMessage,
+    GeneralRecoveryRequestMessage, GeneralRecoveryRequestMessageInput,
+    GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessage,
+    GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
 };
 use crate::server::connection::ServerConnectionTask;
 use crate::server::{
@@ -18,8 +19,10 @@ use crate::server::{
     ServerLeaderType, ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
     ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
-    ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleShutdownEventInput,
-    ServerModuleStartupEventInput, ServerModuleUnloadMessage, ServerRecoveryMessage,
+    ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
+    ServerModuleNotifyEventInput, ServerModuleNotifyEventInputServerSource,
+    ServerModuleShutdownEventInput, ServerModuleStartupEventInput, ServerModuleUnloadMessage,
+    ServerModuleUnloadMessageOutput, ServerNotifyMessage, ServerRecoveryMessage,
     ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
@@ -34,7 +37,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::{select, spawn};
 use tracing::{debug, error, info};
 
@@ -373,6 +375,7 @@ impl ServerTask {
             ServerMessage::ModuleUnload(message) => {
                 self.on_server_module_unload_message(message).await
             }
+            ServerMessage::Notify(message) => self.on_server_notify_message(message).await,
         }
     }
 
@@ -643,6 +646,7 @@ impl ServerTask {
 
     async fn on_server_module_get_message(&mut self, message: ServerModuleGetMessage) {
         let (input, sender) = message.into();
+
         sender
             .do_send(ServerModuleGetMessageOutput::new(
                 self.module_manager.get(input.module_id()).cloned(),
@@ -651,9 +655,47 @@ impl ServerTask {
     }
 
     async fn on_server_module_load_message(&mut self, message: ServerModuleLoadMessage) {
+        let (input, sender) = message.into();
+        let (module,) = input.into();
+
+        sender
+            .do_send(ServerModuleLoadMessageOutput::new(
+                self.module_manager.load(module),
+            ))
+            .await;
     }
 
     async fn on_server_module_unload_message(&mut self, message: ServerModuleUnloadMessage) {
+        let (input, sender) = message.into();
+
+        sender
+            .do_send(ServerModuleUnloadMessageOutput::new(
+                self.module_manager.unload(input.module_id()),
+            ))
+            .await;
+    }
+
+    async fn on_server_notify_message(&mut self, message: ServerNotifyMessage) {
+        let (input,) = message.into();
+        let (module_id, source, body) = input.into();
+
+        let module = match self.module_manager.get(module_id) {
+            None => return,
+            Some(module) => module,
+        };
+
+        let sender = self.sender.clone();
+        let module = module.clone();
+
+        spawn(async move {
+            module
+                .on_notify(ServerModuleNotifyEventInput::new(
+                    ServerHandle::new(sender),
+                    source.into(),
+                    body,
+                ))
+                .await;
+        });
     }
 
     async fn on_general_message(&mut self, message: GeneralMessage) {
@@ -662,6 +704,7 @@ impl ServerTask {
                 self.on_general_log_entries_append_request_message(message)
                     .await
             }
+            GeneralMessage::Notify(message) => self.on_general_notify_message(message).await,
             message => {
                 error!(
                     "{}",
@@ -777,6 +820,35 @@ impl ServerTask {
             error!("{}", error);
             unimplemented!("Switch to candidate");
         }
+    }
+
+    async fn on_general_notify_message(&mut self, message: GeneralNotifyMessage) {
+        let follower = match &self.r#type {
+            ServerType::Leader(_) => return,
+            ServerType::Follower(follower) => follower,
+        };
+
+        let (input,) = message.into();
+        let (module_id, body) = input.into();
+
+        let module = match self.module_manager.get(module_id) {
+            None => return,
+            Some(module) => module,
+        };
+
+        let sender = self.sender.clone();
+        let module = module.clone();
+        let leader_server_id = follower.leader_server_id();
+
+        spawn(async move {
+            module
+                .on_notify(ServerModuleNotifyEventInput::new(
+                    ServerHandle::new(sender),
+                    ServerModuleNotifyEventInputServerSource::new(leader_server_id).into(),
+                    body,
+                ))
+                .await;
+        });
     }
 
     async fn replicate(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {

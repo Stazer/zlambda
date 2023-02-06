@@ -1,5 +1,5 @@
 use crate::common::message::MessageQueueSender;
-use crate::common::module::ModuleId;
+use crate::common::module::{LoadModuleError, ModuleId, UnloadModuleError};
 use crate::server::{
     ServerMessage, ServerModule, ServerModuleGetMessageInput, ServerModuleLoadMessageInput,
     ServerModuleUnloadMessageInput,
@@ -77,16 +77,27 @@ impl ServerModuleManagerHandle {
         module
     }
 
-    pub async fn load(&mut self, module: Arc<dyn ServerModule>) {
-        self.sender
+    pub async fn load(
+        &mut self,
+        module: Arc<dyn ServerModule>,
+    ) -> Result<ModuleId, LoadModuleError> {
+        let (result,) = self
+            .sender
             .do_send_synchronous(ServerModuleLoadMessageInput::new(module))
-            .await;
+            .await
+            .into();
+
+        result
     }
 
-    pub async fn unload(&mut self, module_id: ModuleId) {
-        self.sender
+    pub async fn unload(&mut self, module_id: ModuleId) -> Result<(), UnloadModuleError> {
+        let (result,) = self
+            .sender
             .do_send_synchronous(ServerModuleUnloadMessageInput::new(module_id))
-            .await;
+            .await
+            .into();
+
+        result
     }
 }
 

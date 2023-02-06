@@ -1,3 +1,5 @@
+use crate::common::module::ModuleId;
+use crate::common::utility::Bytes;
 use crate::server::{LogEntry, LogEntryId, LogTerm, ServerId};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -329,5 +331,33 @@ impl GeneralLogEntriesAppendResponseMessageInput {
 
     pub fn missing_log_entry_ids(&self) -> &Vec<LogEntryId> {
         &self.missing_log_entry_ids
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNotifyMessageInput {
+    module_id: ModuleId,
+    body: Bytes,
+}
+
+impl From<GeneralNotifyMessageInput> for (ModuleId, Bytes) {
+    fn from(input: GeneralNotifyMessageInput) -> Self {
+        (input.module_id, input.body)
+    }
+}
+
+impl GeneralNotifyMessageInput {
+    pub fn new(module_id: ModuleId, body: Bytes) -> Self {
+        Self { module_id, body }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
     }
 }

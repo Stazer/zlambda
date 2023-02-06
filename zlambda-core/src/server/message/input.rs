@@ -1,9 +1,10 @@
 use crate::common::module::ModuleId;
+use crate::common::net::TcpStream;
+use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::{LogEntryData, LogEntryId, ServerId, ServerModule};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::TcpStream;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,7 +39,7 @@ impl ServerSocketAcceptMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerLeaderGeneralMessageMessageInput {
     message: GeneralMessage,
 }
@@ -61,7 +62,7 @@ impl ServerLeaderGeneralMessageMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerRegistrationMessageInput {
     server_socket_address: SocketAddr,
 }
@@ -86,7 +87,7 @@ impl ServerRegistrationMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerCommitRegistrationMessageInput {
     member_server_id: ServerId,
 }
@@ -109,7 +110,7 @@ impl ServerCommitRegistrationMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerRecoveryMessageInput {
     server_id: ServerId,
 }
@@ -132,7 +133,7 @@ impl ServerRecoveryMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerLogEntriesReplicationMessageInput {
     log_entries_data: Vec<LogEntryData>,
 }
@@ -155,7 +156,7 @@ impl ServerLogEntriesReplicationMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerLogEntriesAcknowledgementMessageInput {
     log_entry_ids: Vec<LogEntryId>,
     server_id: ServerId,
@@ -186,7 +187,7 @@ impl ServerLogEntriesAcknowledgementMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerLogEntriesRecoveryMessageInput {
     server_id: ServerId,
     log_entry_ids: Vec<LogEntryId>,
@@ -217,7 +218,7 @@ impl ServerLogEntriesRecoveryMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerModuleGetMessageInput {
     module_id: ModuleId,
 }
@@ -240,7 +241,7 @@ impl ServerModuleGetMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerModuleLoadMessageInput {
     module: Arc<dyn ServerModule>,
 }
@@ -263,7 +264,7 @@ impl ServerModuleLoadMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerModuleUnloadMessageInput {
     module_id: ModuleId,
 }
@@ -281,5 +282,78 @@ impl ServerModuleUnloadMessageInput {
 
     pub fn module_id(&self) -> ModuleId {
         self.module_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub struct ServerNotifyMessageInputServerSource {
+    server_id: ServerId,
+}
+
+impl From<ServerNotifyMessageInputServerSource> for (ServerId,) {
+    fn from(source: ServerNotifyMessageInputServerSource) -> Self {
+        (source.server_id,)
+    }
+}
+
+impl ServerNotifyMessageInputServerSource {
+    pub fn new(server_id: ServerId) -> Self {
+        Self { server_id }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub enum ServerNotifyMessageInputSource {
+    Server(ServerNotifyMessageInputServerSource),
+}
+
+impl From<ServerNotifyMessageInputServerSource> for ServerNotifyMessageInputSource {
+    fn from(source: ServerNotifyMessageInputServerSource) -> Self {
+        Self::Server(source)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub struct ServerNotifyMessageInput {
+    module_id: ModuleId,
+    source: ServerNotifyMessageInputSource,
+    body: Bytes,
+}
+
+impl From<ServerNotifyMessageInput> for (ModuleId, ServerNotifyMessageInputSource, Bytes) {
+    fn from(input: ServerNotifyMessageInput) -> Self {
+        (input.module_id, input.source, input.body)
+    }
+}
+
+impl ServerNotifyMessageInput {
+    pub fn new(module_id: ModuleId, source: ServerNotifyMessageInputSource, body: Bytes) -> Self {
+        Self {
+            module_id,
+            source,
+            body,
+        }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
+    }
+
+    pub fn source(&self) -> &ServerNotifyMessageInputSource {
+        &self.source
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
     }
 }

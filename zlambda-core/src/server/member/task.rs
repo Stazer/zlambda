@@ -4,7 +4,7 @@ use crate::common::message::{
 };
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
-    GeneralLogEntriesAppendResponseMessage, GeneralMessage,
+    GeneralLogEntriesAppendResponseMessage, GeneralMessage, GeneralNotifyMessage,
 };
 use crate::server::member::{
     ServerMemberMessage, ServerMemberRecoveryMessage, ServerMemberRegistrationMessage,
@@ -12,7 +12,7 @@ use crate::server::member::{
 };
 use crate::server::{
     ServerId, ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
-    ServerMessage,
+    ServerMessage, ServerNotifyMessageInput, ServerNotifyMessageInputServerSource,
 };
 use tokio::{select, spawn};
 use tracing::{error, info};
@@ -205,6 +205,7 @@ impl ServerMemberTask {
                 self.on_general_log_entries_append_response_message(message)
                     .await
             }
+            GeneralMessage::Notify(message) => self.on_general_notify_message(message).await,
             message => {
                 error!(
                     "{}",
@@ -236,5 +237,18 @@ impl ServerMemberTask {
                 ))
                 .await;
         }
+    }
+
+    async fn on_general_notify_message(&mut self, message: GeneralNotifyMessage) {
+        let (input,) = message.into();
+        let (module_id, body) = input.into();
+
+        self.server_queue_sender
+            .do_send_asynchronous(ServerNotifyMessageInput::new(
+                module_id,
+                ServerNotifyMessageInputServerSource::new(self.server_id).into(),
+                body,
+            ))
+            .await;
     }
 }

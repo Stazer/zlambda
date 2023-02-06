@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "zlambda-core",
+    "zlambda-so",
     "zlambda-cli",
 ]

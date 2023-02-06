@@ -1,0 +1,11 @@
+use zlambda_core::server;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub enum NotifyMessage {
+    Prepare,
+    Append,
+    Commit,
+    Load,
+}

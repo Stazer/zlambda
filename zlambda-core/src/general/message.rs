@@ -1,8 +1,9 @@
 use crate::common::message::AsynchronousMessage;
 use crate::general::{
     GeneralLogEntriesAppendRequestMessageInput, GeneralLogEntriesAppendResponseMessageInput,
-    GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
-    GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
+    GeneralNotifyMessageInput, GeneralRecoveryRequestMessageInput,
+    GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessageInput,
+    GeneralRegistrationResponseMessageInput,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +37,10 @@ pub type GeneralLogEntriesAppendResponseMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type GeneralNotifyMessage = AsynchronousMessage<GeneralNotifyMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum GeneralMessage {
     RegistrationRequest(GeneralRegistrationRequestMessage),
@@ -44,6 +49,7 @@ pub enum GeneralMessage {
     RecoveryResponse(GeneralRecoveryResponseMessage),
     LogEntriesAppendRequest(GeneralLogEntriesAppendRequestMessage),
     LogEntriesAppendResponse(GeneralLogEntriesAppendResponseMessage),
+    Notify(GeneralNotifyMessage),
 }
 
 impl From<GeneralRegistrationRequestMessage> for GeneralMessage {
@@ -79,5 +85,11 @@ impl From<GeneralLogEntriesAppendRequestMessage> for GeneralMessage {
 impl From<GeneralLogEntriesAppendResponseMessage> for GeneralMessage {
     fn from(message: GeneralLogEntriesAppendResponseMessage) -> Self {
         Self::LogEntriesAppendResponse(message)
+    }
+}
+
+impl From<GeneralNotifyMessage> for GeneralMessage {
+    fn from(message: GeneralNotifyMessage) -> Self {
+        Self::Notify(message)
     }
 }

@@ -1,4 +1,5 @@
 use crate::common::message::MessageQueueSender;
+use crate::common::module::{LoadModuleError, ModuleId, UnloadModuleError};
 use crate::server::member::ServerMemberMessage;
 use crate::server::{LogEntryId, LogTerm, ServerId, ServerModule};
 use std::net::SocketAddr;
@@ -291,8 +292,46 @@ impl ServerModuleGetMessageOutput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerModuleLoadMessageOutput = ();
+#[derive(Debug)]
+pub struct ServerModuleLoadMessageOutput {
+    result: Result<ModuleId, LoadModuleError>,
+}
+
+impl From<ServerModuleLoadMessageOutput> for (Result<ModuleId, LoadModuleError>,) {
+    fn from(output: ServerModuleLoadMessageOutput) -> Self {
+        (output.result,)
+    }
+}
+
+impl ServerModuleLoadMessageOutput {
+    pub fn new(result: Result<ModuleId, LoadModuleError>) -> Self {
+        Self { result }
+    }
+
+    pub fn result(&self) -> &Result<ModuleId, LoadModuleError> {
+        &self.result
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerModuleUnloadMessageOutput = ();
+#[derive(Debug)]
+pub struct ServerModuleUnloadMessageOutput {
+    result: Result<(), UnloadModuleError>,
+}
+
+impl From<ServerModuleUnloadMessageOutput> for (Result<(), UnloadModuleError>,) {
+    fn from(output: ServerModuleUnloadMessageOutput) -> Self {
+        (output.result,)
+    }
+}
+
+impl ServerModuleUnloadMessageOutput {
+    pub fn new(result: Result<(), UnloadModuleError>) -> Self {
+        Self { result }
+    }
+
+    pub fn result(&self) -> &Result<(), UnloadModuleError> {
+        &self.result
+    }
+}

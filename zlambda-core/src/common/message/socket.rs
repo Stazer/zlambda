@@ -1,11 +1,11 @@
 use crate::common::message::{AsynchronousMessage, MessageBufferReader, MessageError};
+use crate::common::net::tcp::OwnedReadHalf;
+use crate::common::net::tcp::OwnedWriteHalf;
 use postcard::to_allocvec;
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
 use std::marker::PhantomData;
 use tokio::io::AsyncWriteExt;
-use tokio::net::tcp::OwnedReadHalf;
-use tokio::net::tcp::OwnedWriteHalf;
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
 

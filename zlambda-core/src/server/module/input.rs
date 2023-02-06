@@ -1,9 +1,10 @@
 use crate::common::module::ModuleId;
-use crate::server::{LogEntry, ServerHandle};
+use crate::common::utility::Bytes;
+use crate::server::{LogEntry, ServerHandle, ServerId, ServerNotifyMessageInputSource};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerModuleStartupEventInput {
     server: ServerHandle,
 }
@@ -30,7 +31,7 @@ impl ServerModuleStartupEventInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerModuleShutdownEventInput {
     server: ServerHandle,
 }
@@ -57,7 +58,7 @@ impl ServerModuleShutdownEventInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerModuleLoadEventInput {
     module_id: ModuleId,
     server: ServerHandle,
@@ -89,6 +90,7 @@ impl ServerModuleLoadEventInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Clone, Debug)]
 pub struct ServerModuleUnloadEventInput {
     server: ServerHandle,
 }
@@ -115,11 +117,96 @@ impl ServerModuleUnloadEventInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerModuleDispatchEventInput = ();
+#[derive(Clone, Debug)]
+pub struct ServerModuleNotifyEventInputServerSource {
+    server_id: ServerId,
+}
+
+impl From<ServerModuleNotifyEventInputServerSource> for (ServerId,) {
+    fn from(source: ServerModuleNotifyEventInputServerSource) -> Self {
+        (source.server_id,)
+    }
+}
+
+impl ServerModuleNotifyEventInputServerSource {
+    pub fn new(server_id: ServerId) -> Self {
+        Self { server_id }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+pub enum ServerModuleNotifyEventInputSource {
+    Server(ServerModuleNotifyEventInputServerSource),
+}
+
+impl From<ServerNotifyMessageInputSource> for ServerModuleNotifyEventInputSource {
+    fn from(source: ServerNotifyMessageInputSource) -> Self {
+        match source {
+            ServerNotifyMessageInputSource::Server(source) => Self::Server(
+                ServerModuleNotifyEventInputServerSource::new(source.server_id()),
+            ),
+        }
+    }
+}
+
+impl From<ServerModuleNotifyEventInputServerSource> for ServerModuleNotifyEventInputSource {
+    fn from(source: ServerModuleNotifyEventInputServerSource) -> Self {
+        Self::Server(source)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub struct ServerModuleNotifyEventInput {
+    server: ServerHandle,
+    source: ServerModuleNotifyEventInputSource,
+    body: Bytes,
+}
+
+impl From<ServerModuleNotifyEventInput>
+    for (ServerHandle, ServerModuleNotifyEventInputSource, Bytes)
+{
+    fn from(input: ServerModuleNotifyEventInput) -> Self {
+        (input.server, input.source, input.body)
+    }
+}
+
+impl ServerModuleNotifyEventInput {
+    pub fn new(
+        server: ServerHandle,
+        source: ServerModuleNotifyEventInputSource,
+        body: Bytes,
+    ) -> Self {
+        Self {
+            server,
+            source,
+            body,
+        }
+    }
+
+    pub fn server(&self) -> &ServerHandle {
+        &self.server
+    }
+
+    pub fn source(&self) -> &ServerModuleNotifyEventInputSource {
+        &self.source
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
 pub struct ServerModuleCommitEventInput {
     server: ServerHandle,
     log_entry: LogEntry,

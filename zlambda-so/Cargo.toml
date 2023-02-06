@@ -1,0 +1,8 @@
+[package]
+name = "zlambda-so"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zlambda-core = { path = "../zlambda-core" }
+libloading = "*"
