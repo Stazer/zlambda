@@ -8,12 +8,12 @@ use crate::general::{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct Client {
+pub struct ClientTask {
     sender: MessageSocketSender<GeneralMessage>,
     receiver: MessageSocketReceiver<GeneralMessage>,
 }
 
-impl Client {
+impl ClientTask {
     pub async fn new<T>(address: T) -> Result<Self, NewClientError>
     where
         T: ToSocketAddrs,

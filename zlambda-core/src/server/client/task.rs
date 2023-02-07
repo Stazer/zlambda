@@ -17,7 +17,7 @@ use tracing::error;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub(crate) struct ServerClientTask {
+pub struct ServerClientTask {
     client_id: ServerClientId,
     server_queue_sender: MessageQueueSender<ServerMessage>,
     general_message_sender: MessageSocketSender<GeneralMessage>,
