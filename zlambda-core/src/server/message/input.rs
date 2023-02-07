@@ -428,3 +428,26 @@ impl ServerClientRegistrationMessageInput {
         &self.general_socket_receiver
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerClientResignationMessageInput {
+    server_client_id: ServerClientId,
+}
+
+impl From<ServerClientResignationMessageInput> for (ServerClientId,) {
+    fn from(input: ServerClientResignationMessageInput) -> Self {
+        (input.server_client_id,)
+    }
+}
+
+impl ServerClientResignationMessageInput {
+    pub fn new(server_client_id: ServerClientId) -> Self {
+        Self { server_client_id }
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}

@@ -1,13 +1,14 @@
 use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
-    ServerClientRegistrationMessageInput, ServerCommitRegistrationMessageInput,
-    ServerLeaderGeneralMessageMessageInput, ServerLogEntriesAcknowledgementMessageInput,
-    ServerLogEntriesRecoveryMessageInput, ServerLogEntriesReplicationMessageInput,
-    ServerLogEntriesReplicationMessageOutput, ServerModuleGetMessageInput,
-    ServerModuleGetMessageOutput, ServerModuleLoadMessageInput, ServerModuleLoadMessageOutput,
-    ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput, ServerNotifyMessageInput,
-    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
-    ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
+    ServerClientRegistrationMessageInput, ServerClientResignationMessageInput,
+    ServerCommitRegistrationMessageInput, ServerLeaderGeneralMessageMessageInput,
+    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
+    ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
+    ServerModuleGetMessageInput, ServerModuleGetMessageOutput, ServerModuleLoadMessageInput,
+    ServerModuleLoadMessageOutput, ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
+    ServerNotifyMessageInput, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
+    ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
+    ServerSocketAcceptMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,6 +78,10 @@ pub type ServerClientRegistrationMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerClientResignationMessage = AsynchronousMessage<ServerClientResignationMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
@@ -93,6 +98,7 @@ pub enum ServerMessage {
     ModuleUnload(ServerModuleUnloadMessage),
     Notify(ServerNotifyMessage),
     ClientRegistration(ServerClientRegistrationMessage),
+    ClientResignation(ServerClientResignationMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -164,5 +170,11 @@ impl From<ServerNotifyMessage> for ServerMessage {
 impl From<ServerClientRegistrationMessage> for ServerMessage {
     fn from(message: ServerClientRegistrationMessage) -> Self {
         Self::ClientRegistration(message)
+    }
+}
+
+impl From<ServerClientResignationMessage> for ServerMessage {
+    fn from(message: ServerClientResignationMessage) -> Self {
+        Self::ClientResignation(message)
     }
 }

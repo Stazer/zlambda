@@ -9,7 +9,8 @@ use crate::general::{
 };
 use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientNotifyMessage};
 use crate::server::{
-    ServerMessage, ServerNotifyMessageInput, ServerNotifyMessageInputClientSource,
+    ServerClientResignationMessageInput, ServerMessage, ServerNotifyMessageInput,
+    ServerNotifyMessageInputClientSource,
 };
 use tracing::error;
 
@@ -67,6 +68,10 @@ impl ServerClientTask {
         loop {
             self.select().await
         }
+
+        self.server_queue_sender
+            .do_send_asynchronous(ServerClientResignationMessageInput::new(self.client_id))
+            .await;
     }
 
     async fn select(&mut self) {

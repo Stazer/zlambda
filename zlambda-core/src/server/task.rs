@@ -16,17 +16,18 @@ use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTas
 use crate::server::connection::ServerConnectionTask;
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
-    NewServerError, ServerClientRegistrationMessage, ServerCommitRegistrationMessage,
-    ServerCommitRegistrationMessageInput, ServerFollowerType, ServerHandle, ServerId,
-    ServerLeaderGeneralMessageMessage, ServerLeaderType, ServerLogEntriesAcknowledgementMessage,
-    ServerLogEntriesRecoveryMessage, ServerLogEntriesReplicationMessage,
-    ServerLogEntriesReplicationMessageOutput, ServerMessage, ServerModule,
-    ServerModuleCommitEventInput, ServerModuleGetMessage, ServerModuleGetMessageOutput,
-    ServerModuleLoadMessage, ServerModuleLoadMessageOutput, ServerModuleNotifyEventInput,
-    ServerModuleNotifyEventInputServerSource, ServerModuleShutdownEventInput,
-    ServerModuleStartupEventInput, ServerModuleUnloadMessage, ServerModuleUnloadMessageOutput,
-    ServerNotifyMessage, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
-    ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
+    NewServerError, ServerClientRegistrationMessage, ServerClientResignationMessage,
+    ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
+    ServerHandle, ServerId, ServerLeaderGeneralMessageMessage, ServerLeaderType,
+    ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
+    ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
+    ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
+    ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
+    ServerModuleNotifyEventInput, ServerModuleNotifyEventInputServerSource,
+    ServerModuleShutdownEventInput, ServerModuleStartupEventInput, ServerModuleUnloadMessage,
+    ServerModuleUnloadMessageOutput, ServerNotifyMessage, ServerRecoveryMessage,
+    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
+    ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
 };
@@ -384,6 +385,9 @@ impl ServerTask {
             ServerMessage::ClientRegistration(message) => {
                 self.on_server_client_registration(message).await
             }
+            ServerMessage::ClientResignation(message) => {
+                self.on_server_client_resignation(message).await
+            }
         }
     }
 
@@ -725,6 +729,14 @@ impl ServerTask {
         self.clients.push(Some(client.sender().clone()));
 
         client.spawn();
+    }
+
+    async fn on_server_client_resignation(&mut self, message: ServerClientResignationMessage) {
+        let (input,) = message.into();
+
+        self.clients
+            .get_mut(usize::from(input.server_client_id()))
+            .take();
     }
 
     async fn on_general_message(&mut self, message: GeneralMessage) {
