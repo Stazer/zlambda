@@ -4,11 +4,12 @@ use crate::common::message::{
 };
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
-    GeneralLogEntriesAppendResponseMessage, GeneralMessage, GeneralNotifyMessage, GeneralNotifyMessageInput,
+    GeneralLogEntriesAppendResponseMessage, GeneralMessage, GeneralNotifyMessage,
+    GeneralNotifyMessageInput,
 };
 use crate::server::node::{
-    ServerNodeMessage, ServerNodeRecoveryMessage, ServerNodeRegistrationMessage,
-    ServerNodeReplicationMessage, ServerNodeNotifyMessage,
+    ServerNodeMessage, ServerNodeNotifyMessage, ServerNodeRecoveryMessage,
+    ServerNodeRegistrationMessage, ServerNodeReplicationMessage,
 };
 use crate::server::{
     ServerId, ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
@@ -110,16 +111,11 @@ impl ServerNodeTask {
             ServerNodeMessage::Recovery(message) => {
                 self.on_server_node_recovery_message(message).await
             }
-            ServerNodeMessage::Notify(message) => {
-                self.on_server_node_notify_message(message).await
-            }
+            ServerNodeMessage::Notify(message) => self.on_server_node_notify_message(message).await,
         }
     }
 
-    async fn on_server_node_replication_message(
-        &mut self,
-        message: ServerNodeReplicationMessage,
-    ) {
+    async fn on_server_node_replication_message(&mut self, message: ServerNodeReplicationMessage) {
         match &mut self.general_socket {
             Some(ref mut general_socket) => {
                 let (input,) = message.into();
@@ -211,14 +207,13 @@ impl ServerNodeTask {
         let (input,) = message.into();
         let (module_id, body) = input.into();
 
-        if let Err(error) = socket.0.send(
-            GeneralNotifyMessage::new(
-                GeneralNotifyMessageInput::new(
-                    module_id,
-                    body,
-                )
-            )
-        ).await {
+        if let Err(error) = socket
+            .0
+            .send(GeneralNotifyMessage::new(GeneralNotifyMessageInput::new(
+                module_id, body,
+            )))
+            .await
+        {
             error!("{}", error);
             return;
         }

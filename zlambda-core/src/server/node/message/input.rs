@@ -184,14 +184,8 @@ impl From<ServerNodeNotifyMessageInput> for (ModuleId, Bytes) {
 }
 
 impl ServerNodeNotifyMessageInput {
-    pub fn new(
-        module_id: ModuleId,
-        body: Bytes,
-    ) -> Self {
-        Self {
-            module_id,
-            body,
-        }
+    pub fn new(module_id: ModuleId, body: Bytes) -> Self {
+        Self { module_id, body }
     }
 
     pub fn module_id(&self) -> ModuleId {

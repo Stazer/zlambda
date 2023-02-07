@@ -1,13 +1,13 @@
 use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
-    ServerCommitRegistrationMessageInput, ServerLeaderGeneralMessageMessageInput,
-    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
-    ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
-    ServerModuleGetMessageInput, ServerModuleGetMessageOutput, ServerModuleLoadMessageInput,
-    ServerModuleLoadMessageOutput, ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
-    ServerNotifyMessageInput, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
-    ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
-    ServerSocketAcceptMessageInput,
+    ServerClientRegistrationMessageInput, ServerCommitRegistrationMessageInput,
+    ServerLeaderGeneralMessageMessageInput, ServerLogEntriesAcknowledgementMessageInput,
+    ServerLogEntriesRecoveryMessageInput, ServerLogEntriesReplicationMessageInput,
+    ServerLogEntriesReplicationMessageOutput, ServerModuleGetMessageInput,
+    ServerModuleGetMessageOutput, ServerModuleLoadMessageInput, ServerModuleLoadMessageOutput,
+    ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput, ServerNotifyMessageInput,
+    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
+    ServerRegistrationMessageOutput, ServerSocketAcceptMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,6 +72,11 @@ pub type ServerNotifyMessage = AsynchronousMessage<ServerNotifyMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerClientRegistrationMessage =
+    AsynchronousMessage<ServerClientRegistrationMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
@@ -87,6 +92,7 @@ pub enum ServerMessage {
     ModuleLoad(ServerModuleLoadMessage),
     ModuleUnload(ServerModuleUnloadMessage),
     Notify(ServerNotifyMessage),
+    ClientRegistration(ServerClientRegistrationMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -152,5 +158,11 @@ impl From<ServerModuleUnloadMessage> for ServerMessage {
 impl From<ServerNotifyMessage> for ServerMessage {
     fn from(message: ServerNotifyMessage) -> Self {
         Self::Notify(message)
+    }
+}
+
+impl From<ServerClientRegistrationMessage> for ServerMessage {
+    fn from(message: ServerClientRegistrationMessage) -> Self {
+        Self::ClientRegistration(message)
     }
 }

@@ -1,5 +1,6 @@
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
+use crate::server::client::ServerClientId;
 use crate::server::{LogEntry, ServerHandle, ServerId, ServerNotifyMessageInputSource};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,8 +142,32 @@ impl ServerModuleNotifyEventInputServerSource {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
+pub struct ServerModuleNotifyEventInputClientSource {
+    server_client_id: ServerClientId,
+}
+
+impl From<ServerModuleNotifyEventInputClientSource> for (ServerClientId,) {
+    fn from(source: ServerModuleNotifyEventInputClientSource) -> Self {
+        (source.server_client_id,)
+    }
+}
+
+impl ServerModuleNotifyEventInputClientSource {
+    pub fn new(server_client_id: ServerClientId) -> Self {
+        Self { server_client_id }
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
 pub enum ServerModuleNotifyEventInputSource {
     Server(ServerModuleNotifyEventInputServerSource),
+    Client(ServerModuleNotifyEventInputClientSource),
 }
 
 impl From<ServerNotifyMessageInputSource> for ServerModuleNotifyEventInputSource {
@@ -151,6 +176,9 @@ impl From<ServerNotifyMessageInputSource> for ServerModuleNotifyEventInputSource
             ServerNotifyMessageInputSource::Server(source) => Self::Server(
                 ServerModuleNotifyEventInputServerSource::new(source.server_id()),
             ),
+            ServerNotifyMessageInputSource::Client(source) => Self::Client(
+                ServerModuleNotifyEventInputClientSource::new(source.server_client_id()),
+            ),
         }
     }
 }
@@ -158,6 +186,12 @@ impl From<ServerNotifyMessageInputSource> for ServerModuleNotifyEventInputSource
 impl From<ServerModuleNotifyEventInputServerSource> for ServerModuleNotifyEventInputSource {
     fn from(source: ServerModuleNotifyEventInputServerSource) -> Self {
         Self::Server(source)
+    }
+}
+
+impl From<ServerModuleNotifyEventInputClientSource> for ServerModuleNotifyEventInputSource {
+    fn from(source: ServerModuleNotifyEventInputClientSource) -> Self {
+        Self::Client(source)
     }
 }
 

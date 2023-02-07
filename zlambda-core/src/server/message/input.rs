@@ -1,7 +1,9 @@
+use crate::common::message::{MessageSocketReceiver, MessageSocketSender};
 use crate::common::module::ModuleId;
 use crate::common::net::TcpStream;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
+use crate::server::client::ServerClientId;
 use crate::server::{LogEntryData, LogEntryId, ServerId, ServerModule};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -311,13 +313,43 @@ impl ServerNotifyMessageInputServerSource {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
+pub struct ServerNotifyMessageInputClientSource {
+    server_client_id: ServerClientId,
+}
+
+impl From<ServerNotifyMessageInputClientSource> for (ServerClientId,) {
+    fn from(source: ServerNotifyMessageInputClientSource) -> Self {
+        (source.server_client_id,)
+    }
+}
+
+impl ServerNotifyMessageInputClientSource {
+    pub fn new(server_client_id: ServerClientId) -> Self {
+        Self { server_client_id }
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
 pub enum ServerNotifyMessageInputSource {
     Server(ServerNotifyMessageInputServerSource),
+    Client(ServerNotifyMessageInputClientSource),
 }
 
 impl From<ServerNotifyMessageInputServerSource> for ServerNotifyMessageInputSource {
     fn from(source: ServerNotifyMessageInputServerSource) -> Self {
         Self::Server(source)
+    }
+}
+
+impl From<ServerNotifyMessageInputClientSource> for ServerNotifyMessageInputSource {
+    fn from(source: ServerNotifyMessageInputClientSource) -> Self {
+        Self::Client(source)
     }
 }
 
@@ -355,5 +387,44 @@ impl ServerNotifyMessageInput {
 
     pub fn body(&self) -> &Bytes {
         &self.body
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerClientRegistrationMessageInput {
+    general_socket_sender: MessageSocketSender<GeneralMessage>,
+    general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
+}
+
+impl From<ServerClientRegistrationMessageInput>
+    for (
+        MessageSocketSender<GeneralMessage>,
+        MessageSocketReceiver<GeneralMessage>,
+    )
+{
+    fn from(input: ServerClientRegistrationMessageInput) -> Self {
+        (input.general_socket_sender, input.general_socket_receiver)
+    }
+}
+
+impl ServerClientRegistrationMessageInput {
+    pub fn new(
+        general_socket_sender: MessageSocketSender<GeneralMessage>,
+        general_socket_receiver: MessageSocketReceiver<GeneralMessage>,
+    ) -> Self {
+        Self {
+            general_socket_sender,
+            general_socket_receiver,
+        }
+    }
+
+    pub fn general_socket_sender(&self) -> &MessageSocketSender<GeneralMessage> {
+        &self.general_socket_sender
+    }
+
+    pub fn general_socket_receiver(&self) -> &MessageSocketReceiver<GeneralMessage> {
+        &self.general_socket_receiver
     }
 }

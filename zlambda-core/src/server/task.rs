@@ -4,6 +4,7 @@ use crate::common::message::{
 };
 use crate::common::module::ModuleManager;
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
+use crate::common::runtime::{select, spawn};
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendResponseMessage,
     GeneralLogEntriesAppendResponseMessageInput, GeneralMessage, GeneralNotifyMessage,
@@ -11,20 +12,21 @@ use crate::general::{
     GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessage,
     GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
 };
+use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTask};
 use crate::server::connection::ServerConnectionTask;
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
-    NewServerError, ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput,
-    ServerFollowerType, ServerHandle, ServerId, ServerLeaderGeneralMessageMessage,
-    ServerLeaderType, ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
-    ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
-    ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
-    ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
-    ServerModuleNotifyEventInput, ServerModuleNotifyEventInputServerSource,
-    ServerModuleShutdownEventInput, ServerModuleStartupEventInput, ServerModuleUnloadMessage,
-    ServerModuleUnloadMessageOutput, ServerNotifyMessage, ServerRecoveryMessage,
-    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
-    ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
+    NewServerError, ServerClientRegistrationMessage, ServerCommitRegistrationMessage,
+    ServerCommitRegistrationMessageInput, ServerFollowerType, ServerHandle, ServerId,
+    ServerLeaderGeneralMessageMessage, ServerLeaderType, ServerLogEntriesAcknowledgementMessage,
+    ServerLogEntriesRecoveryMessage, ServerLogEntriesReplicationMessage,
+    ServerLogEntriesReplicationMessageOutput, ServerMessage, ServerModule,
+    ServerModuleCommitEventInput, ServerModuleGetMessage, ServerModuleGetMessageOutput,
+    ServerModuleLoadMessage, ServerModuleLoadMessageOutput, ServerModuleNotifyEventInput,
+    ServerModuleNotifyEventInputServerSource, ServerModuleShutdownEventInput,
+    ServerModuleStartupEventInput, ServerModuleUnloadMessage, ServerModuleUnloadMessageOutput,
+    ServerNotifyMessage, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
+    ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
 };
@@ -32,13 +34,11 @@ use crate::server::{
     ServerNodeMessage, ServerNodeReplicationMessage, ServerNodeReplicationMessageInput,
     ServerNodeTask,
 };
-use crate::server::client::{ServerClientTask, ServerClientMessage};
 use async_recursion::async_recursion;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::{select, spawn};
 use tracing::{debug, error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -381,6 +381,9 @@ impl ServerTask {
                 self.on_server_module_unload_message(message).await
             }
             ServerMessage::Notify(message) => self.on_server_notify_message(message).await,
+            ServerMessage::ClientRegistration(message) => {
+                self.on_server_client_registration(message).await
+            }
         }
     }
 
@@ -439,8 +442,7 @@ impl ServerTask {
                     }
                 };
 
-                let task =
-                    ServerNodeTask::new(node_server_id.into(), self.sender.clone(), None);
+                let task = ServerNodeTask::new(node_server_id.into(), self.sender.clone(), None);
                 let sender = task.sender().clone();
                 task.spawn();
 
@@ -453,8 +455,7 @@ impl ServerTask {
                     .await;
 
                 if node_server_id >= self.server_nodes.len() {
-                    self.server_nodes
-                        .resize_with(node_server_id + 1, || None);
+                    self.server_nodes.resize_with(node_server_id + 1, || None);
                 }
 
                 *self
@@ -506,10 +507,7 @@ impl ServerTask {
             ServerType::Follower(_) => panic!("Server should be leader"),
         };
 
-        let node = match self
-            .server_nodes
-            .get(usize::from(input.node_server_id()))
-        {
+        let node = match self.server_nodes.get(usize::from(input.node_server_id())) {
             Some(Some(node)) => node,
             None | Some(None) => panic!("Server node {} should exist", input.node_server_id()),
         };
@@ -709,6 +707,24 @@ impl ServerTask {
                 ))
                 .await;
         });
+    }
+
+    async fn on_server_client_registration(&mut self, message: ServerClientRegistrationMessage) {
+        let (input,) = message.into();
+        let (sender, receiver) = input.into();
+
+        let client_id = self.clients.len();
+
+        let client = ServerClientTask::new(
+            ServerClientId::from(client_id),
+            self.sender.clone(),
+            sender,
+            receiver,
+        );
+
+        self.clients.push(Some(client.sender().clone()));
+
+        client.spawn();
     }
 
     async fn on_general_message(&mut self, message: GeneralMessage) {

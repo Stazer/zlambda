@@ -1,8 +1,7 @@
 use crate::common::message::AsynchronousMessage;
 use crate::server::node::{
-    ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput,
-    ServerNodeReplicationMessageInput,
-    ServerNodeNotifyMessageInput,
+    ServerNodeNotifyMessageInput, ServerNodeRecoveryMessageInput,
+    ServerNodeRegistrationMessageInput, ServerNodeReplicationMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -11,8 +10,7 @@ pub type ServerNodeReplicationMessage = AsynchronousMessage<ServerNodeReplicatio
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerNodeRegistrationMessage =
-    AsynchronousMessage<ServerNodeRegistrationMessageInput>;
+pub type ServerNodeRegistrationMessage = AsynchronousMessage<ServerNodeRegistrationMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

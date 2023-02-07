@@ -2,15 +2,13 @@ use crate::common::message::{
     MessageError, MessageQueueSender, MessageSocketReceiver, MessageSocketSender,
 };
 use crate::general::{
-    GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryResponseMessageInput,
-    GeneralRecoveryResponseMessageNotALeaderInput, GeneralRecoveryResponseMessageSuccessInput,
-    GeneralRegistrationRequestMessage, GeneralRegistrationResponseMessageInput,
-    GeneralRegistrationResponseMessageNotALeaderInput,
+    GeneralClientRegistrationRequestMessage, GeneralMessage, GeneralRecoveryRequestMessage,
+    GeneralRecoveryResponseMessageInput, GeneralRecoveryResponseMessageNotALeaderInput,
+    GeneralRecoveryResponseMessageSuccessInput, GeneralRegistrationRequestMessage,
+    GeneralRegistrationResponseMessageInput, GeneralRegistrationResponseMessageNotALeaderInput,
     GeneralRegistrationResponseMessageSuccessInput,
 };
-use crate::server::node::{
-    ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput,
-};
+use crate::server::node::{ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput};
 use crate::server::{
     ServerMessage, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
     ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
@@ -64,6 +62,10 @@ impl ServerConnectionTask {
             }
             GeneralMessage::RecoveryRequest(message) => {
                 self.on_general_recovery_request_message(message).await
+            }
+            GeneralMessage::ClientRegistrationRequest(message) => {
+                self.on_general_client_registration_request_message(message)
+                    .await
             }
             message => error!(
                 "{}",
@@ -207,5 +209,11 @@ impl ServerConnectionTask {
                 }
             }
         }
+    }
+
+    async fn on_general_client_registration_request_message(
+        self,
+        _message: GeneralClientRegistrationRequestMessage,
+    ) {
     }
 }

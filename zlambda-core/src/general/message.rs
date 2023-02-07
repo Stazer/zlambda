@@ -1,5 +1,6 @@
 use crate::common::message::AsynchronousMessage;
 use crate::general::{
+    GeneralClientRegistrationRequestMessageInput, GeneralClientRegistrationResponseMessageInput,
     GeneralLogEntriesAppendRequestMessageInput, GeneralLogEntriesAppendResponseMessageInput,
     GeneralNotifyMessageInput, GeneralRecoveryRequestMessageInput,
     GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessageInput,
@@ -41,6 +42,16 @@ pub type GeneralNotifyMessage = AsynchronousMessage<GeneralNotifyMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type GeneralClientRegistrationRequestMessage =
+    AsynchronousMessage<GeneralClientRegistrationRequestMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type GeneralClientRegistrationResponseMessage =
+    AsynchronousMessage<GeneralClientRegistrationResponseMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum GeneralMessage {
     RegistrationRequest(GeneralRegistrationRequestMessage),
@@ -50,6 +61,8 @@ pub enum GeneralMessage {
     LogEntriesAppendRequest(GeneralLogEntriesAppendRequestMessage),
     LogEntriesAppendResponse(GeneralLogEntriesAppendResponseMessage),
     Notify(GeneralNotifyMessage),
+    ClientRegistrationRequest(GeneralClientRegistrationRequestMessage),
+    ClientRegistrationResponse(GeneralClientRegistrationResponseMessage),
 }
 
 impl From<GeneralRegistrationRequestMessage> for GeneralMessage {
@@ -91,5 +104,17 @@ impl From<GeneralLogEntriesAppendResponseMessage> for GeneralMessage {
 impl From<GeneralNotifyMessage> for GeneralMessage {
     fn from(message: GeneralNotifyMessage) -> Self {
         Self::Notify(message)
+    }
+}
+
+impl From<GeneralClientRegistrationRequestMessage> for GeneralMessage {
+    fn from(message: GeneralClientRegistrationRequestMessage) -> Self {
+        Self::ClientRegistrationRequest(message)
+    }
+}
+
+impl From<GeneralClientRegistrationResponseMessage> for GeneralMessage {
+    fn from(message: GeneralClientRegistrationResponseMessage) -> Self {
+        Self::ClientRegistrationResponse(message)
     }
 }

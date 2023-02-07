@@ -361,3 +361,13 @@ impl GeneralNotifyMessageInput {
         &self.body
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralClientRegistrationRequestMessageInput;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralClientRegistrationResponseMessageInput;
