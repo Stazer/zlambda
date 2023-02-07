@@ -3,7 +3,10 @@ use crate::common::message::{
     MessageSocketSender,
 };
 use crate::common::runtime::{select, spawn};
-use crate::general::{GeneralMessage, GeneralNotifyMessage, GeneralNotifyMessageInput};
+use crate::general::{
+    GeneralClientRegistrationResponseMessage, GeneralClientRegistrationResponseMessageInput,
+    GeneralMessage, GeneralNotifyMessage, GeneralNotifyMessageInput,
+};
 use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientNotifyMessage};
 use crate::server::{
     ServerMessage, ServerNotifyMessageInput, ServerNotifyMessageInputClientSource,
@@ -50,6 +53,17 @@ impl ServerClientTask {
     }
 
     pub async fn run(mut self) {
+        if let Err(error) = self
+            .general_message_sender
+            .send(GeneralClientRegistrationResponseMessage::new(
+                GeneralClientRegistrationResponseMessageInput,
+            ))
+            .await
+        {
+            error!("{}", error);
+            return;
+        }
+
         loop {
             self.select().await
         }

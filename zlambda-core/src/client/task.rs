@@ -35,6 +35,7 @@ impl Client {
 
         match receiver.receive().await? {
             None => return Err(MessageError::ExpectedMessage.into()),
+            Some(GeneralMessage::ClientRegistrationResponse(_)) => {}
             Some(message) => {
                 return Err(MessageError::UnexpectedMessage(format!("{message:?}")).into())
             }
