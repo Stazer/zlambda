@@ -1,5 +1,6 @@
 use crate::client::NewClientError;
 use crate::common::message::{MessageError, MessageSocketReceiver, MessageSocketSender};
+use crate::common::runtime::spawn;
 use crate::common::net::{TcpStream, ToSocketAddrs};
 use crate::general::{
     GeneralClientRegistrationRequestMessage, GeneralClientRegistrationRequestMessageInput,
@@ -42,5 +43,21 @@ impl ClientTask {
         }
 
         Ok(Self { sender, receiver })
+    }
+
+    pub fn spawn(self) {
+        spawn(async move {
+            self.run().await
+        });
+    }
+
+    pub async fn run(mut self) {
+        loop {
+            self.select().await
+        }
+    }
+
+    async fn select(&mut self) {
+
     }
 }

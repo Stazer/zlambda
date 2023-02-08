@@ -27,6 +27,7 @@ mod test {
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
+    #[derive(Debug)]
     struct EmptyModule {}
 
     #[async_trait::async_trait]
@@ -42,6 +43,7 @@ mod test {
 
     #[test]
     fn test_as_none() {
+        #[derive(Debug)]
         struct EmptyModule2 {}
 
         #[async_trait::async_trait]

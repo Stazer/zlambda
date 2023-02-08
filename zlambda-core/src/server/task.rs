@@ -664,7 +664,7 @@ impl ServerTask {
 
         sender
             .do_send(ServerModuleGetMessageOutput::new(
-                self.module_manager.get(input.module_id()).cloned(),
+                self.module_manager.get_by_module_id(input.module_id()).cloned(),
             ))
             .await;
     }
@@ -694,7 +694,7 @@ impl ServerTask {
         let (input,) = message.into();
         let (module_id, source, body) = input.into();
 
-        let module = match self.module_manager.get(module_id) {
+        let module = match self.module_manager.get_by_module_id(module_id) {
             None => return,
             Some(module) => module,
         };
@@ -872,7 +872,7 @@ impl ServerTask {
         let (input,) = message.into();
         let (module_id, body) = input.into();
 
-        let module = match self.module_manager.get(module_id) {
+        let module = match self.module_manager.get_by_module_id(module_id) {
             None => return,
             Some(module) => module,
         };
