@@ -1,7 +1,7 @@
 use crate::common::module::{LoadModuleError, Module, ModuleId, UnloadModuleError};
-use std::sync::Arc;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,8 +36,7 @@ where
         }
     }
 
-    pub fn get_by_type_id(&self, type_id: TypeId) -> Option<&Arc<T>>
-    {
+    pub fn get_by_type_id(&self, type_id: TypeId) -> Option<&Arc<T>> {
         self.type_id_lookup.get(&type_id)
     }
 
@@ -45,8 +44,7 @@ where
         self.modules.iter().flatten()
     }
 
-    pub fn load(&mut self, module: Arc<T>) -> Result<ModuleId, LoadModuleError>
-    {
+    pub fn load(&mut self, module: Arc<T>) -> Result<ModuleId, LoadModuleError> {
         let module_id = self.modules.len();
         let type_id = (*module).type_id();
 
@@ -75,7 +73,9 @@ impl ModuleManager<dyn Module> {
     where
         S: Module,
     {
-        self.get_by_type_id(TypeId::of::<S>()).map(|module| module.r#as::<S>()).flatten()
+        self.get_by_type_id(TypeId::of::<S>())
+            .map(|module| module.r#as::<S>())
+            .flatten()
     }
 }
 
@@ -83,9 +83,7 @@ impl ModuleManager<dyn Module> {
 
 #[cfg(test)]
 mod test {
-    use crate::common::module::{
-        Module, ModuleManager, UnloadModuleError,
-    };
+    use crate::common::module::{Module, ModuleManager, UnloadModuleError};
     use std::sync::Arc;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +98,9 @@ mod test {
 
     #[test]
     fn test_load_ok() {
-        assert!(ModuleManager::default().load(Arc::from(EmptyModule {})).is_ok())
+        assert!(ModuleManager::default()
+            .load(Arc::from(EmptyModule {}))
+            .is_ok())
     }
 
     #[test]
@@ -180,10 +180,18 @@ mod test {
 
         let mut manager = ModuleManager::<dyn Module>::default();
         manager.load(Arc::from(EmptyModule {})).unwrap();
-        manager.load(Arc::from(TestModule {value})).unwrap();
-        manager.load(Arc::from(TestModule {value: value - 1})).unwrap();
+        manager.load(Arc::from(TestModule { value })).unwrap();
+        manager
+            .load(Arc::from(TestModule { value: value - 1 }))
+            .unwrap();
 
-        assert!(manager.get_by_type::<TestModule>().map(|module| module.value).unwrap_or_default() == value)
+        assert!(
+            manager
+                .get_by_type::<TestModule>()
+                .map(|module| module.value)
+                .unwrap_or_default()
+                == value
+        )
     }
 
     #[test]

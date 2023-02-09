@@ -4,12 +4,11 @@
 
 use clap::{Args, Parser, Subcommand};
 use std::error::Error;
-use std::path::PathBuf;
-//use tokio::io::AsyncWriteExt;
-//use tokio::io::{stdin, stdout};
 use std::iter::empty;
 use zlambda_core::common::module::ModuleId;
+use zlambda_core::common::utility::Bytes;
 use zlambda_core::server::{ServerId, ServerTask};
+use zlambda_core::client::ClientTask;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,8 +62,7 @@ enum ServerCommand {
 
 #[derive(Debug, Subcommand)]
 enum ClientCommand {
-    Load { path: PathBuf },
-    Dispatch { id: ModuleId },
+    Notify { module_id: ModuleId },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,26 +98,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .await
         }
         MainCommand::Client {
-            address: _,
-            command: _,
+            address,
+            command,
         } => {
-            /*let mut client = match Client::new(address).await {
-                Err(error) => return Err(error),
-                Ok(client) => client,
-            };
+            let client_task = ClientTask::new(address, empty()).await?;
 
             match command {
-                ClientCommand::Load { path } => {
-                    let id = client.load_module(&path).await?;
+                ClientCommand::Notify {
+                    module_id
+                } => {
+                    client_task.handle().notify(module_id, Bytes::default()).await;
+                }
+            }
 
-                    println!("{}", id);
-                }
-                ClientCommand::Dispatch { id } => {
-                    stdout()
-                        .write_all(&client.dispatch(id, stdin()).await?)
-                        .await?;
-                }
-            };*/
+            client_task.run().await
         }
     };
 

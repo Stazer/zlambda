@@ -664,7 +664,9 @@ impl ServerTask {
 
         sender
             .do_send(ServerModuleGetMessageOutput::new(
-                self.module_manager.get_by_module_id(input.module_id()).cloned(),
+                self.module_manager
+                    .get_by_module_id(input.module_id())
+                    .cloned(),
             ))
             .await;
     }
