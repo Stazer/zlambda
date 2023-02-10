@@ -371,3 +371,180 @@ pub struct GeneralClientRegistrationRequestMessageInput;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralClientRegistrationResponseMessageInput;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNotificationMessageInputImmediateType {
+    module_id: ModuleId,
+}
+
+impl From<GeneralNotificationMessageInputImmediateType> for (ModuleId, ) {
+    fn from(r#type: GeneralNotificationMessageInputImmediateType) -> Self {
+        (r#type.module_id,)
+    }
+}
+
+impl GeneralNotificationMessageInputImmediateType {
+    pub fn new(
+        module_id: ModuleId,
+    ) -> Self {
+        Self {
+            module_id,
+        }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNotificationMessageInputStartType {
+    module_id: ModuleId,
+    notification_id: usize,
+}
+
+impl From<GeneralNotificationMessageInputStartType> for (ModuleId, usize) {
+    fn from(r#type: GeneralNotificationMessageInputStartType) -> Self {
+        (r#type.module_id, r#type.notification_id)
+    }
+}
+
+impl GeneralNotificationMessageInputStartType {
+    pub fn new(
+        module_id: ModuleId,
+        notification_id: usize,
+    ) -> Self {
+        Self {
+            module_id,
+            notification_id,
+        }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
+    }
+
+    pub fn notification_id(&self) -> usize {
+        self.notification_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNotificationMessageInputNextType {
+    notification_id: usize,
+}
+
+impl From<GeneralNotificationMessageInputNextType> for (usize,) {
+    fn from(r#type: GeneralNotificationMessageInputNextType) -> Self {
+        (r#type.notification_id,)
+    }
+}
+
+impl GeneralNotificationMessageInputNextType {
+    pub fn new(
+        notification_id: usize,
+    ) -> Self {
+        Self {
+            notification_id,
+        }
+    }
+
+    pub fn notification_id(&self) -> usize {
+        self.notification_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNotificationMessageInputEndType {
+    notification_id: usize,
+}
+
+impl From<GeneralNotificationMessageInputEndType> for (usize,) {
+    fn from(r#type: GeneralNotificationMessageInputEndType) -> Self {
+        (r#type.notification_id,)
+    }
+}
+
+impl GeneralNotificationMessageInputEndType {
+    pub fn new(
+        notification_id: usize,
+    ) -> Self {
+        Self {
+            notification_id,
+        }
+    }
+
+    pub fn notification_id(&self) -> usize {
+        self.notification_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum GeneralNotificationMessageInputType {
+    Immediate(GeneralNotificationMessageInputImmediateType),
+    Start(GeneralNotificationMessageInputStartType),
+    Next(GeneralNotificationMessageInputNextType),
+    End(GeneralNotificationMessageInputEndType),
+}
+
+impl From<GeneralNotificationMessageInputImmediateType> for GeneralNotificationMessageInputType {
+    fn from(r#type: GeneralNotificationMessageInputImmediateType) -> Self {
+        Self::Immediate(r#type)
+    }
+}
+
+impl From<GeneralNotificationMessageInputStartType> for GeneralNotificationMessageInputType {
+    fn from(r#type: GeneralNotificationMessageInputStartType) -> Self {
+        Self::Start(r#type)
+    }
+}
+
+impl From<GeneralNotificationMessageInputNextType> for GeneralNotificationMessageInputType {
+    fn from(r#type: GeneralNotificationMessageInputNextType) -> Self {
+        Self::Next(r#type)
+    }
+}
+
+impl From<GeneralNotificationMessageInputEndType> for GeneralNotificationMessageInputType {
+    fn from(r#type: GeneralNotificationMessageInputEndType) -> Self {
+        Self::End(r#type)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNotificationMessageInput {
+    r#type: GeneralNotificationMessageInputType,
+    body: Bytes,
+}
+
+impl From<GeneralNotificationMessageInput> for (GeneralNotificationMessageInputType, Bytes) {
+    fn from(input: GeneralNotificationMessageInput) -> Self {
+        (input.r#type, input.body)
+    }
+}
+
+impl GeneralNotificationMessageInput {
+    pub fn new(r#type: GeneralNotificationMessageInputType, body: Bytes) -> Self {
+        Self { r#type, body }
+    }
+
+    pub fn r#type(&self) -> &GeneralNotificationMessageInputType {
+        &self.r#type
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
+    }
+}

@@ -6,7 +6,7 @@ use std::fmt::{self, Display, Formatter};
 pub enum LoadModuleError {}
 
 impl Display for LoadModuleError {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, _formatter: &mut Formatter) -> fmt::Result {
         todo!()
     }
 }

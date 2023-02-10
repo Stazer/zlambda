@@ -4,7 +4,7 @@ use crate::general::{
     GeneralLogEntriesAppendRequestMessageInput, GeneralLogEntriesAppendResponseMessageInput,
     GeneralNotifyMessageInput, GeneralRecoveryRequestMessageInput,
     GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessageInput,
-    GeneralRegistrationResponseMessageInput,
+    GeneralRegistrationResponseMessageInput, GeneralNotificationMessageInput,
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,6 +52,10 @@ pub type GeneralClientRegistrationResponseMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type GeneralNotificationMessage = AsynchronousMessage<GeneralNotificationMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum GeneralMessage {
     RegistrationRequest(GeneralRegistrationRequestMessage),
@@ -63,6 +67,7 @@ pub enum GeneralMessage {
     Notify(GeneralNotifyMessage),
     ClientRegistrationRequest(GeneralClientRegistrationRequestMessage),
     ClientRegistrationResponse(GeneralClientRegistrationResponseMessage),
+    Notification(GeneralNotificationMessage),
 }
 
 impl From<GeneralRegistrationRequestMessage> for GeneralMessage {
@@ -116,5 +121,11 @@ impl From<GeneralClientRegistrationRequestMessage> for GeneralMessage {
 impl From<GeneralClientRegistrationResponseMessage> for GeneralMessage {
     fn from(message: GeneralClientRegistrationResponseMessage) -> Self {
         Self::ClientRegistrationResponse(message)
+    }
+}
+
+impl From<GeneralNotificationMessage> for GeneralMessage {
+    fn from(message: GeneralNotificationMessage) -> Self {
+        Self::Notification(message)
     }
 }

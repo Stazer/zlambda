@@ -79,6 +79,10 @@ where
     pub async fn do_receive(&mut self) -> T {
         self.receiver.do_receive().await
     }
+
+    pub async fn receive(&mut self) -> Option<T> {
+        self.receiver.recv().await
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
