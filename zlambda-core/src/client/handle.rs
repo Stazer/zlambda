@@ -1,4 +1,4 @@
-use crate::client::{ClientMessage, ClientNotifyMessageInput};
+use crate::client::{ClientMessage};
 use crate::common::message::MessageQueueSender;
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
@@ -15,11 +15,5 @@ impl ClientHandle {
         Self {
             client_message_sender,
         }
-    }
-
-    pub async fn notify(&self, module_id: ModuleId, body: Bytes) {
-        self.client_message_sender
-            .do_send_asynchronous(ClientNotifyMessageInput::new(module_id, body))
-            .await;
     }
 }

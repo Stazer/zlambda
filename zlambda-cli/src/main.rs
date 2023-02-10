@@ -5,10 +5,10 @@
 use clap::{Args, Parser, Subcommand};
 use std::error::Error;
 use std::iter::empty;
+use zlambda_core::client::ClientTask;
 use zlambda_core::common::module::ModuleId;
 use zlambda_core::common::utility::Bytes;
 use zlambda_core::server::{ServerId, ServerTask};
-use zlambda_core::client::ClientTask;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,17 +97,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .run()
             .await
         }
-        MainCommand::Client {
-            address,
-            command,
-        } => {
+        MainCommand::Client { address, command } => {
             let client_task = ClientTask::new(address, empty()).await?;
 
             match command {
-                ClientCommand::Notify {
-                    module_id
-                } => {
-                    client_task.handle().notify(module_id, Bytes::default()).await;
+                ClientCommand::Notify { module_id } => {
+                    client_task.handle().notify(module_id, stdin()).await;
                 }
             }
 

@@ -7,8 +7,10 @@ edition = "2021"
 [dependencies]
 async-ffi = "*"
 async-recursion = "*"
+async-stream = "*"
 async-trait = "*"
 bytes = { version = "1", features = ["serde"] }
+either = "1"
 futures = "0.3"
 libloading = "0.7"
 postcard = { version = "1", features = ["alloc"] }

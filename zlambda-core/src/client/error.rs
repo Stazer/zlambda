@@ -1,5 +1,5 @@
-use crate::common::module::{LoadModuleError};
 use crate::common::message::MessageError;
+use crate::common::module::LoadModuleError;
 use std::error;
 use std::fmt::{self, Display, Formatter};
 use std::io;

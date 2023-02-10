@@ -2,9 +2,9 @@ use crate::common::message::AsynchronousMessage;
 use crate::general::{
     GeneralClientRegistrationRequestMessageInput, GeneralClientRegistrationResponseMessageInput,
     GeneralLogEntriesAppendRequestMessageInput, GeneralLogEntriesAppendResponseMessageInput,
-    GeneralNotifyMessageInput, GeneralRecoveryRequestMessageInput,
+    GeneralNotificationMessageInput, GeneralNotifyMessageInput, GeneralRecoveryRequestMessageInput,
     GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessageInput,
-    GeneralRegistrationResponseMessageInput, GeneralNotificationMessageInput,
+    GeneralRegistrationResponseMessageInput,
 };
 use serde::{Deserialize, Serialize};
 

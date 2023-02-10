@@ -1,1 +1,1 @@
-pub type ClientModuleNotifyEventOutput = ();
+pub type ClientModuleNotificationEventOutput = ();

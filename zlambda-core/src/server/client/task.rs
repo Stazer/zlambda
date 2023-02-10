@@ -3,15 +3,20 @@ use crate::common::message::{
     MessageSocketSender,
 };
 use crate::common::runtime::{select, spawn};
+use crate::common::utility::Bytes;
 use crate::general::{
     GeneralClientRegistrationResponseMessage, GeneralClientRegistrationResponseMessageInput,
-    GeneralMessage, GeneralNotifyMessage, GeneralNotifyMessageInput,
+    GeneralMessage, GeneralNotificationMessage, GeneralNotificationMessageInputType,
+    GeneralNotifyMessage, GeneralNotifyMessageInput,
 };
 use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientNotifyMessage};
 use crate::server::{
-    ServerClientResignationMessageInput, ServerMessage, ServerNotifyMessageInput,
+    ServerClientResignationMessageInput, ServerHandle, ServerMessage, ServerModuleGetMessageInput,
+    ServerModuleNotificationEventBody, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventInputClientSource, ServerNotifyMessageInput,
     ServerNotifyMessageInputClientSource,
 };
+use std::collections::HashMap;
 use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,17 +24,18 @@ use tracing::error;
 #[derive(Debug)]
 pub struct ServerClientTask {
     client_id: ServerClientId,
-    server_queue_sender: MessageQueueSender<ServerMessage>,
+    server_message_sender: MessageQueueSender<ServerMessage>,
     general_message_sender: MessageSocketSender<GeneralMessage>,
     general_message_receiver: MessageSocketReceiver<GeneralMessage>,
     sender: MessageQueueSender<ServerClientMessage>,
     receiver: MessageQueueReceiver<ServerClientMessage>,
+    notification_senders: HashMap<usize, MessageQueueSender<Bytes>>,
 }
 
 impl ServerClientTask {
     pub fn new(
         client_id: ServerClientId,
-        server_queue_sender: MessageQueueSender<ServerMessage>,
+        server_message_sender: MessageQueueSender<ServerMessage>,
         general_message_sender: MessageSocketSender<GeneralMessage>,
         general_message_receiver: MessageSocketReceiver<GeneralMessage>,
     ) -> Self {
@@ -37,11 +43,12 @@ impl ServerClientTask {
 
         Self {
             client_id,
-            server_queue_sender,
+            server_message_sender,
             general_message_sender,
             general_message_receiver,
             sender,
             receiver,
+            notification_senders: HashMap::default(),
         }
     }
 
@@ -69,7 +76,7 @@ impl ServerClientTask {
             self.select().await
         }
 
-        self.server_queue_sender
+        self.server_message_sender
             .do_send_asynchronous(ServerClientResignationMessageInput::new(self.client_id))
             .await;
     }
@@ -121,6 +128,9 @@ impl ServerClientTask {
     async fn on_general_message(&mut self, message: GeneralMessage) {
         match message {
             GeneralMessage::Notify(message) => self.on_general_notify_message(message).await,
+            GeneralMessage::Notification(message) => {
+                self.on_general_notification_message(message).await
+            }
             message => {
                 error!(
                     "{}",
@@ -134,12 +144,88 @@ impl ServerClientTask {
         let (input,) = message.into();
         let (module_id, body) = input.into();
 
-        self.server_queue_sender
+        self.server_message_sender
             .do_send_asynchronous(ServerNotifyMessageInput::new(
                 module_id,
                 ServerNotifyMessageInputClientSource::new(self.client_id).into(),
                 body,
             ))
             .await;
+    }
+
+    async fn on_general_notification_message(&mut self, message: GeneralNotificationMessage) {
+        let (input,) = message.into();
+        let (r#type, body) = input.into();
+
+        match r#type {
+            GeneralNotificationMessageInputType::Immediate(r#type) => {
+                let output = self
+                    .server_message_sender
+                    .do_send_synchronous(ServerModuleGetMessageInput::new(r#type.module_id()))
+                    .await;
+
+                let module = match output.into() {
+                    (None,) => return,
+                    (Some(module),) => module,
+                };
+
+                let handle = ServerHandle::new(self.server_message_sender.clone());
+                let client_source =
+                    ServerModuleNotificationEventInputClientSource::new(self.client_id);
+
+                let (sender, receiver) = message_queue();
+                sender.do_send(body).await;
+
+                spawn(async move {
+                    module
+                        .on_notification(ServerModuleNotificationEventInput::new(
+                            handle,
+                            client_source.into(),
+                            ServerModuleNotificationEventBody::new(receiver),
+                        ))
+                        .await;
+                });
+            }
+            GeneralNotificationMessageInputType::Start(r#type) => {
+                let output = self
+                    .server_message_sender
+                    .do_send_synchronous(ServerModuleGetMessageInput::new(r#type.module_id()))
+                    .await;
+
+                let module = match output.into() {
+                    (None,) => return,
+                    (Some(module),) => module,
+                };
+
+                let (sender, receiver) = message_queue();
+                sender.do_send(body).await;
+                self.notification_senders
+                    .insert(r#type.notification_id(), sender);
+
+                let handle = ServerHandle::new(self.server_message_sender.clone());
+                let client_source =
+                    ServerModuleNotificationEventInputClientSource::new(self.client_id);
+
+                spawn(async move {
+                    module
+                        .on_notification(ServerModuleNotificationEventInput::new(
+                            handle,
+                            client_source.into(),
+                            ServerModuleNotificationEventBody::new(receiver),
+                        ))
+                        .await;
+                });
+            }
+            GeneralNotificationMessageInputType::Next(r#type) => {
+                if let Some(sender) = self.notification_senders.get(&r#type.notification_id()) {
+                    sender.do_send(body).await;
+                }
+            }
+            GeneralNotificationMessageInputType::End(r#type) => {
+                if let Some(sender) = self.notification_senders.remove(&r#type.notification_id()) {
+                    sender.do_send(body).await;
+                }
+            }
+        };
     }
 }

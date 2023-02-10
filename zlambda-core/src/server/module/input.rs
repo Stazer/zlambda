@@ -1,11 +1,10 @@
+use crate::common::message::MessageQueueReceiver;
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
-use crate::common::message::MessageQueueReceiver;
 use crate::server::client::ServerClientId;
 use crate::server::{LogEntry, ServerHandle, ServerId, ServerNotifyMessageInputSource};
+use async_stream::stream;
 use futures::Stream;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -296,19 +295,21 @@ pub enum ServerModuleNotificationEventInputSource {
     Client(ServerModuleNotificationEventInputClientSource),
 }
 
-impl From<ServerModuleNotificationEventInputServerSource> for ServerModuleNotificationEventInputSource {
+impl From<ServerModuleNotificationEventInputServerSource>
+    for ServerModuleNotificationEventInputSource
+{
     fn from(source: ServerModuleNotificationEventInputServerSource) -> Self {
         Self::Server(source)
     }
 }
 
-impl From<ServerModuleNotificationEventInputClientSource> for ServerModuleNotificationEventInputSource {
+impl From<ServerModuleNotificationEventInputClientSource>
+    for ServerModuleNotificationEventInputSource
+{
     fn from(source: ServerModuleNotificationEventInputClientSource) -> Self {
         Self::Client(source)
     }
 }
-
-use futures::Future;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -318,15 +319,16 @@ pub struct ServerModuleNotificationEventBody {
 }
 
 impl ServerModuleNotificationEventBody {
-    pub fn new(
-        receiver: MessageQueueReceiver<Bytes>,
-    ) -> Self {
-        Self {
-            receiver,
-        }
+    pub fn new(receiver: MessageQueueReceiver<Bytes>) -> Self {
+        Self { receiver }
+    }
+
+    pub fn stream(&mut self) -> impl Stream<Item = Bytes> + '_ {
+        stream!(while let Some(bytes) = self.receiver.receive().await {
+            yield bytes
+        })
     }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -338,7 +340,11 @@ pub struct ServerModuleNotificationEventInput {
 }
 
 impl From<ServerModuleNotificationEventInput>
-    for (ServerHandle, ServerModuleNotificationEventInputSource, ServerModuleNotificationEventBody)
+    for (
+        ServerHandle,
+        ServerModuleNotificationEventInputSource,
+        ServerModuleNotificationEventBody,
+    )
 {
     fn from(input: ServerModuleNotificationEventInput) -> Self {
         (input.server, input.source, input.body)

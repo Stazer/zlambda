@@ -1,12 +1,12 @@
-use crate::client::{ClientModuleNotifyEventInput, ClientModuleNotifyEventOutput};
+use crate::client::{ClientModuleNotificationEventOutput, ClientModuleNotificationEventInput};
 use crate::common::module::Module;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[async_trait::async_trait]
 pub trait ClientModule: Module {
-    async fn on_notify(
+    async fn on_notification(
         &self,
-        _event: ClientModuleNotifyEventInput,
-    ) -> ClientModuleNotifyEventOutput;
+        _event: ClientModuleNotificationEventInput,
+    ) -> ClientModuleNotificationEventOutput;
 }

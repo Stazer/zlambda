@@ -8,7 +8,7 @@ use crate::server::{
     ServerModuleLoadMessageOutput, ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
     ServerNotifyMessageInput, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
     ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
-    ServerSocketAcceptMessageInput, ServerNotificationMessageInput,
+    ServerSocketAcceptMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,10 +82,6 @@ pub type ServerClientResignationMessage = AsynchronousMessage<ServerClientResign
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerNotificationMessage = AsynchronousMessage<ServerNotificationMessageInput>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
@@ -103,7 +99,6 @@ pub enum ServerMessage {
     Notify(ServerNotifyMessage),
     ClientRegistration(ServerClientRegistrationMessage),
     ClientResignation(ServerClientResignationMessage),
-    Notification(ServerNotificationMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -181,11 +176,5 @@ impl From<ServerClientRegistrationMessage> for ServerMessage {
 impl From<ServerClientResignationMessage> for ServerMessage {
     fn from(message: ServerClientResignationMessage) -> Self {
         Self::ClientResignation(message)
-    }
-}
-
-impl From<ServerNotificationMessage> for ServerMessage {
-    fn from(message: ServerNotificationMessage) -> Self {
-        Self::Notification(message)
     }
 }

@@ -5,6 +5,7 @@ use crate::common::message::{
 use crate::common::module::ModuleManager;
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
+use crate::common::utility::Bytes;
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendResponseMessage,
     GeneralLogEntriesAppendResponseMessageInput, GeneralMessage, GeneralNotifyMessage,
@@ -30,7 +31,6 @@ use crate::server::{
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
-    ServerNotificationMessage, ServerNotificationMessageInputType,
 };
 use crate::server::{
     ServerNodeMessage, ServerNodeReplicationMessage, ServerNodeReplicationMessageInput,
@@ -42,7 +42,6 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::{debug, error, info};
-use crate::common::utility::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -56,9 +55,6 @@ pub struct ServerTask {
     commit_messages: HashMap<LogEntryId, Vec<ServerMessage>>,
     module_manager: ModuleManager<dyn ServerModule>,
     clients: Vec<Option<MessageQueueSender<ServerClientMessage>>>,
-    notification_senders: HashMap<usize, MessageQueueSender<Bytes>>,
-    server_notification_lookup: HashMap<ServerId, HashMap<usize, usize>>,
-    client_notification_lookup: HashMap<ServerClientId, HashMap<usize, usize>>,
 }
 
 impl ServerTask {
@@ -79,10 +75,6 @@ impl ServerTask {
             module_manager.load(Arc::from(module))?;
         }
 
-        let notification_senders = HashMap::default();
-        let server_notification_lookup = HashMap::default();
-        let client_notification_lookup = HashMap::default();
-
         match follower_data {
             None => Ok(Self {
                 server_id: ServerId::default(),
@@ -94,9 +86,6 @@ impl ServerTask {
                 commit_messages: HashMap::default(),
                 module_manager,
                 clients: Vec::default(),
-                notification_senders,
-                server_notification_lookup,
-                client_notification_lookup,
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -183,9 +172,6 @@ impl ServerTask {
                     commit_messages: HashMap::default(),
                     module_manager,
                     clients: Vec::default(),
-                    notification_senders,
-                server_notification_lookup,
-                client_notification_lookup,
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -268,9 +254,6 @@ impl ServerTask {
                     commit_messages: HashMap::default(),
                     module_manager,
                     clients: Vec::default(),
-                    notification_senders,
-                    server_notification_lookup,
-                    client_notification_lookup,
                 })
             }
         }
@@ -405,9 +388,6 @@ impl ServerTask {
             }
             ServerMessage::ClientResignation(message) => {
                 self.on_server_client_resignation(message).await
-            }
-            ServerMessage::Notification(message) => {
-                self.on_server_notification_message(message).await
             }
         }
     }
@@ -760,26 +740,6 @@ impl ServerTask {
         self.clients
             .get_mut(usize::from(input.server_client_id()))
             .take();
-    }
-
-    async fn on_server_notification_message(&mut self, message: ServerNotificationMessage) {
-        let (input,) = message.into();
-        let (r#type, body) = input.into();
-
-        match r#type {
-            ServerNotificationMessageInputType::Immediate(immediate) => {
-
-            },
-            ServerNotificationMessageInputType::Start(start) => {
-
-            },
-            ServerNotificationMessageInputType::Next(next) => {
-
-            },
-            ServerNotificationMessageInputType::End(end) => {
-
-            },
-        }
     }
 
     async fn on_general_message(&mut self, message: GeneralMessage) {

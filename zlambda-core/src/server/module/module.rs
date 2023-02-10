@@ -1,10 +1,11 @@
 use crate::common::module::Module;
 use crate::server::{
     ServerModuleCommitEventInput, ServerModuleCommitEventOutput, ServerModuleLoadEventInput,
-    ServerModuleLoadEventOutput, ServerModuleNotifyEventInput, ServerModuleNotifyEventOutput,
-    ServerModuleShutdownEventInput, ServerModuleShutdownEventOutput, ServerModuleStartupEventInput,
-    ServerModuleStartupEventOutput, ServerModuleUnloadEventInput, ServerModuleUnloadEventOutput,
-    ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput
+    ServerModuleLoadEventOutput, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventOutput, ServerModuleNotifyEventInput,
+    ServerModuleNotifyEventOutput, ServerModuleShutdownEventInput, ServerModuleShutdownEventOutput,
+    ServerModuleStartupEventInput, ServerModuleStartupEventOutput, ServerModuleUnloadEventInput,
+    ServerModuleUnloadEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

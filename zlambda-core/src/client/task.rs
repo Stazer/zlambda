@@ -1,6 +1,6 @@
 use crate::client::{
-    ClientHandle, ClientMessage, ClientModule, ClientNotifyMessage, NewClientError,
-    ClientModuleNotifyEventInput,
+    ClientHandle, ClientMessage, ClientModule,
+    NewClientError, ClientModuleNotificationEventInput, ClientModuleNotificationEventInputBody,
 };
 use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
@@ -11,9 +11,11 @@ use crate::common::net::{TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
 use crate::general::{
     GeneralClientRegistrationRequestMessage, GeneralClientRegistrationRequestMessageInput,
-    GeneralMessage, GeneralNotifyMessage, GeneralNotifyMessageInput,
+    GeneralMessage, GeneralNotificationMessage, GeneralNotificationMessageInputType,
 };
 use std::sync::Arc;
+use std::collections::HashMap;
+use crate::common::utility::Bytes;
 use tracing::error;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,6 +27,7 @@ pub struct ClientTask {
     client_message_receiver: MessageQueueReceiver<ClientMessage>,
     client_message_sender: MessageQueueSender<ClientMessage>,
     module_manager: ModuleManager<dyn ClientModule>,
+    notification_senders: HashMap<usize, MessageQueueSender<Bytes>>,
 }
 
 impl ClientTask {
@@ -73,6 +76,7 @@ impl ClientTask {
             client_message_sender,
             client_message_receiver,
             module_manager,
+            notification_senders: HashMap::default(),
         })
     }
 
@@ -115,54 +119,75 @@ impl ClientTask {
     }
 
     async fn on_client_message(&mut self, message: ClientMessage) {
-        match message {
-            ClientMessage::Notify(message) => self.on_client_notify_message(message).await,
-        }
-    }
-
-    async fn on_client_notify_message(&mut self, message: ClientNotifyMessage) {
-        let (input,) = message.into();
-        let (module_id, body) = input.into();
-
-        if let Err(error) = self
-            .general_sender
-            .send(GeneralNotifyMessage::new(GeneralNotifyMessageInput::new(
-                module_id, body,
-            )))
-            .await
-        {
-            error!("{}", error);
-        }
     }
 
     async fn on_general_message(&mut self, message: GeneralMessage) {
         match message {
-            GeneralMessage::Notify(message) => self.on_general_notify_message(message).await,
+            GeneralMessage::Notification(message) => {
+                self.on_general_notification_message(message).await
+            }
             message => {
                 todo!()
-            },
+            }
         }
     }
 
-    async fn on_general_notify_message(&mut self, message: GeneralNotifyMessage) {
+    async fn on_general_notification_message(&mut self, message: GeneralNotificationMessage) {
         let (input,) = message.into();
-        let (module_id, body) = input.into();
+        let (r#type, body) = input.into();
 
-        let module = match self.module_manager.get_by_module_id(module_id) {
-            None => return,
-            Some(module) => module,
+        match r#type {
+            GeneralNotificationMessageInputType::Immediate(r#type) => {
+                let module = match self.module_manager.get_by_module_id(r#type.module_id()) {
+                    None => return,
+                    Some(module) => module.clone(),
+                };
+
+                let handle = self.handle();
+
+                let (sender, receiver) = message_queue();
+                sender.do_send(body).await;
+
+                spawn(async move {
+                    module
+                        .on_notification(ClientModuleNotificationEventInput::new(
+                            handle,
+                            ClientModuleNotificationEventInputBody::new(receiver),
+                        ))
+                        .await;
+                });
+            }
+            GeneralNotificationMessageInputType::Start(r#type) => {
+                let module = match self.module_manager.get_by_module_id(r#type.module_id()) {
+                    None => return,
+                    Some(module) => module.clone(),
+                };
+
+                let handle = self.handle();
+
+                let (sender, receiver) = message_queue();
+                sender.do_send(body).await;
+                self.notification_senders.insert(r#type.notification_id(), sender);
+
+                spawn(async move {
+                    module
+                        .on_notification(ClientModuleNotificationEventInput::new(
+                            handle,
+                            ClientModuleNotificationEventInputBody::new(receiver),
+                        ))
+                        .await;
+                });
+            }
+            GeneralNotificationMessageInputType::Next(r#type) => {
+                if let Some(sender) = self.notification_senders.get(&r#type.notification_id()) {
+                    sender.do_send(body).await;
+                }
+            }
+            GeneralNotificationMessageInputType::End(r#type) => {
+                if let Some(sender) = self.notification_senders.remove(&r#type.notification_id()) {
+                    sender.do_send(body).await;
+                }
+            }
         };
-
-        let client_handle = self.handle();
-        let module = module.clone();
-
-        spawn(async move {
-            module
-                .on_notify(ClientModuleNotifyEventInput::new(
-                    client_handle,
-                    body,
-                ))
-                .await;
-        });
     }
 }

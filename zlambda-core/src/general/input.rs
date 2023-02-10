@@ -379,19 +379,15 @@ pub struct GeneralNotificationMessageInputImmediateType {
     module_id: ModuleId,
 }
 
-impl From<GeneralNotificationMessageInputImmediateType> for (ModuleId, ) {
+impl From<GeneralNotificationMessageInputImmediateType> for (ModuleId,) {
     fn from(r#type: GeneralNotificationMessageInputImmediateType) -> Self {
         (r#type.module_id,)
     }
 }
 
 impl GeneralNotificationMessageInputImmediateType {
-    pub fn new(
-        module_id: ModuleId,
-    ) -> Self {
-        Self {
-            module_id,
-        }
+    pub fn new(module_id: ModuleId) -> Self {
+        Self { module_id }
     }
 
     pub fn module_id(&self) -> ModuleId {
@@ -414,10 +410,7 @@ impl From<GeneralNotificationMessageInputStartType> for (ModuleId, usize) {
 }
 
 impl GeneralNotificationMessageInputStartType {
-    pub fn new(
-        module_id: ModuleId,
-        notification_id: usize,
-    ) -> Self {
+    pub fn new(module_id: ModuleId, notification_id: usize) -> Self {
         Self {
             module_id,
             notification_id,
@@ -447,12 +440,8 @@ impl From<GeneralNotificationMessageInputNextType> for (usize,) {
 }
 
 impl GeneralNotificationMessageInputNextType {
-    pub fn new(
-        notification_id: usize,
-    ) -> Self {
-        Self {
-            notification_id,
-        }
+    pub fn new(notification_id: usize) -> Self {
+        Self { notification_id }
     }
 
     pub fn notification_id(&self) -> usize {
@@ -474,12 +463,8 @@ impl From<GeneralNotificationMessageInputEndType> for (usize,) {
 }
 
 impl GeneralNotificationMessageInputEndType {
-    pub fn new(
-        notification_id: usize,
-    ) -> Self {
-        Self {
-            notification_id,
-        }
+    pub fn new(notification_id: usize) -> Self {
+        Self { notification_id }
     }
 
     pub fn notification_id(&self) -> usize {
