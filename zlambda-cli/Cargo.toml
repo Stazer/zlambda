@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
+tokio-util = "*"
+futures = "*"
 console-subscriber = { version = "*" }
 tracing-subscriber = { version = "0", features = ["fmt"] }
 zlambda-core = { path = "../zlambda-core" }
