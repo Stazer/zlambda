@@ -6,10 +6,17 @@ use crate::common::runtime::{select, spawn};
 use crate::common::utility::Bytes;
 use crate::general::{
     GeneralClientRegistrationResponseMessage, GeneralClientRegistrationResponseMessageInput,
-    GeneralMessage, GeneralNotificationMessage, GeneralNotificationMessageInputType,
-    GeneralNotifyMessage, GeneralNotifyMessageInput,
+    GeneralMessage, GeneralNotificationMessage, GeneralNotificationMessageInput,
+    GeneralNotificationMessageInputEndType, GeneralNotificationMessageInputImmediateType,
+    GeneralNotificationMessageInputNextType, GeneralNotificationMessageInputStartType,
+    GeneralNotificationMessageInputType, GeneralNotifyMessage, GeneralNotifyMessageInput,
 };
-use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientNotifyMessage};
+use crate::server::client::{
+    ServerClientId, ServerClientMessage, ServerClientNotificationEndMessage,
+    ServerClientNotificationImmediateMessage, ServerClientNotificationNextMessage,
+    ServerClientNotificationStartMessage, ServerClientNotificationStartMessageOutput,
+    ServerClientNotifyMessage,
+};
 use crate::server::{
     ServerClientResignationMessageInput, ServerHandle, ServerMessage, ServerModuleGetMessageInput,
     ServerModuleNotificationEventBody, ServerModuleNotificationEventInput,
@@ -29,7 +36,8 @@ pub struct ServerClientTask {
     general_message_receiver: MessageSocketReceiver<GeneralMessage>,
     sender: MessageQueueSender<ServerClientMessage>,
     receiver: MessageQueueReceiver<ServerClientMessage>,
-    notification_senders: HashMap<usize, MessageQueueSender<Bytes>>,
+    incoming_notification_senders: HashMap<usize, MessageQueueSender<Bytes>>,
+    outgoing_notification_counter: usize,
 }
 
 impl ServerClientTask {
@@ -48,7 +56,8 @@ impl ServerClientTask {
             general_message_receiver,
             sender,
             receiver,
-            notification_senders: HashMap::default(),
+            incoming_notification_senders: HashMap::default(),
+            outgoing_notification_counter: 0,
         }
     }
 
@@ -107,6 +116,116 @@ impl ServerClientTask {
             ServerClientMessage::Notify(message) => {
                 self.on_server_client_notify_message(message).await
             }
+            ServerClientMessage::NotificationImmediate(message) => {
+                self.on_server_client_notification_immediate_message(message)
+                    .await
+            }
+            ServerClientMessage::NotificationStart(message) => {
+                self.on_server_client_notification_start_message(message)
+                    .await
+            }
+            ServerClientMessage::NotificationNext(message) => {
+                self.on_server_client_notification_next_message(message)
+                    .await
+            }
+            ServerClientMessage::NotificationEnd(message) => {
+                self.on_server_client_notification_end_message(message)
+                    .await
+            }
+        }
+    }
+
+    async fn on_server_client_notification_immediate_message(
+        &mut self,
+        message: ServerClientNotificationImmediateMessage,
+    ) {
+        let (input,) = message.into();
+        let (module_id, body) = input.into();
+
+        if let Err(error) = self
+            .general_message_sender
+            .send(GeneralNotificationMessage::new(
+                GeneralNotificationMessageInput::new(
+                    GeneralNotificationMessageInputImmediateType::new(module_id).into(),
+                    body,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+        }
+    }
+
+    async fn on_server_client_notification_start_message(
+        &mut self,
+        message: ServerClientNotificationStartMessage,
+    ) {
+        let (input, sender) = message.into();
+        let (module_id, body) = input.into();
+
+        let notification_id = self.outgoing_notification_counter;
+        self.outgoing_notification_counter += 1;
+
+        sender
+            .do_send(ServerClientNotificationStartMessageOutput::new(
+                notification_id,
+            ))
+            .await;
+
+        if let Err(error) = self
+            .general_message_sender
+            .send(GeneralNotificationMessage::new(
+                GeneralNotificationMessageInput::new(
+                    GeneralNotificationMessageInputStartType::new(module_id, notification_id)
+                        .into(),
+                    body,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+        }
+    }
+
+    async fn on_server_client_notification_next_message(
+        &mut self,
+        message: ServerClientNotificationNextMessage,
+    ) {
+        let (input,) = message.into();
+        let (notification_id, body) = input.into();
+
+        if let Err(error) = self
+            .general_message_sender
+            .send(GeneralNotificationMessage::new(
+                GeneralNotificationMessageInput::new(
+                    GeneralNotificationMessageInputNextType::new(notification_id).into(),
+                    body,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+        }
+    }
+
+    async fn on_server_client_notification_end_message(
+        &mut self,
+        message: ServerClientNotificationEndMessage,
+    ) {
+        let (input,) = message.into();
+        let (notification_id, body) = input.into();
+
+        if let Err(error) = self
+            .general_message_sender
+            .send(GeneralNotificationMessage::new(
+                GeneralNotificationMessageInput::new(
+                    GeneralNotificationMessageInputEndType::new(notification_id).into(),
+                    body,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
         }
     }
 
@@ -199,7 +318,7 @@ impl ServerClientTask {
 
                 let (sender, receiver) = message_queue();
                 sender.do_send(body).await;
-                self.notification_senders
+                self.incoming_notification_senders
                     .insert(r#type.notification_id(), sender);
 
                 let handle = ServerHandle::new(self.server_message_sender.clone());
@@ -217,12 +336,18 @@ impl ServerClientTask {
                 });
             }
             GeneralNotificationMessageInputType::Next(r#type) => {
-                if let Some(sender) = self.notification_senders.get(&r#type.notification_id()) {
+                if let Some(sender) = self
+                    .incoming_notification_senders
+                    .get(&r#type.notification_id())
+                {
                     sender.do_send(body).await;
                 }
             }
             GeneralNotificationMessageInputType::End(r#type) => {
-                if let Some(sender) = self.notification_senders.remove(&r#type.notification_id()) {
+                if let Some(sender) = self
+                    .incoming_notification_senders
+                    .remove(&r#type.notification_id())
+                {
                     sender.do_send(body).await;
                 }
             }

@@ -1,7 +1,10 @@
-use crate::common::message::AsynchronousMessage;
+use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::node::{
-    ServerNodeNotifyMessageInput, ServerNodeRecoveryMessageInput,
-    ServerNodeRegistrationMessageInput, ServerNodeReplicationMessageInput,
+    ServerNodeNotificationEndMessageInput, ServerNodeNotificationImmediateMessageInput,
+    ServerNodeNotificationNextMessageInput, ServerNodeNotificationStartMessageInput,
+    ServerNodeNotificationStartMessageOutput, ServerNodeNotifyMessageInput,
+    ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput,
+    ServerNodeReplicationMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,12 +25,38 @@ pub type ServerNodeNotifyMessage = AsynchronousMessage<ServerNodeNotifyMessageIn
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerNodeNotificationImmediateMessage =
+    AsynchronousMessage<ServerNodeNotificationImmediateMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerNodeNotificationStartMessage = SynchronousMessage<
+    ServerNodeNotificationStartMessageInput,
+    ServerNodeNotificationStartMessageOutput,
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerNodeNotificationNextMessage =
+    AsynchronousMessage<ServerNodeNotificationNextMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerNodeNotificationEndMessage =
+    AsynchronousMessage<ServerNodeNotificationEndMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerNodeMessage {
     Replication(ServerNodeReplicationMessage),
     Registration(ServerNodeRegistrationMessage),
     Recovery(ServerNodeRecoveryMessage),
     Notify(ServerNodeNotifyMessage),
+    NotificationImmediate(ServerNodeNotificationImmediateMessage),
+    NotificationStart(ServerNodeNotificationStartMessage),
+    NotificationNext(ServerNodeNotificationNextMessage),
+    NotificationEnd(ServerNodeNotificationEndMessage),
 }
 
 impl From<ServerNodeReplicationMessage> for ServerNodeMessage {
@@ -51,5 +80,29 @@ impl From<ServerNodeRecoveryMessage> for ServerNodeMessage {
 impl From<ServerNodeNotifyMessage> for ServerNodeMessage {
     fn from(message: ServerNodeNotifyMessage) -> Self {
         Self::Notify(message)
+    }
+}
+
+impl From<ServerNodeNotificationImmediateMessage> for ServerNodeMessage {
+    fn from(message: ServerNodeNotificationImmediateMessage) -> Self {
+        Self::NotificationImmediate(message)
+    }
+}
+
+impl From<ServerNodeNotificationStartMessage> for ServerNodeMessage {
+    fn from(message: ServerNodeNotificationStartMessage) -> Self {
+        Self::NotificationStart(message)
+    }
+}
+
+impl From<ServerNodeNotificationNextMessage> for ServerNodeMessage {
+    fn from(message: ServerNodeNotificationNextMessage) -> Self {
+        Self::NotificationNext(message)
+    }
+}
+
+impl From<ServerNodeNotificationEndMessage> for ServerNodeMessage {
+    fn from(message: ServerNodeNotificationEndMessage) -> Self {
+        Self::NotificationEnd(message)
     }
 }

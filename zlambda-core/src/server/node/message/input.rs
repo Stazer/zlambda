@@ -196,3 +196,121 @@ impl ServerNodeNotifyMessageInput {
         &self.body
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerNodeNotificationImmediateMessageInput {
+    module_id: ModuleId,
+    body: Bytes,
+}
+
+impl From<ServerNodeNotificationImmediateMessageInput> for (ModuleId, Bytes) {
+    fn from(input: ServerNodeNotificationImmediateMessageInput) -> Self {
+        (input.module_id, input.body)
+    }
+}
+
+impl ServerNodeNotificationImmediateMessageInput {
+    pub fn new(module_id: ModuleId, body: Bytes) -> Self {
+        Self { module_id, body }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerNodeNotificationStartMessageInput {
+    module_id: ModuleId,
+    body: Bytes,
+}
+
+impl From<ServerNodeNotificationStartMessageInput> for (ModuleId, Bytes) {
+    fn from(input: ServerNodeNotificationStartMessageInput) -> Self {
+        (input.module_id, input.body)
+    }
+}
+
+impl ServerNodeNotificationStartMessageInput {
+    pub fn new(module_id: ModuleId, body: Bytes) -> Self {
+        Self { module_id, body }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerNodeNotificationNextMessageInput {
+    notification_id: usize,
+    body: Bytes,
+}
+
+impl From<ServerNodeNotificationNextMessageInput> for (usize, Bytes) {
+    fn from(input: ServerNodeNotificationNextMessageInput) -> Self {
+        (input.notification_id, input.body)
+    }
+}
+
+impl ServerNodeNotificationNextMessageInput {
+    pub fn new(notification_id: usize, body: Bytes) -> Self {
+        Self {
+            notification_id,
+            body,
+        }
+    }
+
+    pub fn notification_id(&self) -> usize {
+        self.notification_id
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerNodeNotificationEndMessageInput {
+    notification_id: usize,
+    body: Bytes,
+}
+
+impl From<ServerNodeNotificationEndMessageInput> for (usize, Bytes) {
+    fn from(input: ServerNodeNotificationEndMessageInput) -> Self {
+        (input.notification_id, input.body)
+    }
+}
+
+impl ServerNodeNotificationEndMessageInput {
+    pub fn new(notification_id: usize, body: Bytes) -> Self {
+        Self {
+            notification_id,
+            body,
+        }
+    }
+
+    pub fn notification_id(&self) -> usize {
+        self.notification_id
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
+    }
+}

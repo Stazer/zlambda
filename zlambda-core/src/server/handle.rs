@@ -1,9 +1,22 @@
 use crate::common::message::MessageQueueSender;
 use crate::common::module::{LoadModuleError, ModuleId, UnloadModuleError};
+use crate::common::utility::Bytes;
+use crate::server::client::{
+    ServerClientMessage, ServerClientNotificationEndMessageInput,
+    ServerClientNotificationImmediateMessageInput, ServerClientNotificationNextMessageInput,
+    ServerClientNotificationStartMessageInput,
+};
+use crate::server::node::{
+    ServerNodeMessage, ServerNodeNotificationEndMessageInput,
+    ServerNodeNotificationImmediateMessageInput, ServerNodeNotificationNextMessageInput,
+    ServerNodeNotificationStartMessageInput,
+};
 use crate::server::{
     ServerMessage, ServerModule, ServerModuleGetMessageInput, ServerModuleLoadMessageInput,
     ServerModuleUnloadMessageInput,
 };
+use futures::Stream;
+use futures::StreamExt;
 use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -147,5 +160,149 @@ pub struct ServerClientManagerHandle {
 impl ServerClientManagerHandle {
     pub(crate) fn new(sender: MessageQueueSender<ServerMessage>) -> Self {
         Self { sender }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Clone)]
+pub struct ServerClientHandle {
+    server_client_message_sender: MessageQueueSender<ServerClientMessage>,
+}
+
+impl ServerClientHandle {
+    pub(crate) fn new(
+        server_client_message_sender: MessageQueueSender<ServerClientMessage>,
+    ) -> Self {
+        Self {
+            server_client_message_sender,
+        }
+    }
+
+    pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
+    where
+        T: Stream<Item = Bytes> + Unpin,
+    {
+        let first = match body.next().await {
+            None => return,
+            Some(first) => first,
+        };
+
+        let mut previous = match body.next().await {
+            None => {
+                self.server_client_message_sender
+                    .do_send_asynchronous(ServerClientNotificationImmediateMessageInput::new(
+                        module_id, first,
+                    ))
+                    .await;
+
+                return;
+            }
+            Some(previous) => previous,
+        };
+
+        let (notification_id,) = self
+            .server_client_message_sender
+            .do_send_synchronous(ServerClientNotificationStartMessageInput::new(
+                module_id, first,
+            ))
+            .await
+            .into();
+
+        loop {
+            let next = match body.next().await {
+                None => {
+                    self.server_client_message_sender
+                        .do_send_asynchronous(ServerClientNotificationEndMessageInput::new(
+                            notification_id,
+                            previous,
+                        ))
+                        .await;
+
+                    break;
+                }
+                Some(next) => next,
+            };
+
+            self.server_client_message_sender
+                .do_send_asynchronous(ServerClientNotificationNextMessageInput::new(
+                    notification_id,
+                    previous,
+                ))
+                .await;
+
+            previous = next;
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Clone)]
+pub struct ServerNodeHandle {
+    server_node_message_sender: MessageQueueSender<ServerNodeMessage>,
+}
+
+impl ServerNodeHandle {
+    pub(crate) fn new(server_node_message_sender: MessageQueueSender<ServerNodeMessage>) -> Self {
+        Self {
+            server_node_message_sender,
+        }
+    }
+
+    pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
+    where
+        T: Stream<Item = Bytes> + Unpin,
+    {
+        let first = match body.next().await {
+            None => return,
+            Some(first) => first,
+        };
+
+        let mut previous = match body.next().await {
+            None => {
+                self.server_node_message_sender
+                    .do_send_asynchronous(ServerNodeNotificationImmediateMessageInput::new(
+                        module_id, first,
+                    ))
+                    .await;
+
+                return;
+            }
+            Some(previous) => previous,
+        };
+
+        let (notification_id,) = self
+            .server_node_message_sender
+            .do_send_synchronous(ServerNodeNotificationStartMessageInput::new(
+                module_id, first,
+            ))
+            .await
+            .into();
+
+        loop {
+            let next = match body.next().await {
+                None => {
+                    self.server_node_message_sender
+                        .do_send_asynchronous(ServerNodeNotificationEndMessageInput::new(
+                            notification_id,
+                            previous,
+                        ))
+                        .await;
+
+                    break;
+                }
+                Some(next) => next,
+            };
+
+            self.server_node_message_sender
+                .do_send_asynchronous(ServerNodeNotificationNextMessageInput::new(
+                    notification_id,
+                    previous,
+                ))
+                .await;
+
+            previous = next;
+        }
     }
 }
