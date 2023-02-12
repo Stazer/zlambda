@@ -10,12 +10,8 @@ impl From<ClientNotificationStartMessageOutput> for (usize,) {
 }
 
 impl ClientNotificationStartMessageOutput {
-    pub fn new(
-        notification_id: usize,
-    ) -> Self {
-        Self {
-            notification_id,
-        }
+    pub fn new(notification_id: usize) -> Self {
+        Self { notification_id }
     }
 
     pub fn notification_id(&self) -> usize {

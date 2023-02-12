@@ -31,7 +31,9 @@ pub struct ClientModuleNotificationEventInput {
     body: ClientModuleNotificationEventInputBody,
 }
 
-impl From<ClientModuleNotificationEventInput> for (ClientHandle, ClientModuleNotificationEventInputBody) {
+impl From<ClientModuleNotificationEventInput>
+    for (ClientHandle, ClientModuleNotificationEventInputBody)
+{
     fn from(input: ClientModuleNotificationEventInput) -> Self {
         (input.client_handle, input.body)
     }

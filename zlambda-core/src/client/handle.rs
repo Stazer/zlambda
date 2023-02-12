@@ -1,9 +1,12 @@
-use crate::client::{ClientMessage, ClientNotificationStartMessageInput, ClientNotificationNextMessageInput};
+use crate::client::{
+    ClientMessage, ClientNotificationEndMessageInput, ClientNotificationImmediateMessageInput,
+    ClientNotificationNextMessageInput, ClientNotificationStartMessageInput,
+};
 use crate::common::message::MessageQueueSender;
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
-use futures::StreamExt;
 use futures::Stream;
+use futures::StreamExt;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,27 +26,54 @@ impl ClientHandle {
     where
         T: Stream<Item = Bytes> + Unpin,
     {
-        let output = self.client_message_sender.do_send_synchronous(
-            ClientNotificationStartMessageInput::new(
-                module_id,
-            ),
-        ).await;
+        let first = match body.next().await {
+            None => return,
+            Some(first) => first,
+        };
 
-        while let Some(bytes) = body.next().await {
-            self.client_message_sender.do_send_asynchronous(
-                ClientNotificationNextMessageInput::new(
-                    output.notification_id(),
-                    Some(bytes),
-                ),
-            ).await;
+        let mut previous = match body.next().await {
+            None => {
+                self.client_message_sender
+                    .do_send_asynchronous(ClientNotificationImmediateMessageInput::new(
+                        module_id, first,
+                    ))
+                    .await;
+
+                return;
+            }
+            Some(previous) => previous,
+        };
+
+        let (notification_id,) = self
+            .client_message_sender
+            .do_send_synchronous(ClientNotificationStartMessageInput::new(module_id, first))
+            .await
+            .into();
+
+        loop {
+            let next = match body.next().await {
+                None => {
+                    self.client_message_sender
+                        .do_send_asynchronous(ClientNotificationEndMessageInput::new(
+                            notification_id,
+                            previous,
+                        ))
+                        .await;
+
+                    break;
+                }
+                Some(next) => next,
+            };
+
+            self.client_message_sender
+                .do_send_asynchronous(ClientNotificationNextMessageInput::new(
+                    notification_id,
+                    previous,
+                ))
+                .await;
+
+            previous = next;
         }
-
-        self.client_message_sender.do_send_asynchronous(
-            ClientNotificationNextMessageInput::new(
-                output.notification_id(),
-                None,
-            ),
-        ).await;
     }
 }
 
@@ -55,6 +85,5 @@ pub struct ClientServerHandle {
 }
 
 impl ClientServerHandle {
-    pub fn notify(&self, module_id: ModuleId, body: impl Stream<Item = Bytes>) {
-    }
+    pub fn notify(&self, module_id: ModuleId, body: impl Stream<Item = Bytes>) {}
 }

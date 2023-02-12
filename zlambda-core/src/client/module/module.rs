@@ -1,4 +1,4 @@
-use crate::client::{ClientModuleNotificationEventOutput, ClientModuleNotificationEventInput};
+use crate::client::{ClientModuleNotificationEventInput, ClientModuleNotificationEventOutput};
 use crate::common::module::Module;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

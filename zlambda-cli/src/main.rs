@@ -3,15 +3,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use clap::{Args, Parser, Subcommand};
+use futures::stream::StreamExt;
 use std::error::Error;
 use std::iter::empty;
+use tokio::io::stdin;
+use tokio_util::io::ReaderStream;
 use zlambda_core::client::ClientTask;
 use zlambda_core::common::module::ModuleId;
 use zlambda_core::common::utility::Bytes;
 use zlambda_core::server::{ServerId, ServerTask};
-use tokio::io::stdin;
-use tokio_util::io::ReaderStream;
-use futures::stream::StreamExt;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -105,7 +105,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             match command {
                 ClientCommand::Notify { module_id } => {
-                    client_task.handle().notify(module_id, ReaderStream::new(stdin()).map(|x| x.unwrap())).await;
+                    client_task
+                        .handle()
+                        .notify(module_id, ReaderStream::new(stdin()).map(|x| x.unwrap()))
+                        .await;
                 }
             }
 
