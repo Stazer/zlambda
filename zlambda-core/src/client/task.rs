@@ -3,6 +3,7 @@ use crate::client::{
     ClientModuleNotificationEventInputBody, ClientNotificationEndMessage,
     ClientNotificationImmediateMessage, ClientNotificationNextMessage,
     ClientNotificationStartMessage, ClientNotificationStartMessageOutput, NewClientError,
+    ClientModuleInitializeEventInput, ClientModuleFinalizeEventInput,
 };
 use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
@@ -96,8 +97,24 @@ impl ClientTask {
     }
 
     pub async fn run(mut self) {
+        for module in self.module_manager.iter().cloned() {
+            let client_handle = self.handle();
+
+            spawn(async move {
+                module.on_initialize(ClientModuleInitializeEventInput::new(client_handle)).await;
+            });
+        }
+
         while self.running {
             self.select().await
+        }
+
+        for module in self.module_manager.iter().cloned() {
+            let client_handle = self.handle();
+
+            spawn(async move {
+                module.on_finalize(ClientModuleFinalizeEventInput::new(client_handle)).await;
+            });
         }
     }
 

@@ -7,6 +7,60 @@ use futures::Stream;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ClientModuleInitializeEventInput {
+    client_handle: ClientHandle,
+}
+
+impl From<ClientModuleInitializeEventInput> for (ClientHandle,) {
+    fn from(input: ClientModuleInitializeEventInput) -> Self {
+        (input.client_handle,)
+    }
+}
+
+impl ClientModuleInitializeEventInput {
+    pub fn new(
+        client_handle: ClientHandle,
+    ) -> Self {
+        Self {
+            client_handle,
+        }
+    }
+
+    pub fn client_handle(&self) -> &ClientHandle {
+        &self.client_handle
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ClientModuleFinalizeEventInput {
+    client_handle: ClientHandle,
+}
+
+impl From<ClientModuleFinalizeEventInput> for (ClientHandle,) {
+    fn from(input: ClientModuleFinalizeEventInput) -> Self {
+        (input.client_handle,)
+    }
+}
+
+impl ClientModuleFinalizeEventInput {
+    pub fn new(
+        client_handle: ClientHandle,
+    ) -> Self {
+        Self {
+            client_handle,
+        }
+    }
+
+    pub fn client_handle(&self) -> &ClientHandle {
+        &self.client_handle
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ClientModuleNotificationEventInputBody {
     receiver: MessageQueueReceiver<Bytes>,
 }

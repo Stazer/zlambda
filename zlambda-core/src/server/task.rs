@@ -5,7 +5,6 @@ use crate::common::message::{
 use crate::common::module::ModuleManager;
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
-use crate::common::utility::Bytes;
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendResponseMessage,
     GeneralLogEntriesAppendResponseMessageInput, GeneralMessage, GeneralNotifyMessage,
@@ -55,6 +54,7 @@ pub struct ServerTask {
     commit_messages: HashMap<LogEntryId, Vec<ServerMessage>>,
     module_manager: ModuleManager<dyn ServerModule>,
     clients: Vec<Option<MessageQueueSender<ServerClientMessage>>>,
+    running: bool,
 }
 
 impl ServerTask {
@@ -86,6 +86,7 @@ impl ServerTask {
                 commit_messages: HashMap::default(),
                 module_manager,
                 clients: Vec::default(),
+                running: true,
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -172,6 +173,7 @@ impl ServerTask {
                     commit_messages: HashMap::default(),
                     module_manager,
                     clients: Vec::default(),
+                    running: true,
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -254,6 +256,7 @@ impl ServerTask {
                     commit_messages: HashMap::default(),
                     module_manager,
                     clients: Vec::default(),
+                    running: true,
                 })
             }
         }
@@ -276,7 +279,7 @@ impl ServerTask {
                 .await;
         }
 
-        loop {
+       while self.running {
             match &mut self.r#type {
                 ServerType::Leader(_) => {
                     select!(

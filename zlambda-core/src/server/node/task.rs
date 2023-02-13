@@ -20,7 +20,7 @@ use crate::server::node::{
 };
 use crate::server::{
     ServerHandle, ServerId, ServerLogEntriesAcknowledgementMessageInput,
-    ServerLogEntriesRecoveryMessageInput, ServerMessage, ServerModuleGetMessage,
+    ServerLogEntriesRecoveryMessageInput, ServerMessage,
     ServerModuleGetMessageInput, ServerModuleNotificationEventBody,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
     ServerNotifyMessageInput, ServerNotifyMessageInputServerSource,

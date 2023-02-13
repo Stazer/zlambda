@@ -8,10 +8,9 @@ use std::error::Error;
 use std::iter::empty;
 use tokio::io::stdin;
 use tokio_util::io::ReaderStream;
-use zlambda_core::client::ClientTask;
-use zlambda_core::common::module::ModuleId;
-use zlambda_core::common::utility::Bytes;
-use zlambda_core::server::{ServerId, ServerTask};
+use zlambda_core::client::{ClientTask, ClientModule};
+use zlambda_core::common::module::{ModuleId, Module};
+use zlambda_core::server::{ServerId, ServerTask, ServerModule};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -70,6 +69,43 @@ enum ClientCommand {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
+pub struct TestClientModule {}
+
+#[async_trait::async_trait]
+impl Module for TestClientModule {}
+
+#[async_trait::async_trait]
+impl ClientModule for TestClientModule {
+}
+
+impl TestClientModule {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct TestServerModule {}
+
+#[async_trait::async_trait]
+impl Module for TestServerModule {}
+
+#[async_trait::async_trait]
+impl ServerModule for TestServerModule {
+}
+
+impl TestServerModule {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = MainArguments::parse();
@@ -94,23 +130,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         server_id,
                     } => Some((leader_address, server_id)),
                 },
-                empty(),
+                vec![Box::<dyn ServerModule>::from(Box::new(TestServerModule::new()))].into_iter()
             )
             .await?
             .run()
             .await
         }
         MainCommand::Client { address, command } => {
-            let client_task = ClientTask::new(address, empty()).await?;
+            let client_task = ClientTask::new(address, vec![Box::<dyn ClientModule>::from(Box::new(TestClientModule::new()))].into_iter()).await?;
 
-            match command {
-                ClientCommand::Notify { module_id } => {
+            /*match command {
+                /*ClientCommand::Notify { module_id } => {
                     client_task
                         .handle()
+                        .server()
                         .notify(module_id, ReaderStream::new(stdin()).map(|x| x.unwrap()))
                         .await;
-                }
-            }
+                }*/
+            }*/
 
             client_task.run().await
         }

@@ -22,6 +22,27 @@ impl ClientHandle {
         }
     }
 
+    pub fn server(&self) -> ClientServerHandle {
+        ClientServerHandle::new(self.client_message_sender.clone())
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Clone)]
+pub struct ClientServerHandle {
+    client_message_sender: MessageQueueSender<ClientMessage>,
+}
+
+impl ClientServerHandle {
+    pub(crate) fn new(
+        client_message_sender: MessageQueueSender<ClientMessage>,
+    ) -> Self {
+        Self {
+            client_message_sender,
+        }
+    }
+
     pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
     where
         T: Stream<Item = Bytes> + Unpin,
@@ -75,15 +96,4 @@ impl ClientHandle {
             previous = next;
         }
     }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug, Clone)]
-pub struct ClientServerHandle {
-    client_message_sender: MessageQueueSender<ClientMessage>,
-}
-
-impl ClientServerHandle {
-    pub fn notify(&self, module_id: ModuleId, body: impl Stream<Item = Bytes>) {}
 }
