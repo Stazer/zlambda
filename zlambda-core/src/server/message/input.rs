@@ -4,7 +4,7 @@ use crate::common::net::TcpStream;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::client::ServerClientId;
-use crate::server::{LogEntryData, LogEntryId, ServerId, ServerModule};
+use crate::server::{LogEntry, LogEntryData, LogEntryId, LogTerm, ServerId, ServerModule};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -41,30 +41,7 @@ impl ServerSocketAcceptMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
-pub struct ServerLeaderGeneralMessageMessageInput {
-    message: GeneralMessage,
-}
-
-impl From<ServerLeaderGeneralMessageMessageInput> for (GeneralMessage,) {
-    fn from(input: ServerLeaderGeneralMessageMessageInput) -> Self {
-        (input.message,)
-    }
-}
-
-impl ServerLeaderGeneralMessageMessageInput {
-    pub fn new(message: GeneralMessage) -> Self {
-        Self { message }
-    }
-
-    pub fn message(&self) -> &GeneralMessage {
-        &self.message
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerRegistrationMessageInput {
     server_socket_address: SocketAddr,
 }
@@ -89,7 +66,7 @@ impl ServerRegistrationMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerCommitRegistrationMessageInput {
     node_server_id: ServerId,
 }
@@ -112,7 +89,7 @@ impl ServerCommitRegistrationMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerRecoveryMessageInput {
     server_id: ServerId,
 }
@@ -135,7 +112,7 @@ impl ServerRecoveryMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerLogEntriesReplicationMessageInput {
     log_entries_data: Vec<LogEntryData>,
 }
@@ -158,7 +135,7 @@ impl ServerLogEntriesReplicationMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerLogEntriesAcknowledgementMessageInput {
     log_entry_ids: Vec<LogEntryId>,
     server_id: ServerId,
@@ -189,7 +166,7 @@ impl ServerLogEntriesAcknowledgementMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerLogEntriesRecoveryMessageInput {
     server_id: ServerId,
     log_entry_ids: Vec<LogEntryId>,
@@ -220,7 +197,7 @@ impl ServerLogEntriesRecoveryMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerModuleGetMessageInput {
     module_id: ModuleId,
 }
@@ -243,7 +220,7 @@ impl ServerModuleGetMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerModuleLoadMessageInput {
     module: Arc<dyn ServerModule>,
 }
@@ -266,7 +243,7 @@ impl ServerModuleLoadMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerModuleUnloadMessageInput {
     module_id: ModuleId,
 }
@@ -289,7 +266,7 @@ impl ServerModuleUnloadMessageInput {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerNotifyMessageInputServerSource {
     server_id: ServerId,
 }
@@ -312,7 +289,7 @@ impl ServerNotifyMessageInputServerSource {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerNotifyMessageInputClientSource {
     server_client_id: ServerClientId,
 }
@@ -335,7 +312,7 @@ impl ServerNotifyMessageInputClientSource {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum ServerNotifyMessageInputSource {
     Server(ServerNotifyMessageInputServerSource),
     Client(ServerNotifyMessageInputClientSource),
@@ -355,7 +332,7 @@ impl From<ServerNotifyMessageInputClientSource> for ServerNotifyMessageInputSour
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ServerNotifyMessageInput {
     module_id: ModuleId,
     source: ServerNotifyMessageInputSource,
@@ -449,5 +426,60 @@ impl ServerClientResignationMessageInput {
 
     pub fn server_client_id(&self) -> ServerClientId {
         self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLogAppendRequestMessageInput {
+    server_id: ServerId,
+    log_entries: Vec<LogEntry>,
+    last_committed_log_entry_id: Option<LogEntryId>,
+    log_current_term: LogTerm,
+}
+
+impl From<ServerLogAppendRequestMessageInput>
+    for (ServerId, Vec<LogEntry>, Option<LogEntryId>, LogTerm)
+{
+    fn from(input: ServerLogAppendRequestMessageInput) -> Self {
+        (
+            input.server_id,
+            input.log_entries,
+            input.last_committed_log_entry_id,
+            input.log_current_term,
+        )
+    }
+}
+
+impl ServerLogAppendRequestMessageInput {
+    pub fn new(
+        server_id: ServerId,
+        log_entries: Vec<LogEntry>,
+        last_committed_log_entry_id: Option<LogEntryId>,
+        log_current_term: LogTerm,
+    ) -> Self {
+        Self {
+            server_id,
+            log_entries,
+            last_committed_log_entry_id,
+            log_current_term,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn log_entries(&self) -> &Vec<LogEntry> {
+        &self.log_entries
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> &Option<LogEntryId> {
+        &self.last_committed_log_entry_id
+    }
+
+    pub fn log_current_term(&self) -> LogTerm {
+        self.log_current_term
     }
 }

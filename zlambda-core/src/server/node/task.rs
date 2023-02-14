@@ -6,22 +6,23 @@ use crate::common::runtime::{select, spawn};
 use crate::common::utility::Bytes;
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
-    GeneralLogEntriesAppendResponseMessage, GeneralMessage, GeneralNotificationMessage,
-    GeneralNotificationMessageInput, GeneralNotificationMessageInputEndType,
-    GeneralNotificationMessageInputImmediateType, GeneralNotificationMessageInputNextType,
-    GeneralNotificationMessageInputStartType, GeneralNotificationMessageInputType,
-    GeneralNotifyMessage, GeneralNotifyMessageInput,
+    GeneralLogEntriesAppendResponseMessage, GeneralLogEntriesAppendResponseMessageInput,
+    GeneralMessage, GeneralNotificationMessage, GeneralNotificationMessageInput,
+    GeneralNotificationMessageInputEndType, GeneralNotificationMessageInputImmediateType,
+    GeneralNotificationMessageInputNextType, GeneralNotificationMessageInputStartType,
+    GeneralNotificationMessageInputType, GeneralNotifyMessage, GeneralNotifyMessageInput,
 };
 use crate::server::node::{
-    ServerNodeMessage, ServerNodeNotificationEndMessage, ServerNodeNotificationImmediateMessage,
-    ServerNodeNotificationNextMessage, ServerNodeNotificationStartMessage,
-    ServerNodeNotificationStartMessageOutput, ServerNodeNotifyMessage, ServerNodeRecoveryMessage,
-    ServerNodeRegistrationMessage, ServerNodeReplicationMessage,
+    ServerNodeLogAppendResponseMessage, ServerNodeMessage, ServerNodeNotificationEndMessage,
+    ServerNodeNotificationImmediateMessage, ServerNodeNotificationNextMessage,
+    ServerNodeNotificationStartMessage, ServerNodeNotificationStartMessageOutput,
+    ServerNodeNotifyMessage, ServerNodeRecoveryMessage, ServerNodeRegistrationMessage,
+    ServerNodeReplicationMessage,
 };
 use crate::server::{
-    ServerHandle, ServerId, ServerLogEntriesAcknowledgementMessageInput,
-    ServerLogEntriesRecoveryMessageInput, ServerMessage,
-    ServerModuleGetMessageInput, ServerModuleNotificationEventBody,
+    ServerHandle, ServerId, ServerLogAppendRequestMessageInput,
+    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
+    ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventBody,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
     ServerNotifyMessageInput, ServerNotifyMessageInputServerSource,
 };
@@ -124,6 +125,9 @@ impl ServerNodeTask {
             }
             ServerNodeMessage::Recovery(message) => {
                 self.on_server_node_recovery_message(message).await
+            }
+            ServerNodeMessage::LogAppendResponse(message) => {
+                self.on_server_log_append_response_message(message).await
             }
             ServerNodeMessage::Notify(message) => self.on_server_node_notify_message(message).await,
             ServerNodeMessage::NotificationImmediate(message) => {
@@ -336,6 +340,30 @@ impl ServerNodeTask {
         info!("Server {} recovered", self.server_id);
     }
 
+    async fn on_server_log_append_response_message(
+        &mut self,
+        message: ServerNodeLogAppendResponseMessage,
+    ) {
+        let (input,) = message.into();
+        let (log_entry_ids, missing_log_entry_ids) = input.into();
+
+        if let Some(general_socket) = &mut self.general_socket {
+            if let Err(error) = general_socket
+                .0
+                .send(GeneralLogEntriesAppendResponseMessage::new(
+                    GeneralLogEntriesAppendResponseMessageInput::new(
+                        log_entry_ids,
+                        missing_log_entry_ids,
+                    ),
+                ))
+                .await
+            {
+                error!("{}", error);
+                return;
+            }
+        }
+    }
+
     async fn on_server_node_notify_message(&mut self, message: ServerNodeNotifyMessage) {
         let socket = match &mut self.general_socket {
             None => return,
@@ -359,6 +387,10 @@ impl ServerNodeTask {
 
     async fn on_general_message(&mut self, message: GeneralMessage) {
         match message {
+            GeneralMessage::LogEntriesAppendRequest(message) => {
+                self.on_general_log_entries_append_request_message(message)
+                    .await
+            }
             GeneralMessage::LogEntriesAppendResponse(message) => {
                 self.on_general_log_entries_append_response_message(message)
                     .await
@@ -374,6 +406,23 @@ impl ServerNodeTask {
                 );
             }
         }
+    }
+
+    async fn on_general_log_entries_append_request_message(
+        &mut self,
+        message: GeneralLogEntriesAppendRequestMessage,
+    ) {
+        let (input,) = message.into();
+        let (log_entries, last_committed_log_entry_id, log_current_term) = input.into();
+
+        self.server_message_sender
+            .do_send_asynchronous(ServerLogAppendRequestMessageInput::new(
+                self.server_id,
+                log_entries,
+                last_committed_log_entry_id,
+                log_current_term,
+            ))
+            .await;
     }
 
     async fn on_general_log_entries_append_response_message(

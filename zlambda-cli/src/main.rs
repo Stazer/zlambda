@@ -8,9 +8,9 @@ use std::error::Error;
 use std::iter::empty;
 use tokio::io::stdin;
 use tokio_util::io::ReaderStream;
-use zlambda_core::client::{ClientTask, ClientModule};
-use zlambda_core::common::module::{ModuleId, Module};
-use zlambda_core::server::{ServerId, ServerTask, ServerModule};
+use zlambda_core::client::{ClientModule, ClientTask};
+use zlambda_core::common::module::{Module, ModuleId};
+use zlambda_core::server::{ServerId, ServerModule, ServerTask};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,8 +76,7 @@ pub struct TestClientModule {}
 impl Module for TestClientModule {}
 
 #[async_trait::async_trait]
-impl ClientModule for TestClientModule {
-}
+impl ClientModule for TestClientModule {}
 
 impl TestClientModule {
     pub fn new() -> Self {
@@ -94,15 +93,13 @@ pub struct TestServerModule {}
 impl Module for TestServerModule {}
 
 #[async_trait::async_trait]
-impl ServerModule for TestServerModule {
-}
+impl ServerModule for TestServerModule {}
 
 impl TestServerModule {
     pub fn new() -> Self {
         Self {}
     }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -130,14 +127,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         server_id,
                     } => Some((leader_address, server_id)),
                 },
-                vec![Box::<dyn ServerModule>::from(Box::new(TestServerModule::new()))].into_iter()
+                vec![Box::<dyn ServerModule>::from(Box::new(
+                    TestServerModule::new(),
+                ))]
+                .into_iter(),
             )
             .await?
             .run()
             .await
         }
         MainCommand::Client { address, command } => {
-            let client_task = ClientTask::new(address, vec![Box::<dyn ClientModule>::from(Box::new(TestClientModule::new()))].into_iter()).await?;
+            let client_task = ClientTask::new(
+                address,
+                vec![Box::<dyn ClientModule>::from(Box::new(
+                    TestClientModule::new(),
+                ))]
+                .into_iter(),
+            )
+            .await?;
 
             /*match command {
                 /*ClientCommand::Notify { module_id } => {

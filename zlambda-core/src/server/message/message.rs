@@ -1,7 +1,7 @@
 use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
     ServerClientRegistrationMessageInput, ServerClientResignationMessageInput,
-    ServerCommitRegistrationMessageInput, ServerLeaderGeneralMessageMessageInput,
+    ServerCommitRegistrationMessageInput, ServerLogAppendRequestMessageInput,
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
     ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
     ServerModuleGetMessageInput, ServerModuleGetMessageOutput, ServerModuleLoadMessageInput,
@@ -14,11 +14,6 @@ use crate::server::{
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type ServerSocketAcceptMessage = AsynchronousMessage<ServerSocketAcceptMessageInput>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type ServerLeaderGeneralMessageMessage =
-    AsynchronousMessage<ServerLeaderGeneralMessageMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -82,17 +77,21 @@ pub type ServerClientResignationMessage = AsynchronousMessage<ServerClientResign
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerLogAppendRequestMessage = AsynchronousMessage<ServerLogAppendRequestMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
     SocketAccept(ServerSocketAcceptMessage),
-    LeaderGeneralMessage(ServerLeaderGeneralMessageMessage),
     Registration(ServerRegistrationMessage),
     CommitRegistration(ServerCommitRegistrationMessage),
     Recovery(ServerRecoveryMessage),
     LogEntriesReplication(ServerLogEntriesReplicationMessage),
     LogEntriesAcknowledgement(ServerLogEntriesAcknowledgementMessage),
     LogEntriesRecovery(ServerLogEntriesRecoveryMessage),
+    LogAppendRequest(ServerLogAppendRequestMessage),
     ModuleGet(ServerModuleGetMessage),
     ModuleLoad(ServerModuleLoadMessage),
     ModuleUnload(ServerModuleUnloadMessage),
@@ -176,5 +175,11 @@ impl From<ServerClientRegistrationMessage> for ServerMessage {
 impl From<ServerClientResignationMessage> for ServerMessage {
     fn from(message: ServerClientResignationMessage) -> Self {
         Self::ClientResignation(message)
+    }
+}
+
+impl From<ServerLogAppendRequestMessage> for ServerMessage {
+    fn from(message: ServerLogAppendRequestMessage) -> Self {
+        Self::LogAppendRequest(message)
     }
 }

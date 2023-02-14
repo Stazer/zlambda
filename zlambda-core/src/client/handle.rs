@@ -35,9 +35,7 @@ pub struct ClientServerHandle {
 }
 
 impl ClientServerHandle {
-    pub(crate) fn new(
-        client_message_sender: MessageQueueSender<ClientMessage>,
-    ) -> Self {
+    pub(crate) fn new(client_message_sender: MessageQueueSender<ClientMessage>) -> Self {
         Self {
             client_message_sender,
         }

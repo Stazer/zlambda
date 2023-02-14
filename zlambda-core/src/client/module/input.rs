@@ -18,12 +18,8 @@ impl From<ClientModuleInitializeEventInput> for (ClientHandle,) {
 }
 
 impl ClientModuleInitializeEventInput {
-    pub fn new(
-        client_handle: ClientHandle,
-    ) -> Self {
-        Self {
-            client_handle,
-        }
+    pub fn new(client_handle: ClientHandle) -> Self {
+        Self { client_handle }
     }
 
     pub fn client_handle(&self) -> &ClientHandle {
@@ -45,12 +41,8 @@ impl From<ClientModuleFinalizeEventInput> for (ClientHandle,) {
 }
 
 impl ClientModuleFinalizeEventInput {
-    pub fn new(
-        client_handle: ClientHandle,
-    ) -> Self {
-        Self {
-            client_handle,
-        }
+    pub fn new(client_handle: ClientHandle) -> Self {
+        Self { client_handle }
     }
 
     pub fn client_handle(&self) -> &ClientHandle {

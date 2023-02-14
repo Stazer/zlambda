@@ -1,9 +1,9 @@
 use crate::client::{
-    ClientHandle, ClientMessage, ClientModule, ClientModuleNotificationEventInput,
+    ClientHandle, ClientMessage, ClientModule, ClientModuleFinalizeEventInput,
+    ClientModuleInitializeEventInput, ClientModuleNotificationEventInput,
     ClientModuleNotificationEventInputBody, ClientNotificationEndMessage,
     ClientNotificationImmediateMessage, ClientNotificationNextMessage,
     ClientNotificationStartMessage, ClientNotificationStartMessageOutput, NewClientError,
-    ClientModuleInitializeEventInput, ClientModuleFinalizeEventInput,
 };
 use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
@@ -101,7 +101,9 @@ impl ClientTask {
             let client_handle = self.handle();
 
             spawn(async move {
-                module.on_initialize(ClientModuleInitializeEventInput::new(client_handle)).await;
+                module
+                    .on_initialize(ClientModuleInitializeEventInput::new(client_handle))
+                    .await;
             });
         }
 
@@ -113,7 +115,9 @@ impl ClientTask {
             let client_handle = self.handle();
 
             spawn(async move {
-                module.on_finalize(ClientModuleFinalizeEventInput::new(client_handle)).await;
+                module
+                    .on_finalize(ClientModuleFinalizeEventInput::new(client_handle))
+                    .await;
             });
         }
     }

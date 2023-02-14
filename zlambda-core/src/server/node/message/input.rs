@@ -172,6 +172,37 @@ impl ServerNodeRecoveryMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ServerNodeLogAppendResponseMessageInput {
+    log_entry_ids: Vec<LogEntryId>,
+    missing_log_entry_ids: Vec<LogEntryId>,
+}
+
+impl From<ServerNodeLogAppendResponseMessageInput> for (Vec<LogEntryId>, Vec<LogEntryId>) {
+    fn from(input: ServerNodeLogAppendResponseMessageInput) -> Self {
+        (input.log_entry_ids, input.missing_log_entry_ids)
+    }
+}
+
+impl ServerNodeLogAppendResponseMessageInput {
+    pub fn new(log_entry_ids: Vec<LogEntryId>, missing_log_entry_ids: Vec<LogEntryId>) -> Self {
+        Self {
+            log_entry_ids,
+            missing_log_entry_ids,
+        }
+    }
+
+    pub fn log_entry_ids(&self) -> &Vec<LogEntryId> {
+        &self.log_entry_ids
+    }
+
+    pub fn missing_log_entry_ids(&self) -> &Vec<LogEntryId> {
+        &self.missing_log_entry_ids
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ServerNodeNotifyMessageInput {
     module_id: ModuleId,
     body: Bytes,

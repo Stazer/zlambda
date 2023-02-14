@@ -1,10 +1,10 @@
 use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::node::{
-    ServerNodeNotificationEndMessageInput, ServerNodeNotificationImmediateMessageInput,
-    ServerNodeNotificationNextMessageInput, ServerNodeNotificationStartMessageInput,
-    ServerNodeNotificationStartMessageOutput, ServerNodeNotifyMessageInput,
-    ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput,
-    ServerNodeReplicationMessageInput,
+    ServerNodeLogAppendResponseMessageInput, ServerNodeNotificationEndMessageInput,
+    ServerNodeNotificationImmediateMessageInput, ServerNodeNotificationNextMessageInput,
+    ServerNodeNotificationStartMessageInput, ServerNodeNotificationStartMessageOutput,
+    ServerNodeNotifyMessageInput, ServerNodeRecoveryMessageInput,
+    ServerNodeRegistrationMessageInput, ServerNodeReplicationMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,6 +18,11 @@ pub type ServerNodeRegistrationMessage = AsynchronousMessage<ServerNodeRegistrat
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type ServerNodeRecoveryMessage = AsynchronousMessage<ServerNodeRecoveryMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerNodeLogAppendResponseMessage =
+    AsynchronousMessage<ServerNodeLogAppendResponseMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,6 +57,7 @@ pub enum ServerNodeMessage {
     Replication(ServerNodeReplicationMessage),
     Registration(ServerNodeRegistrationMessage),
     Recovery(ServerNodeRecoveryMessage),
+    LogAppendResponse(ServerNodeLogAppendResponseMessage),
     Notify(ServerNodeNotifyMessage),
     NotificationImmediate(ServerNodeNotificationImmediateMessage),
     NotificationStart(ServerNodeNotificationStartMessage),
@@ -74,6 +80,12 @@ impl From<ServerNodeRegistrationMessage> for ServerNodeMessage {
 impl From<ServerNodeRecoveryMessage> for ServerNodeMessage {
     fn from(message: ServerNodeRecoveryMessage) -> Self {
         Self::Recovery(message)
+    }
+}
+
+impl From<ServerNodeLogAppendResponseMessage> for ServerNodeMessage {
+    fn from(message: ServerNodeLogAppendResponseMessage) -> Self {
+        Self::LogAppendResponse(message)
     }
 }
 
