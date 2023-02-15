@@ -6,7 +6,7 @@ use crate::server::{
     ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
     ServerModuleGetMessageInput, ServerModuleGetMessageOutput, ServerModuleLoadMessageInput,
     ServerModuleLoadMessageOutput, ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
-    ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
+    ServerNodeHandshakeMessageInput, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
     ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
     ServerSocketAcceptMessageInput,
 };
@@ -22,8 +22,17 @@ pub type ServerRegistrationMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerCommitRegistrationMessage =
+    SynchronousMessage<ServerCommitRegistrationMessageInput, ServerRegistrationMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub type ServerRecoveryMessage =
     SynchronousMessage<ServerRecoveryMessageInput, ServerRecoveryMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerNodeHandshakeMessage = AsynchronousMessage<ServerNodeHandshakeMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,11 +45,6 @@ pub type ServerLogEntriesReplicationMessage = SynchronousMessage<
 
 pub type ServerLogEntriesAcknowledgementMessage =
     AsynchronousMessage<ServerLogEntriesAcknowledgementMessageInput>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type ServerCommitRegistrationMessage =
-    SynchronousMessage<ServerCommitRegistrationMessageInput, ServerRegistrationMessageOutput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -84,6 +88,7 @@ pub enum ServerMessage {
     Registration(ServerRegistrationMessage),
     CommitRegistration(ServerCommitRegistrationMessage),
     Recovery(ServerRecoveryMessage),
+    NodeHandshake(ServerNodeHandshakeMessage),
     LogEntriesReplication(ServerLogEntriesReplicationMessage),
     LogEntriesAcknowledgement(ServerLogEntriesAcknowledgementMessage),
     LogEntriesRecovery(ServerLogEntriesRecoveryMessage),
@@ -116,6 +121,12 @@ impl From<ServerCommitRegistrationMessage> for ServerMessage {
 impl From<ServerRecoveryMessage> for ServerMessage {
     fn from(message: ServerRecoveryMessage) -> Self {
         Self::Recovery(message)
+    }
+}
+
+impl From<ServerNodeHandshakeMessage> for ServerMessage {
+    fn from(message: ServerNodeHandshakeMessage) -> Self {
+        Self::NodeHandshake(message)
     }
 }
 

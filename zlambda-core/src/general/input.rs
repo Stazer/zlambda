@@ -264,12 +264,8 @@ impl From<GeneralNodeHandshakeRequestMessageInput> for (ServerId,) {
 }
 
 impl GeneralNodeHandshakeRequestMessageInput {
-    pub fn new(
-        server_id: ServerId,
-    ) -> Self {
-        Self {
-            server_id,
-        }
+    pub fn new(server_id: ServerId) -> Self {
+        Self { server_id }
     }
 
     pub fn server_id(&self) -> ServerId {
@@ -294,19 +290,17 @@ pub struct GeneralNodeHandshakeResponseMessageInput {
     result: GeneralNodeHandshakeResponseMessageInputResult,
 }
 
-impl From<GeneralNodeHandshakeResponseMessageInput> for (GeneralNodeHandshakeResponseMessageInputResult,) {
+impl From<GeneralNodeHandshakeResponseMessageInput>
+    for (GeneralNodeHandshakeResponseMessageInputResult,)
+{
     fn from(input: GeneralNodeHandshakeResponseMessageInput) -> Self {
         (input.result,)
     }
 }
 
 impl GeneralNodeHandshakeResponseMessageInput {
-    pub fn new(
-        result: GeneralNodeHandshakeResponseMessageInputResult,
-    ) -> Self {
-        Self {
-            result,
-        }
+    pub fn new(result: GeneralNodeHandshakeResponseMessageInputResult) -> Self {
+        Self { result }
     }
 
     pub fn result(&self) -> &GeneralNodeHandshakeResponseMessageInputResult {

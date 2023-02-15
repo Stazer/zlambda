@@ -4,8 +4,7 @@ use crate::common::utility::Bytes;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
-pub struct ServerClientShutdownMessageInput {
-}
+pub struct ServerClientShutdownMessageInput {}
 
 impl From<ServerClientShutdownMessageInput> for () {
     fn from(_input: ServerClientShutdownMessageInput) -> Self {

@@ -20,10 +20,10 @@ use crate::server::client::{
 use crate::server::{
     ServerClientResignationMessageInput, ServerHandle, ServerMessage, ServerModuleGetMessageInput,
     ServerModuleNotificationEventBody, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventInputClientSource
+    ServerModuleNotificationEventInputClientSource,
 };
 use std::collections::HashMap;
-use tracing::{error, debug};
+use tracing::{debug, error};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

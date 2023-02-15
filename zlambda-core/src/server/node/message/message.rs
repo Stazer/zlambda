@@ -1,9 +1,9 @@
 use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::node::{
-    ServerNodeLogAppendResponseMessageInput, ServerNodeNotificationEndMessageInput,
-    ServerNodeNotificationImmediateMessageInput, ServerNodeNotificationNextMessageInput,
-    ServerNodeNotificationStartMessageInput, ServerNodeNotificationStartMessageOutput,
-    ServerNodeRecoveryMessageInput,
+    ServerNodeLogAppendResponseMessageInput, ServerNodeNodeHandshakeMessageInput,
+    ServerNodeNotificationEndMessageInput, ServerNodeNotificationImmediateMessageInput,
+    ServerNodeNotificationNextMessageInput, ServerNodeNotificationStartMessageInput,
+    ServerNodeNotificationStartMessageOutput, ServerNodeRecoveryMessageInput,
     ServerNodeRegistrationMessageInput, ServerNodeReplicationMessageInput,
 };
 
@@ -18,6 +18,10 @@ pub type ServerNodeRegistrationMessage = AsynchronousMessage<ServerNodeRegistrat
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type ServerNodeRecoveryMessage = AsynchronousMessage<ServerNodeRecoveryMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerNodeNodeHandshakeMessage = AsynchronousMessage<ServerNodeNodeHandshakeMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,6 +57,7 @@ pub enum ServerNodeMessage {
     Replication(ServerNodeReplicationMessage),
     Registration(ServerNodeRegistrationMessage),
     Recovery(ServerNodeRecoveryMessage),
+    NodeHandshake(ServerNodeNodeHandshakeMessage),
     LogAppendResponse(ServerNodeLogAppendResponseMessage),
     NotificationImmediate(ServerNodeNotificationImmediateMessage),
     NotificationStart(ServerNodeNotificationStartMessage),
@@ -75,6 +80,12 @@ impl From<ServerNodeRegistrationMessage> for ServerNodeMessage {
 impl From<ServerNodeRecoveryMessage> for ServerNodeMessage {
     fn from(message: ServerNodeRecoveryMessage) -> Self {
         Self::Recovery(message)
+    }
+}
+
+impl From<ServerNodeNodeHandshakeMessage> for ServerNodeMessage {
+    fn from(message: ServerNodeNodeHandshakeMessage) -> Self {
+        Self::NodeHandshake(message)
     }
 }
 

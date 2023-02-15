@@ -2,11 +2,10 @@ use crate::common::message::AsynchronousMessage;
 use crate::general::{
     GeneralClientRegistrationRequestMessageInput, GeneralClientRegistrationResponseMessageInput,
     GeneralLogEntriesAppendRequestMessageInput, GeneralLogEntriesAppendResponseMessageInput,
+    GeneralNodeHandshakeRequestMessageInput, GeneralNodeHandshakeResponseMessageInput,
     GeneralNotificationMessageInput, GeneralRecoveryRequestMessageInput,
     GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessageInput,
     GeneralRegistrationResponseMessageInput,
-    GeneralNodeHandshakeResponseMessageInput,
-    GeneralNodeHandshakeRequestMessageInput,
 };
 use serde::{Deserialize, Serialize};
 
@@ -30,11 +29,13 @@ pub type GeneralRecoveryResponseMessage = AsynchronousMessage<GeneralRecoveryRes
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type GeneralNodeHandshakeRequestMessage = AsynchronousMessage<GeneralNodeHandshakeRequestMessageInput>;
+pub type GeneralNodeHandshakeRequestMessage =
+    AsynchronousMessage<GeneralNodeHandshakeRequestMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type GeneralNodeHandshakeResponseMessage = AsynchronousMessage<GeneralNodeHandshakeResponseMessageInput>;
+pub type GeneralNodeHandshakeResponseMessage =
+    AsynchronousMessage<GeneralNodeHandshakeResponseMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

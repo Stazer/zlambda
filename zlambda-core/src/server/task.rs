@@ -6,13 +6,19 @@ use crate::common::module::ModuleManager;
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
 use crate::general::{
-    GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryRequestMessageInput,
-    GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessage,
-    GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
+    GeneralMessage, GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
+    GeneralNodeHandshakeResponseMessageInputResult, GeneralRecoveryRequestMessage,
+    GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
+    GeneralRegistrationRequestMessage, GeneralRegistrationRequestMessageInput,
+    GeneralRegistrationResponseMessageInput,
+    GeneralNodeHandshakeRequestMessage,
+    GeneralNodeHandshakeRequestMessageInput,
 };
 use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTask};
 use crate::server::connection::ServerConnectionTask;
-use crate::server::node::ServerNodeLogAppendResponseMessageInput;
+use crate::server::node::{
+    ServerNodeLogAppendResponseMessageInput, ServerNodeNodeHandshakeMessageInput,
+};
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
     NewServerError, ServerClientRegistrationMessage, ServerClientResignationMessage,
@@ -22,11 +28,11 @@ use crate::server::{
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
     ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
     ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
-    ServerModuleShutdownEventInput, ServerModuleStartupEventInput,
-    ServerModuleUnloadMessage, ServerModuleUnloadMessageOutput, ServerNodeMessage,
+    ServerModuleShutdownEventInput, ServerModuleStartupEventInput, ServerModuleUnloadMessage,
+    ServerModuleUnloadMessageOutput, ServerNodeHandshakeMessage, ServerNodeMessage,
     ServerNodeReplicationMessage, ServerNodeReplicationMessageInput, ServerNodeTask,
-    ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
-    ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
+    ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
+    ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
 };
@@ -313,6 +319,8 @@ impl ServerTask {
     }
 
     pub async fn run(mut self) {
+        self.handshake().await;
+
         for module in self.module_manager.iter() {
             module
                 .on_startup(ServerModuleStartupEventInput::new(ServerHandle::new(
@@ -367,6 +375,9 @@ impl ServerTask {
                 self.on_server_commit_registration_message(message).await
             }
             ServerMessage::Recovery(message) => self.on_server_recovery_message(message).await,
+            ServerMessage::NodeHandshake(message) => {
+                self.on_server_node_handshake_message(message).await
+            }
             ServerMessage::LogEntriesReplication(message) => {
                 self.on_server_log_entries_replication_message(message)
                     .await
@@ -568,6 +579,54 @@ impl ServerTask {
                     .await;
             }
         }
+    }
+
+    async fn on_server_node_handshake_message(&mut self, message: ServerNodeHandshakeMessage) {
+        let (input,) = message.into();
+        let (mut general_message_sender, general_message_receiver, server_id) = input.into();
+
+        if server_id <= self.server_id || server_id == self.leader_server_id {
+            if general_message_sender
+                .send(GeneralNodeHandshakeResponseMessage::new(
+                    GeneralNodeHandshakeResponseMessageInput::new(
+                        GeneralNodeHandshakeResponseMessageInputResult::ServerIdUnfeasible,
+                    ),
+                ))
+                .await
+                .is_err()
+            {
+                return;
+            }
+
+            return;
+        }
+
+        let server_node_message_sender =
+            match self.server_node_message_senders.get(usize::from(server_id)) {
+                None | Some(None) => {
+                    if general_message_sender
+                        .send(GeneralNodeHandshakeResponseMessage::new(
+                            GeneralNodeHandshakeResponseMessageInput::new(
+                                GeneralNodeHandshakeResponseMessageInputResult::Unknown,
+                            ),
+                        ))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+
+                    return;
+                }
+                Some(Some(server_node_message_sender)) => server_node_message_sender,
+            };
+
+        server_node_message_sender
+            .do_send_asynchronous(ServerNodeNodeHandshakeMessageInput::new(
+                general_message_sender,
+                general_message_receiver,
+            ))
+            .await;
     }
 
     async fn on_server_log_entries_replication_message(
@@ -950,6 +1009,69 @@ impl ServerTask {
                         .await;
                 }
             }
+        }
+    }
+
+    async fn handshake(&mut self) {
+        for (server_id, socket_address) in self.server_socket_addresses.iter().enumerate().map(|(server_id, socket_address)| (ServerId::from(server_id), socket_address)) {
+            if server_id >= self.server_id || server_id == self.leader_server_id {
+                continue;
+            }
+
+            let socket_address = match socket_address {
+                None => continue,
+                Some(socket_address) => socket_address,
+            };
+
+            let socket = match TcpStream::connect(socket_address).await {
+                Err(_) => None,
+                Ok(socket) => {
+                    (async move || {
+                        let (reader, writer) = socket.into_split();
+
+                        let (mut sender, mut receiver) = (
+                            MessageSocketSender::<GeneralMessage>::new(writer),
+                            MessageSocketReceiver::<GeneralMessage>::new(reader),
+                        );
+
+                        if sender
+                            .send(GeneralNodeHandshakeRequestMessage::new(
+                                GeneralNodeHandshakeRequestMessageInput::new(server_id),
+                            ))
+                            .await.is_err() {
+                                return None;
+                            }
+
+                        let message = match receiver.receive().await {
+                            Err(_) | Ok(None) | Ok(Some(_)) => return None,
+                            Ok(Some(GeneralMessage::NodeHandshakeResponse(message))) => message,
+                        };
+
+                        let (input, ) = message.into();
+
+                        match input.result() {
+                            GeneralNodeHandshakeResponseMessageInputResult::Success => Some((sender, receiver)),
+                            result => {
+                                error!("{:?}", result);
+                                None
+                            }
+                        }
+                    })().await
+                }
+            };
+
+            let task = ServerNodeTask::new(
+                server_id,
+                self.sender.clone(),
+                socket,
+            );
+
+            self.server_node_message_senders.resize_with(usize::from(server_id) + 1, || None);
+            if let Some(server_node_message_senders) = self.server_node_message_senders.get_mut(usize::from(server_id)) {
+                *server_node_message_senders = Some(task.sender().clone());
+            }
+
+            task.spawn();
         }
     }
 }

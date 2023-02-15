@@ -9,11 +9,13 @@ use std::iter::empty;
 use tokio::io::stdin;
 use tokio_util::io::ReaderStream;
 use zlambda_core::client::{
-    ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput,
-    ClientModule, ClientTask,
+    ClientModule, ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput, ClientTask,
 };
 use zlambda_core::common::module::{Module, ModuleId};
-use zlambda_core::server::{ServerId, ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput, ServerTask};
+use zlambda_core::server::{
+    ServerId, ServerModule, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventOutput, ServerTask,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -72,8 +74,8 @@ enum ClientCommand {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use zlambda_core::common::utility::Bytes;
 use futures::pin_mut;
+use zlambda_core::common::utility::Bytes;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -85,7 +87,10 @@ impl Module for TestClientModule {}
 
 #[async_trait::async_trait]
 impl ClientModule for TestClientModule {
-    async fn on_initialize(&self, event: ClientModuleInitializeEventInput) -> ClientModuleInitializeEventOutput {
+    async fn on_initialize(
+        &self,
+        event: ClientModuleInitializeEventInput,
+    ) -> ClientModuleInitializeEventOutput {
         let s = async_stream::stream! {
             while let Some(bytes) = ReaderStream::new(stdin()).next().await {
                 yield bytes.unwrap();
@@ -114,7 +119,10 @@ impl Module for TestServerModule {}
 
 #[async_trait::async_trait]
 impl ServerModule for TestServerModule {
-    async fn on_notification(&self, mut input: ServerModuleNotificationEventInput) -> ServerModuleNotificationEventOutput {
+    async fn on_notification(
+        &self,
+        mut input: ServerModuleNotificationEventInput,
+    ) -> ServerModuleNotificationEventOutput {
         println!("{:?}", input.source());
 
         let mut stream = Box::pin(input.body_mut().stream());

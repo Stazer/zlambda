@@ -1,7 +1,6 @@
 use crate::common::message::{MessageSocketReceiver, MessageSocketSender};
 use crate::common::module::ModuleId;
 use crate::common::net::TcpStream;
-use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::client::ServerClientId;
 use crate::server::{LogEntry, LogEntryData, LogEntryId, LogTerm, ServerId, ServerModule};
@@ -103,6 +102,57 @@ impl From<ServerRecoveryMessageInput> for (ServerId,) {
 impl ServerRecoveryMessageInput {
     pub fn new(server_id: ServerId) -> Self {
         Self { server_id }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerNodeHandshakeMessageInput {
+    general_message_sender: MessageSocketSender<GeneralMessage>,
+    general_message_receiver: MessageSocketReceiver<GeneralMessage>,
+    server_id: ServerId,
+}
+
+impl From<ServerNodeHandshakeMessageInput>
+    for (
+        MessageSocketSender<GeneralMessage>,
+        MessageSocketReceiver<GeneralMessage>,
+        ServerId,
+    )
+{
+    fn from(input: ServerNodeHandshakeMessageInput) -> Self {
+        (
+            input.general_message_sender,
+            input.general_message_receiver,
+            input.server_id,
+        )
+    }
+}
+
+impl ServerNodeHandshakeMessageInput {
+    pub fn new(
+        general_message_sender: MessageSocketSender<GeneralMessage>,
+        general_message_receiver: MessageSocketReceiver<GeneralMessage>,
+        server_id: ServerId,
+    ) -> Self {
+        Self {
+            general_message_sender,
+            general_message_receiver,
+            server_id,
+        }
+    }
+
+    pub fn general_message_sender(&self) -> &MessageSocketSender<GeneralMessage> {
+        &self.general_message_sender
+    }
+
+    pub fn general_message_receiver(&self) -> &MessageSocketReceiver<GeneralMessage> {
+        &self.general_message_receiver
     }
 
     pub fn server_id(&self) -> ServerId {

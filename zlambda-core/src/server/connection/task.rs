@@ -2,17 +2,18 @@ use crate::common::message::{
     MessageError, MessageQueueSender, MessageSocketReceiver, MessageSocketSender,
 };
 use crate::general::{
-    GeneralClientRegistrationRequestMessage, GeneralMessage, GeneralRecoveryRequestMessage,
-    GeneralRecoveryResponseMessageInput, GeneralRecoveryResponseMessageNotALeaderInput,
-    GeneralRecoveryResponseMessageSuccessInput, GeneralRegistrationRequestMessage,
-    GeneralRegistrationResponseMessageInput, GeneralRegistrationResponseMessageNotALeaderInput,
-    GeneralRegistrationResponseMessageSuccessInput,GeneralNodeHandshakeRequestMessage,
+    GeneralClientRegistrationRequestMessage, GeneralMessage, GeneralNodeHandshakeRequestMessage,
+    GeneralRecoveryRequestMessage, GeneralRecoveryResponseMessageInput,
+    GeneralRecoveryResponseMessageNotALeaderInput, GeneralRecoveryResponseMessageSuccessInput,
+    GeneralRegistrationRequestMessage, GeneralRegistrationResponseMessageInput,
+    GeneralRegistrationResponseMessageNotALeaderInput,
+    GeneralRegistrationResponseMessageSuccessInput,
 };
 use crate::server::node::{ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput};
 use crate::server::{
-    ServerMessage, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
-    ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
-    ServerClientRegistrationMessageInput,
+    ServerClientRegistrationMessageInput, ServerMessage, ServerNodeHandshakeMessageInput,
+    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
+    ServerRegistrationMessageOutput,
 };
 use tokio::spawn;
 use tracing::error;
@@ -65,7 +66,8 @@ impl ServerConnectionTask {
                 self.on_general_recovery_request_message(message).await
             }
             GeneralMessage::NodeHandshakeRequest(message) => {
-                self.on_general_node_handshake_request_message(message).await
+                self.on_general_node_handshake_request_message(message)
+                    .await
             }
             GeneralMessage::ClientRegistrationRequest(message) => {
                 self.on_general_client_registration_request_message(message)
@@ -219,17 +221,26 @@ impl ServerConnectionTask {
         self,
         message: GeneralNodeHandshakeRequestMessage,
     ) {
+        let (input,) = message.into();
+
+        self.server_message_sender
+            .do_send_asynchronous(ServerNodeHandshakeMessageInput::new(
+                self.general_message_sender,
+                self.general_message_receiver,
+                input.server_id(),
+            ))
+            .await;
     }
 
     async fn on_general_client_registration_request_message(
         self,
         _message: GeneralClientRegistrationRequestMessage,
     ) {
-        self
-            .server_message_sender
+        self.server_message_sender
             .do_send_asynchronous(ServerClientRegistrationMessageInput::new(
                 self.general_message_sender,
                 self.general_message_receiver,
-            )).await;
+            ))
+            .await;
     }
 }

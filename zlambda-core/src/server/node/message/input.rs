@@ -172,6 +172,45 @@ impl ServerNodeRecoveryMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ServerNodeNodeHandshakeMessageInput {
+    general_message_sender: MessageSocketSender<GeneralMessage>,
+    general_message_receiver: MessageSocketReceiver<GeneralMessage>,
+}
+
+impl From<ServerNodeNodeHandshakeMessageInput>
+    for (
+        MessageSocketSender<GeneralMessage>,
+        MessageSocketReceiver<GeneralMessage>,
+    )
+{
+    fn from(input: ServerNodeNodeHandshakeMessageInput) -> Self {
+        (input.general_message_sender, input.general_message_receiver)
+    }
+}
+
+impl ServerNodeNodeHandshakeMessageInput {
+    pub fn new(
+        general_message_sender: MessageSocketSender<GeneralMessage>,
+        general_message_receiver: MessageSocketReceiver<GeneralMessage>,
+    ) -> Self {
+        Self {
+            general_message_sender,
+            general_message_receiver,
+        }
+    }
+
+    pub fn general_message_sender(&self) -> &MessageSocketSender<GeneralMessage> {
+        &self.general_message_sender
+    }
+
+    pub fn general_message_receiver(&self) -> &MessageSocketReceiver<GeneralMessage> {
+        &self.general_message_receiver
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ServerNodeLogAppendResponseMessageInput {
     log_entry_ids: Vec<LogEntryId>,
     missing_log_entry_ids: Vec<LogEntryId>,

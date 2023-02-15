@@ -7,17 +7,18 @@ use crate::common::utility::Bytes;
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
     GeneralLogEntriesAppendResponseMessage, GeneralLogEntriesAppendResponseMessageInput,
-    GeneralMessage, GeneralNotificationMessage, GeneralNotificationMessageInput,
-    GeneralNotificationMessageInputEndType, GeneralNotificationMessageInputImmediateType,
-    GeneralNotificationMessageInputNextType, GeneralNotificationMessageInputStartType,
-    GeneralNotificationMessageInputType,
+    GeneralMessage, GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
+    GeneralNodeHandshakeResponseMessageInputResult, GeneralNotificationMessage,
+    GeneralNotificationMessageInput, GeneralNotificationMessageInputEndType,
+    GeneralNotificationMessageInputImmediateType, GeneralNotificationMessageInputNextType,
+    GeneralNotificationMessageInputStartType, GeneralNotificationMessageInputType,
 };
 use crate::server::node::{
-    ServerNodeLogAppendResponseMessage, ServerNodeMessage, ServerNodeNotificationEndMessage,
-    ServerNodeNotificationImmediateMessage, ServerNodeNotificationNextMessage,
-    ServerNodeNotificationStartMessage, ServerNodeNotificationStartMessageOutput,
-    ServerNodeRecoveryMessage, ServerNodeRegistrationMessage,
-    ServerNodeReplicationMessage,
+    ServerNodeLogAppendResponseMessage, ServerNodeMessage, ServerNodeNodeHandshakeMessage,
+    ServerNodeNotificationEndMessage, ServerNodeNotificationImmediateMessage,
+    ServerNodeNotificationNextMessage, ServerNodeNotificationStartMessage,
+    ServerNodeNotificationStartMessageOutput, ServerNodeRecoveryMessage,
+    ServerNodeRegistrationMessage, ServerNodeReplicationMessage,
 };
 use crate::server::{
     ServerHandle, ServerId, ServerLogAppendRequestMessageInput,
@@ -26,7 +27,7 @@ use crate::server::{
     ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
 };
 use std::collections::HashMap;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -124,6 +125,9 @@ impl ServerNodeTask {
             }
             ServerNodeMessage::Recovery(message) => {
                 self.on_server_node_recovery_message(message).await
+            }
+            ServerNodeMessage::NodeHandshake(message) => {
+                self.on_server_node_node_handshake_message(message).await
             }
             ServerNodeMessage::LogAppendResponse(message) => {
                 self.on_server_log_append_response_message(message).await
@@ -336,6 +340,46 @@ impl ServerNodeTask {
         self.general_socket = Some((sender, receiver));
 
         info!("Server {} recovered", self.server_id);
+    }
+
+    async fn on_server_node_node_handshake_message(
+        &mut self,
+        message: ServerNodeNodeHandshakeMessage,
+    ) {
+        let (input,) = message.into();
+        let (mut general_message_sender, general_message_receiver) = input.into();
+
+        if self.general_socket.is_some() {
+            if general_message_sender
+                .send(GeneralNodeHandshakeResponseMessage::new(
+                    GeneralNodeHandshakeResponseMessageInput::new(
+                        GeneralNodeHandshakeResponseMessageInputResult::AlreadyOnline,
+                    ),
+                ))
+                .await
+                .is_err()
+            {
+                return;
+            }
+
+            return;
+        }
+
+        if general_message_sender
+            .send(GeneralNodeHandshakeResponseMessage::new(
+                GeneralNodeHandshakeResponseMessageInput::new(
+                    GeneralNodeHandshakeResponseMessageInputResult::Success,
+                ),
+            ))
+            .await
+            .is_err()
+        {
+            return;
+        }
+
+        self.general_socket = Some((general_message_sender, general_message_receiver));
+
+        debug!("Handshake with server {} successful", self.server_id);
     }
 
     async fn on_server_log_append_response_message(

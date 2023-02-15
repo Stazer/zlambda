@@ -2,7 +2,7 @@ use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::client::{
     ServerClientNotificationEndMessageInput, ServerClientNotificationImmediateMessageInput,
     ServerClientNotificationNextMessageInput, ServerClientNotificationStartMessageInput,
-    ServerClientNotificationStartMessageOutput, ServerClientShutdownMessageInput
+    ServerClientNotificationStartMessageOutput, ServerClientShutdownMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
