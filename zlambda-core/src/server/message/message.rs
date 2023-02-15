@@ -6,7 +6,7 @@ use crate::server::{
     ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
     ServerModuleGetMessageInput, ServerModuleGetMessageOutput, ServerModuleLoadMessageInput,
     ServerModuleLoadMessageOutput, ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
-    ServerNotifyMessageInput, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
+    ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
     ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
     ServerSocketAcceptMessageInput,
 };
@@ -64,10 +64,6 @@ pub type ServerModuleUnloadMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerNotifyMessage = AsynchronousMessage<ServerNotifyMessageInput>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 pub type ServerClientRegistrationMessage =
     AsynchronousMessage<ServerClientRegistrationMessageInput>;
 
@@ -95,7 +91,6 @@ pub enum ServerMessage {
     ModuleGet(ServerModuleGetMessage),
     ModuleLoad(ServerModuleLoadMessage),
     ModuleUnload(ServerModuleUnloadMessage),
-    Notify(ServerNotifyMessage),
     ClientRegistration(ServerClientRegistrationMessage),
     ClientResignation(ServerClientResignationMessage),
 }
@@ -157,12 +152,6 @@ impl From<ServerModuleLoadMessage> for ServerMessage {
 impl From<ServerModuleUnloadMessage> for ServerMessage {
     fn from(message: ServerModuleUnloadMessage) -> Self {
         Self::ModuleUnload(message)
-    }
-}
-
-impl From<ServerNotifyMessage> for ServerMessage {
-    fn from(message: ServerNotifyMessage) -> Self {
-        Self::Notify(message)
     }
 }
 

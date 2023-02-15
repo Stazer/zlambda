@@ -253,6 +253,70 @@ impl From<GeneralRecoveryResponseMessageSuccessInput> for GeneralRecoveryRespons
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNodeHandshakeRequestMessageInput {
+    server_id: ServerId,
+}
+
+impl From<GeneralNodeHandshakeRequestMessageInput> for (ServerId,) {
+    fn from(input: GeneralNodeHandshakeRequestMessageInput) -> Self {
+        (input.server_id,)
+    }
+}
+
+impl GeneralNodeHandshakeRequestMessageInput {
+    pub fn new(
+        server_id: ServerId,
+    ) -> Self {
+        Self {
+            server_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum GeneralNodeHandshakeResponseMessageInputResult {
+    ServerIdUnfeasible,
+    AlreadyOnline,
+    Unknown,
+    Success,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNodeHandshakeResponseMessageInput {
+    result: GeneralNodeHandshakeResponseMessageInputResult,
+}
+
+impl From<GeneralNodeHandshakeResponseMessageInput> for (GeneralNodeHandshakeResponseMessageInputResult,) {
+    fn from(input: GeneralNodeHandshakeResponseMessageInput) -> Self {
+        (input.result,)
+    }
+}
+
+impl GeneralNodeHandshakeResponseMessageInput {
+    pub fn new(
+        result: GeneralNodeHandshakeResponseMessageInputResult,
+    ) -> Self {
+        Self {
+            result,
+        }
+    }
+
+    pub fn result(&self) -> &GeneralNodeHandshakeResponseMessageInputResult {
+        &self.result
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralLogEntriesAppendRequestMessageInput {
     log_entries: Vec<LogEntry>,
     last_committed_log_entry_id: Option<LogEntryId>,
@@ -331,34 +395,6 @@ impl GeneralLogEntriesAppendResponseMessageInput {
 
     pub fn missing_log_entry_ids(&self) -> &Vec<LogEntryId> {
         &self.missing_log_entry_ids
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GeneralNotifyMessageInput {
-    module_id: ModuleId,
-    body: Bytes,
-}
-
-impl From<GeneralNotifyMessageInput> for (ModuleId, Bytes) {
-    fn from(input: GeneralNotifyMessageInput) -> Self {
-        (input.module_id, input.body)
-    }
-}
-
-impl GeneralNotifyMessageInput {
-    pub fn new(module_id: ModuleId, body: Bytes) -> Self {
-        Self { module_id, body }
-    }
-
-    pub fn module_id(&self) -> ModuleId {
-        self.module_id
-    }
-
-    pub fn body(&self) -> &Bytes {
-        &self.body
     }
 }
 

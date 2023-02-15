@@ -22,10 +22,10 @@ use crate::server::{
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
     ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
     ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
-    ServerModuleNotifyEventInput, ServerModuleShutdownEventInput, ServerModuleStartupEventInput,
+    ServerModuleShutdownEventInput, ServerModuleStartupEventInput,
     ServerModuleUnloadMessage, ServerModuleUnloadMessageOutput, ServerNodeMessage,
     ServerNodeReplicationMessage, ServerNodeReplicationMessageInput, ServerNodeTask,
-    ServerNotifyMessage, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
+    ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
     ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
@@ -386,7 +386,6 @@ impl ServerTask {
             ServerMessage::ModuleUnload(message) => {
                 self.on_server_module_unload_message(message).await
             }
-            ServerMessage::Notify(message) => self.on_server_notify_message(message).await,
             ServerMessage::ClientRegistration(message) => {
                 self.on_server_client_registration(message).await
             }
@@ -772,29 +771,6 @@ impl ServerTask {
                 self.module_manager.unload(input.module_id()),
             ))
             .await;
-    }
-
-    async fn on_server_notify_message(&mut self, message: ServerNotifyMessage) {
-        let (input,) = message.into();
-        let (module_id, source, body) = input.into();
-
-        let module = match self.module_manager.get_by_module_id(module_id) {
-            None => return,
-            Some(module) => module,
-        };
-
-        let sender = self.sender.clone();
-        let module = module.clone();
-
-        spawn(async move {
-            module
-                .on_notify(ServerModuleNotifyEventInput::new(
-                    ServerHandle::new(sender),
-                    source.into(),
-                    body,
-                ))
-                .await;
-        });
     }
 
     async fn on_server_client_registration(&mut self, message: ServerClientRegistrationMessage) {

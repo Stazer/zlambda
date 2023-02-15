@@ -2,12 +2,12 @@ use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::client::{
     ServerClientNotificationEndMessageInput, ServerClientNotificationImmediateMessageInput,
     ServerClientNotificationNextMessageInput, ServerClientNotificationStartMessageInput,
-    ServerClientNotificationStartMessageOutput, ServerClientNotifyMessageInput,
+    ServerClientNotificationStartMessageOutput, ServerClientShutdownMessageInput
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerClientNotifyMessage = AsynchronousMessage<ServerClientNotifyMessageInput>;
+pub type ServerClientShutdownMessage = AsynchronousMessage<ServerClientShutdownMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,16 +35,16 @@ pub type ServerClientNotificationEndMessage =
 
 #[derive(Debug)]
 pub enum ServerClientMessage {
-    Notify(ServerClientNotifyMessage),
+    Shutdown(ServerClientShutdownMessage),
     NotificationImmediate(ServerClientNotificationImmediateMessage),
     NotificationStart(ServerClientNotificationStartMessage),
     NotificationNext(ServerClientNotificationNextMessage),
     NotificationEnd(ServerClientNotificationEndMessage),
 }
 
-impl From<ServerClientNotifyMessage> for ServerClientMessage {
-    fn from(message: ServerClientNotifyMessage) -> Self {
-        Self::Notify(message)
+impl From<ServerClientShutdownMessage> for ServerClientMessage {
+    fn from(message: ServerClientShutdownMessage) -> Self {
+        Self::Shutdown(message)
     }
 }
 

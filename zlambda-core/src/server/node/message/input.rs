@@ -203,34 +203,6 @@ impl ServerNodeLogAppendResponseMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerNodeNotifyMessageInput {
-    module_id: ModuleId,
-    body: Bytes,
-}
-
-impl From<ServerNodeNotifyMessageInput> for (ModuleId, Bytes) {
-    fn from(input: ServerNodeNotifyMessageInput) -> Self {
-        (input.module_id, input.body)
-    }
-}
-
-impl ServerNodeNotifyMessageInput {
-    pub fn new(module_id: ModuleId, body: Bytes) -> Self {
-        Self { module_id, body }
-    }
-
-    pub fn module_id(&self) -> ModuleId {
-        self.module_id
-    }
-
-    pub fn body(&self) -> &Bytes {
-        &self.body
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
 pub struct ServerNodeNotificationImmediateMessageInput {
     module_id: ModuleId,
     body: Bytes,

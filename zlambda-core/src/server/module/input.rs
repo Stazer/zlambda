@@ -2,7 +2,7 @@ use crate::common::message::MessageQueueReceiver;
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
 use crate::server::client::ServerClientId;
-use crate::server::{LogEntry, ServerHandle, ServerId, ServerNotifyMessageInputSource};
+use crate::server::{LogEntry, ServerHandle, ServerId};
 use async_stream::stream;
 use futures::Stream;
 
@@ -116,128 +116,6 @@ impl ServerModuleUnloadEventInput {
 
     pub fn server_mut(&mut self) -> &mut ServerHandle {
         &mut self.server
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug)]
-pub struct ServerModuleNotifyEventInputServerSource {
-    server_id: ServerId,
-}
-
-impl From<ServerModuleNotifyEventInputServerSource> for (ServerId,) {
-    fn from(source: ServerModuleNotifyEventInputServerSource) -> Self {
-        (source.server_id,)
-    }
-}
-
-impl ServerModuleNotifyEventInputServerSource {
-    pub fn new(server_id: ServerId) -> Self {
-        Self { server_id }
-    }
-
-    pub fn server_id(&self) -> ServerId {
-        self.server_id
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug)]
-pub struct ServerModuleNotifyEventInputClientSource {
-    server_client_id: ServerClientId,
-}
-
-impl From<ServerModuleNotifyEventInputClientSource> for (ServerClientId,) {
-    fn from(source: ServerModuleNotifyEventInputClientSource) -> Self {
-        (source.server_client_id,)
-    }
-}
-
-impl ServerModuleNotifyEventInputClientSource {
-    pub fn new(server_client_id: ServerClientId) -> Self {
-        Self { server_client_id }
-    }
-
-    pub fn server_client_id(&self) -> ServerClientId {
-        self.server_client_id
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug)]
-pub enum ServerModuleNotifyEventInputSource {
-    Server(ServerModuleNotifyEventInputServerSource),
-    Client(ServerModuleNotifyEventInputClientSource),
-}
-
-impl From<ServerNotifyMessageInputSource> for ServerModuleNotifyEventInputSource {
-    fn from(source: ServerNotifyMessageInputSource) -> Self {
-        match source {
-            ServerNotifyMessageInputSource::Server(source) => Self::Server(
-                ServerModuleNotifyEventInputServerSource::new(source.server_id()),
-            ),
-            ServerNotifyMessageInputSource::Client(source) => Self::Client(
-                ServerModuleNotifyEventInputClientSource::new(source.server_client_id()),
-            ),
-        }
-    }
-}
-
-impl From<ServerModuleNotifyEventInputServerSource> for ServerModuleNotifyEventInputSource {
-    fn from(source: ServerModuleNotifyEventInputServerSource) -> Self {
-        Self::Server(source)
-    }
-}
-
-impl From<ServerModuleNotifyEventInputClientSource> for ServerModuleNotifyEventInputSource {
-    fn from(source: ServerModuleNotifyEventInputClientSource) -> Self {
-        Self::Client(source)
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug)]
-pub struct ServerModuleNotifyEventInput {
-    server: ServerHandle,
-    source: ServerModuleNotifyEventInputSource,
-    body: Bytes,
-}
-
-impl From<ServerModuleNotifyEventInput>
-    for (ServerHandle, ServerModuleNotifyEventInputSource, Bytes)
-{
-    fn from(input: ServerModuleNotifyEventInput) -> Self {
-        (input.server, input.source, input.body)
-    }
-}
-
-impl ServerModuleNotifyEventInput {
-    pub fn new(
-        server: ServerHandle,
-        source: ServerModuleNotifyEventInputSource,
-        body: Bytes,
-    ) -> Self {
-        Self {
-            server,
-            source,
-            body,
-        }
-    }
-
-    pub fn server(&self) -> &ServerHandle {
-        &self.server
-    }
-
-    pub fn source(&self) -> &ServerModuleNotifyEventInputSource {
-        &self.source
-    }
-
-    pub fn body(&self) -> &Bytes {
-        &self.body
     }
 }
 

@@ -3,7 +3,7 @@ use crate::server::node::{
     ServerNodeLogAppendResponseMessageInput, ServerNodeNotificationEndMessageInput,
     ServerNodeNotificationImmediateMessageInput, ServerNodeNotificationNextMessageInput,
     ServerNodeNotificationStartMessageInput, ServerNodeNotificationStartMessageOutput,
-    ServerNodeNotifyMessageInput, ServerNodeRecoveryMessageInput,
+    ServerNodeRecoveryMessageInput,
     ServerNodeRegistrationMessageInput, ServerNodeReplicationMessageInput,
 };
 
@@ -23,10 +23,6 @@ pub type ServerNodeRecoveryMessage = AsynchronousMessage<ServerNodeRecoveryMessa
 
 pub type ServerNodeLogAppendResponseMessage =
     AsynchronousMessage<ServerNodeLogAppendResponseMessageInput>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type ServerNodeNotifyMessage = AsynchronousMessage<ServerNodeNotifyMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,7 +54,6 @@ pub enum ServerNodeMessage {
     Registration(ServerNodeRegistrationMessage),
     Recovery(ServerNodeRecoveryMessage),
     LogAppendResponse(ServerNodeLogAppendResponseMessage),
-    Notify(ServerNodeNotifyMessage),
     NotificationImmediate(ServerNodeNotificationImmediateMessage),
     NotificationStart(ServerNodeNotificationStartMessage),
     NotificationNext(ServerNodeNotificationNextMessage),
@@ -86,12 +81,6 @@ impl From<ServerNodeRecoveryMessage> for ServerNodeMessage {
 impl From<ServerNodeLogAppendResponseMessage> for ServerNodeMessage {
     fn from(message: ServerNodeLogAppendResponseMessage) -> Self {
         Self::LogAppendResponse(message)
-    }
-}
-
-impl From<ServerNodeNotifyMessage> for ServerNodeMessage {
-    fn from(message: ServerNodeNotifyMessage) -> Self {
-        Self::Notify(message)
     }
 }
 

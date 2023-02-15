@@ -9,28 +9,28 @@ use crate::general::{
     GeneralMessage, GeneralNotificationMessage, GeneralNotificationMessageInput,
     GeneralNotificationMessageInputEndType, GeneralNotificationMessageInputImmediateType,
     GeneralNotificationMessageInputNextType, GeneralNotificationMessageInputStartType,
-    GeneralNotificationMessageInputType, GeneralNotifyMessage, GeneralNotifyMessageInput,
+    GeneralNotificationMessageInputType,
 };
 use crate::server::client::{
     ServerClientId, ServerClientMessage, ServerClientNotificationEndMessage,
     ServerClientNotificationImmediateMessage, ServerClientNotificationNextMessage,
     ServerClientNotificationStartMessage, ServerClientNotificationStartMessageOutput,
-    ServerClientNotifyMessage,
+    ServerClientShutdownMessage,
 };
 use crate::server::{
     ServerClientResignationMessageInput, ServerHandle, ServerMessage, ServerModuleGetMessageInput,
     ServerModuleNotificationEventBody, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventInputClientSource, ServerNotifyMessageInput,
-    ServerNotifyMessageInputClientSource,
+    ServerModuleNotificationEventInputClientSource
 };
 use std::collections::HashMap;
-use tracing::error;
+use tracing::{error, debug};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct ServerClientTask {
     client_id: ServerClientId,
+    running: bool,
     server_message_sender: MessageQueueSender<ServerMessage>,
     general_message_sender: MessageSocketSender<GeneralMessage>,
     general_message_receiver: MessageSocketReceiver<GeneralMessage>,
@@ -51,6 +51,7 @@ impl ServerClientTask {
 
         Self {
             client_id,
+            running: true,
             server_message_sender,
             general_message_sender,
             general_message_receiver,
@@ -81,7 +82,7 @@ impl ServerClientTask {
             return;
         }
 
-        loop {
+        while self.running {
             self.select().await
         }
 
@@ -99,9 +100,11 @@ impl ServerClientTask {
                 match result {
                     Err(error) => {
                         error!("{}", error);
+                        self.running = false;
                     }
                     Ok(None) => {
-                        error!("Connection loss");
+                        debug!("Connection loss");
+                        self.running = false;
                     }
                     Ok(Some(message)) => {
                         self.on_general_message(message).await
@@ -113,8 +116,8 @@ impl ServerClientTask {
 
     async fn on_server_client_message(&mut self, message: ServerClientMessage) {
         match message {
-            ServerClientMessage::Notify(message) => {
-                self.on_server_client_notify_message(message).await
+            ServerClientMessage::Shutdown(message) => {
+                self.on_server_client_shutdown_message(message).await
             }
             ServerClientMessage::NotificationImmediate(message) => {
                 self.on_server_client_notification_immediate_message(message)
@@ -133,6 +136,10 @@ impl ServerClientTask {
                     .await
             }
         }
+    }
+
+    async fn on_server_client_shutdown_message(&mut self, _message: ServerClientShutdownMessage) {
+        self.running = false;
     }
 
     async fn on_server_client_notification_immediate_message(
@@ -229,24 +236,8 @@ impl ServerClientTask {
         }
     }
 
-    async fn on_server_client_notify_message(&mut self, message: ServerClientNotifyMessage) {
-        let (input,) = message.into();
-        let (module_id, body) = input.into();
-
-        if let Err(error) = self
-            .general_message_sender
-            .send(GeneralNotifyMessage::new(GeneralNotifyMessageInput::new(
-                module_id, body,
-            )))
-            .await
-        {
-            error!("{}", error);
-        }
-    }
-
     async fn on_general_message(&mut self, message: GeneralMessage) {
         match message {
-            GeneralMessage::Notify(message) => self.on_general_notify_message(message).await,
             GeneralMessage::Notification(message) => {
                 self.on_general_notification_message(message).await
             }
@@ -257,19 +248,6 @@ impl ServerClientTask {
                 );
             }
         }
-    }
-
-    async fn on_general_notify_message(&mut self, message: GeneralNotifyMessage) {
-        let (input,) = message.into();
-        let (module_id, body) = input.into();
-
-        self.server_message_sender
-            .do_send_asynchronous(ServerNotifyMessageInput::new(
-                module_id,
-                ServerNotifyMessageInputClientSource::new(self.client_id).into(),
-                body,
-            ))
-            .await;
     }
 
     async fn on_general_notification_message(&mut self, message: GeneralNotificationMessage) {

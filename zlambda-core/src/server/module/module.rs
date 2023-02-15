@@ -2,8 +2,8 @@ use crate::common::module::Module;
 use crate::server::{
     ServerModuleCommitEventInput, ServerModuleCommitEventOutput, ServerModuleLoadEventInput,
     ServerModuleLoadEventOutput, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventOutput, ServerModuleNotifyEventInput,
-    ServerModuleNotifyEventOutput, ServerModuleShutdownEventInput, ServerModuleShutdownEventOutput,
+    ServerModuleNotificationEventOutput,
+    ServerModuleShutdownEventInput, ServerModuleShutdownEventOutput,
     ServerModuleStartupEventInput, ServerModuleStartupEventOutput, ServerModuleUnloadEventInput,
     ServerModuleUnloadEventOutput,
 };
@@ -30,12 +30,6 @@ pub trait ServerModule: Module {
         &self,
         _event: ServerModuleUnloadEventInput,
     ) -> ServerModuleUnloadEventOutput {
-    }
-
-    async fn on_notify(
-        &self,
-        _event: ServerModuleNotifyEventInput,
-    ) -> ServerModuleNotifyEventOutput {
     }
 
     async fn on_notification(

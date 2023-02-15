@@ -10,13 +10,13 @@ use crate::general::{
     GeneralMessage, GeneralNotificationMessage, GeneralNotificationMessageInput,
     GeneralNotificationMessageInputEndType, GeneralNotificationMessageInputImmediateType,
     GeneralNotificationMessageInputNextType, GeneralNotificationMessageInputStartType,
-    GeneralNotificationMessageInputType, GeneralNotifyMessage, GeneralNotifyMessageInput,
+    GeneralNotificationMessageInputType,
 };
 use crate::server::node::{
     ServerNodeLogAppendResponseMessage, ServerNodeMessage, ServerNodeNotificationEndMessage,
     ServerNodeNotificationImmediateMessage, ServerNodeNotificationNextMessage,
     ServerNodeNotificationStartMessage, ServerNodeNotificationStartMessageOutput,
-    ServerNodeNotifyMessage, ServerNodeRecoveryMessage, ServerNodeRegistrationMessage,
+    ServerNodeRecoveryMessage, ServerNodeRegistrationMessage,
     ServerNodeReplicationMessage,
 };
 use crate::server::{
@@ -24,7 +24,6 @@ use crate::server::{
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
     ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventBody,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
-    ServerNotifyMessageInput, ServerNotifyMessageInputServerSource,
 };
 use std::collections::HashMap;
 use tracing::{error, info};
@@ -129,7 +128,6 @@ impl ServerNodeTask {
             ServerNodeMessage::LogAppendResponse(message) => {
                 self.on_server_log_append_response_message(message).await
             }
-            ServerNodeMessage::Notify(message) => self.on_server_node_notify_message(message).await,
             ServerNodeMessage::NotificationImmediate(message) => {
                 self.on_server_node_notification_immediate_message(message)
                     .await
@@ -364,27 +362,6 @@ impl ServerNodeTask {
         }
     }
 
-    async fn on_server_node_notify_message(&mut self, message: ServerNodeNotifyMessage) {
-        let socket = match &mut self.general_socket {
-            None => return,
-            Some(socket) => socket,
-        };
-
-        let (input,) = message.into();
-        let (module_id, body) = input.into();
-
-        if let Err(error) = socket
-            .0
-            .send(GeneralNotifyMessage::new(GeneralNotifyMessageInput::new(
-                module_id, body,
-            )))
-            .await
-        {
-            error!("{}", error);
-            return;
-        }
-    }
-
     async fn on_general_message(&mut self, message: GeneralMessage) {
         match message {
             GeneralMessage::LogEntriesAppendRequest(message) => {
@@ -395,7 +372,6 @@ impl ServerNodeTask {
                 self.on_general_log_entries_append_response_message(message)
                     .await
             }
-            GeneralMessage::Notify(message) => self.on_general_notify_message(message).await,
             GeneralMessage::Notification(message) => {
                 self.on_general_notification_message(message).await
             }
@@ -447,19 +423,6 @@ impl ServerNodeTask {
                 ))
                 .await;
         }
-    }
-
-    async fn on_general_notify_message(&mut self, message: GeneralNotifyMessage) {
-        let (input,) = message.into();
-        let (module_id, body) = input.into();
-
-        self.server_message_sender
-            .do_send_asynchronous(ServerNotifyMessageInput::new(
-                module_id,
-                ServerNotifyMessageInputServerSource::new(self.server_id).into(),
-                body,
-            ))
-            .await;
     }
 
     async fn on_general_notification_message(&mut self, message: GeneralNotificationMessage) {

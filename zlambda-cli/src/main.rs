@@ -8,9 +8,12 @@ use std::error::Error;
 use std::iter::empty;
 use tokio::io::stdin;
 use tokio_util::io::ReaderStream;
-use zlambda_core::client::{ClientModule, ClientTask};
+use zlambda_core::client::{
+    ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput,
+    ClientModule, ClientTask,
+};
 use zlambda_core::common::module::{Module, ModuleId};
-use zlambda_core::server::{ServerId, ServerModule, ServerTask};
+use zlambda_core::server::{ServerId, ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput, ServerTask};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,6 +72,11 @@ enum ClientCommand {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+use zlambda_core::common::utility::Bytes;
+use futures::pin_mut;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub struct TestClientModule {}
 
@@ -76,7 +84,19 @@ pub struct TestClientModule {}
 impl Module for TestClientModule {}
 
 #[async_trait::async_trait]
-impl ClientModule for TestClientModule {}
+impl ClientModule for TestClientModule {
+    async fn on_initialize(&self, event: ClientModuleInitializeEventInput) -> ClientModuleInitializeEventOutput {
+        let s = async_stream::stream! {
+            while let Some(bytes) = ReaderStream::new(stdin()).next().await {
+                yield bytes.unwrap();
+            }
+        };
+
+        pin_mut!(s);
+
+        event.client_handle().server().notify(0, s).await;
+    }
+}
 
 impl TestClientModule {
     pub fn new() -> Self {
@@ -93,7 +113,17 @@ pub struct TestServerModule {}
 impl Module for TestServerModule {}
 
 #[async_trait::async_trait]
-impl ServerModule for TestServerModule {}
+impl ServerModule for TestServerModule {
+    async fn on_notification(&self, mut input: ServerModuleNotificationEventInput) -> ServerModuleNotificationEventOutput {
+        println!("{:?}", input.source());
+
+        let mut stream = Box::pin(input.body_mut().stream());
+
+        while let Some(bytes) = stream.next().await {
+            println!("{:?}", bytes);
+        }
+    }
+}
 
 impl TestServerModule {
     pub fn new() -> Self {
