@@ -49,6 +49,16 @@ where
     {
         self.send(AsynchronousMessage::new(input)).await
     }
+
+    /*pub async fn do_send_synchronous<I, O>(&self, input: I) -> O
+    where
+        T: From<SynchronousMessage<I, O>>,
+        O: Debug + Send,
+    {
+        self.do_send(SynchronousMessage::new(input, sender)).await;
+
+        receiver.do_receive().await
+    }*/
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

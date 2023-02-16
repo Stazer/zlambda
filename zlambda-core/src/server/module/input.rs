@@ -2,7 +2,7 @@ use crate::common::message::MessageQueueReceiver;
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
 use crate::server::client::ServerClientId;
-use crate::server::{LogEntry, ServerHandle, ServerId};
+use crate::server::{LogEntryId, ServerHandle, ServerId};
 use async_stream::stream;
 use futures::Stream;
 
@@ -264,12 +264,21 @@ impl ServerModuleNotificationEventInput {
 #[derive(Clone, Debug)]
 pub struct ServerModuleCommitEventInput {
     server: ServerHandle,
-    log_entry: LogEntry,
+    log_entry_id: LogEntryId,
+}
+
+impl From<ServerModuleCommitEventInput> for (ServerHandle, LogEntryId) {
+    fn from(input: ServerModuleCommitEventInput) -> Self {
+        (input.server, input.log_entry_id)
+    }
 }
 
 impl ServerModuleCommitEventInput {
-    pub fn new(server: ServerHandle, log_entry: LogEntry) -> Self {
-        Self { server, log_entry }
+    pub fn new(server: ServerHandle, log_entry_id: LogEntryId) -> Self {
+        Self {
+            server,
+            log_entry_id,
+        }
     }
 
     pub fn server(&self) -> &ServerHandle {
@@ -280,11 +289,7 @@ impl ServerModuleCommitEventInput {
         &mut self.server
     }
 
-    pub fn log_entry(&self) -> &LogEntry {
-        &self.log_entry
-    }
-
-    pub fn log_entry_mut(&mut self) -> &mut LogEntry {
-        &mut self.log_entry
+    pub fn log_entry_id(&self) -> LogEntryId {
+        self.log_entry_id
     }
 }

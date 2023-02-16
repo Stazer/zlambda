@@ -18,7 +18,7 @@ use crate::server::node::{
     ServerNodeNotificationEndMessage, ServerNodeNotificationImmediateMessage,
     ServerNodeNotificationNextMessage, ServerNodeNotificationStartMessage,
     ServerNodeNotificationStartMessageOutput, ServerNodeRecoveryMessage,
-    ServerNodeRegistrationMessage, ServerNodeReplicationMessage,
+    ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeShutdownMessage,
 };
 use crate::server::{
     ServerHandle, ServerId, ServerLogAppendRequestMessageInput,
@@ -32,6 +32,7 @@ use tracing::{debug, error, info};
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct ServerNodeTask {
+    running: bool,
     server_id: ServerId,
     server_message_sender: MessageQueueSender<ServerMessage>,
     general_socket: Option<(
@@ -56,6 +57,7 @@ impl ServerNodeTask {
         let (sender, receiver) = message_queue();
 
         Self {
+            running: true,
             server_id,
             server_message_sender,
             general_socket,
@@ -75,7 +77,9 @@ impl ServerNodeTask {
     }
 
     pub async fn run(mut self) {
-        loop {
+        println!("running {:?}", self.server_id);
+
+        while self.running {
             self.select().await
         }
     }
@@ -117,6 +121,9 @@ impl ServerNodeTask {
 
     async fn on_server_node_message(&mut self, message: ServerNodeMessage) {
         match message {
+            ServerNodeMessage::Shutdown(message) => {
+                self.on_server_node_shutdown_message(message).await
+            }
             ServerNodeMessage::Replication(message) => {
                 self.on_server_node_replication_message(message).await
             }
@@ -149,114 +156,8 @@ impl ServerNodeTask {
         }
     }
 
-    async fn on_server_node_notification_immediate_message(
-        &mut self,
-        message: ServerNodeNotificationImmediateMessage,
-    ) {
-        let general_message_sender = match &mut self.general_socket {
-            Some((sender, _)) => sender,
-            None => return,
-        };
-
-        let (input,) = message.into();
-        let (module_id, body) = input.into();
-
-        if let Err(error) = general_message_sender
-            .send(GeneralNotificationMessage::new(
-                GeneralNotificationMessageInput::new(
-                    GeneralNotificationMessageInputImmediateType::new(module_id).into(),
-                    body,
-                ),
-            ))
-            .await
-        {
-            error!("{}", error);
-        }
-    }
-
-    async fn on_server_node_notification_start_message(
-        &mut self,
-        message: ServerNodeNotificationStartMessage,
-    ) {
-        let general_message_sender = match &mut self.general_socket {
-            Some((sender, _)) => sender,
-            None => return,
-        };
-
-        let (input, sender) = message.into();
-        let (module_id, body) = input.into();
-
-        let notification_id = self.outgoing_notification_counter;
-        self.outgoing_notification_counter += 1;
-
-        sender
-            .do_send(ServerNodeNotificationStartMessageOutput::new(
-                notification_id,
-            ))
-            .await;
-
-        if let Err(error) = general_message_sender
-            .send(GeneralNotificationMessage::new(
-                GeneralNotificationMessageInput::new(
-                    GeneralNotificationMessageInputStartType::new(module_id, notification_id)
-                        .into(),
-                    body,
-                ),
-            ))
-            .await
-        {
-            error!("{}", error);
-        }
-    }
-
-    async fn on_server_node_notification_next_message(
-        &mut self,
-        message: ServerNodeNotificationNextMessage,
-    ) {
-        let general_message_sender = match &mut self.general_socket {
-            Some((sender, _)) => sender,
-            None => return,
-        };
-
-        let (input,) = message.into();
-        let (notification_id, body) = input.into();
-
-        if let Err(error) = general_message_sender
-            .send(GeneralNotificationMessage::new(
-                GeneralNotificationMessageInput::new(
-                    GeneralNotificationMessageInputNextType::new(notification_id).into(),
-                    body,
-                ),
-            ))
-            .await
-        {
-            error!("{}", error);
-        }
-    }
-
-    async fn on_server_node_notification_end_message(
-        &mut self,
-        message: ServerNodeNotificationEndMessage,
-    ) {
-        let general_message_sender = match &mut self.general_socket {
-            Some((sender, _)) => sender,
-            None => return,
-        };
-
-        let (input,) = message.into();
-        let (notification_id, body) = input.into();
-
-        if let Err(error) = general_message_sender
-            .send(GeneralNotificationMessage::new(
-                GeneralNotificationMessageInput::new(
-                    GeneralNotificationMessageInputEndType::new(notification_id).into(),
-                    body,
-                ),
-            ))
-            .await
-        {
-            error!("{}", error);
-        }
+    async fn on_server_node_shutdown_message(&mut self, _message: ServerNodeShutdownMessage) {
+        self.running = false;
     }
 
     async fn on_server_node_replication_message(&mut self, message: ServerNodeReplicationMessage) {
@@ -403,6 +304,116 @@ impl ServerNodeTask {
                 error!("{}", error);
                 return;
             }
+        }
+    }
+
+    async fn on_server_node_notification_immediate_message(
+        &mut self,
+        message: ServerNodeNotificationImmediateMessage,
+    ) {
+        let general_message_sender = match &mut self.general_socket {
+            Some((sender, _)) => sender,
+            None => return,
+        };
+
+        let (input,) = message.into();
+        let (module_id, body) = input.into();
+
+        if let Err(error) = general_message_sender
+            .send(GeneralNotificationMessage::new(
+                GeneralNotificationMessageInput::new(
+                    GeneralNotificationMessageInputImmediateType::new(module_id).into(),
+                    body,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+        }
+    }
+
+    async fn on_server_node_notification_start_message(
+        &mut self,
+        message: ServerNodeNotificationStartMessage,
+    ) {
+        let general_message_sender = match &mut self.general_socket {
+            Some((sender, _)) => sender,
+            None => return,
+        };
+
+        let (input, sender) = message.into();
+        let (module_id, body) = input.into();
+
+        let notification_id = self.outgoing_notification_counter;
+        self.outgoing_notification_counter += 1;
+
+        sender
+            .do_send(ServerNodeNotificationStartMessageOutput::new(
+                notification_id,
+            ))
+            .await;
+
+        if let Err(error) = general_message_sender
+            .send(GeneralNotificationMessage::new(
+                GeneralNotificationMessageInput::new(
+                    GeneralNotificationMessageInputStartType::new(module_id, notification_id)
+                        .into(),
+                    body,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+        }
+    }
+
+    async fn on_server_node_notification_next_message(
+        &mut self,
+        message: ServerNodeNotificationNextMessage,
+    ) {
+        let general_message_sender = match &mut self.general_socket {
+            Some((sender, _)) => sender,
+            None => return,
+        };
+
+        let (input,) = message.into();
+        let (notification_id, body) = input.into();
+
+        if let Err(error) = general_message_sender
+            .send(GeneralNotificationMessage::new(
+                GeneralNotificationMessageInput::new(
+                    GeneralNotificationMessageInputNextType::new(notification_id).into(),
+                    body,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+        }
+    }
+
+    async fn on_server_node_notification_end_message(
+        &mut self,
+        message: ServerNodeNotificationEndMessage,
+    ) {
+        let general_message_sender = match &mut self.general_socket {
+            Some((sender, _)) => sender,
+            None => return,
+        };
+
+        let (input,) = message.into();
+        let (notification_id, body) = input.into();
+
+        if let Err(error) = general_message_sender
+            .send(GeneralNotificationMessage::new(
+                GeneralNotificationMessageInput::new(
+                    GeneralNotificationMessageInputEndType::new(notification_id).into(),
+                    body,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
         }
     }
 

@@ -7,6 +7,17 @@ use crate::server::{LogEntry, LogEntryId, LogTerm};
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ServerNodeShutdownMessageInput {}
+
+impl ServerNodeShutdownMessageInput {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ServerNodeReplicationMessageInput {
     log_entries: Vec<LogEntry>,
     last_committed_log_entry_id: Option<LogEntryId>,

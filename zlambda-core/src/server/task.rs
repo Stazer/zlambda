@@ -6,18 +6,18 @@ use crate::common::module::ModuleManager;
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
 use crate::general::{
-    GeneralMessage, GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
+    GeneralMessage, GeneralNodeHandshakeRequestMessage, GeneralNodeHandshakeRequestMessageInput,
+    GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
     GeneralNodeHandshakeResponseMessageInputResult, GeneralRecoveryRequestMessage,
     GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
     GeneralRegistrationRequestMessage, GeneralRegistrationRequestMessageInput,
     GeneralRegistrationResponseMessageInput,
-    GeneralNodeHandshakeRequestMessage,
-    GeneralNodeHandshakeRequestMessageInput,
 };
 use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTask};
 use crate::server::connection::ServerConnectionTask;
 use crate::server::node::{
     ServerNodeLogAppendResponseMessageInput, ServerNodeNodeHandshakeMessageInput,
+    ServerNodeShutdownMessageInput,
 };
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
@@ -49,7 +49,6 @@ use tracing::{debug, error, info};
 pub struct ServerTask {
     server_id: ServerId,
     leader_server_id: ServerId,
-    server_nodes: Vec<Option<(SocketAddr, Option<MessageQueueSender<ServerNodeMessage>>)>>,
     r#type: ServerType,
     tcp_listener: TcpListener,
     sender: MessageQueueSender<ServerMessage>,
@@ -86,7 +85,6 @@ impl ServerTask {
             None => Ok(Self {
                 server_id: ServerId::default(),
                 leader_server_id: ServerId::default(),
-                server_nodes: vec![Some((tcp_listener.local_addr()?, None))],
                 r#type: ServerLeaderType::new(LeadingLog::default()).into(),
                 tcp_listener,
                 sender: queue_sender.clone(),
@@ -193,7 +191,6 @@ impl ServerTask {
                         FollowingLog::new(term, Vec::default(), 0),
                     )
                     .into(),
-                    server_nodes: Vec::default(),
                     tcp_listener,
                     sender: queue_sender,
                     receiver: queue_receiver,
@@ -295,7 +292,6 @@ impl ServerTask {
                         FollowingLog::new(term, Vec::default(), 0),
                     )
                     .into(),
-                    server_nodes: Vec::default(),
                     tcp_listener,
                     sender: queue_sender,
                     receiver: queue_receiver,
@@ -319,7 +315,7 @@ impl ServerTask {
     }
 
     pub async fn run(mut self) {
-        self.handshake().await;
+        self.ensure_node_handshakes().await;
 
         for module in self.module_manager.iter() {
             module
@@ -359,6 +355,8 @@ impl ServerTask {
                 )))
                 .await;
         }
+
+        self.ensure_node_shutdowns().await;
     }
 
     #[async_recursion]
@@ -428,7 +426,7 @@ impl ServerTask {
         match &self.r#type {
             ServerType::Leader(_) => {
                 let node_server_id = {
-                    let mut iterator = self.server_nodes.iter();
+                    let mut iterator = self.server_socket_addresses.iter();
                     let mut index = 0;
 
                     loop {
@@ -440,9 +438,32 @@ impl ServerTask {
                     }
                 };
 
+                if node_server_id >= self.server_socket_addresses.len() {
+                    self.server_socket_addresses
+                        .resize_with(node_server_id + 1, || None);
+                }
+
+                if node_server_id >= self.server_node_message_senders.len() {
+                    self.server_node_message_senders
+                        .resize_with(node_server_id + 1, || None);
+                }
+
                 let task = ServerNodeTask::new(node_server_id.into(), self.sender.clone(), None);
                 let sender = task.sender().clone();
                 task.spawn();
+
+
+                if let Some(server_socket_address) =
+                    self.server_socket_addresses.get_mut(node_server_id)
+                {
+                    *server_socket_address = Some(input.server_socket_address());
+                }
+
+                if let Some(server_node_message_sender) =
+                    self.server_node_message_senders.get_mut(node_server_id)
+                {
+                    *server_node_message_sender = Some(sender);
+                }
 
                 let log_entry_ids = self
                     .replicate(vec![AddServerLogEntryData::new(
@@ -451,15 +472,6 @@ impl ServerTask {
                     )
                     .into()])
                     .await;
-
-                if node_server_id >= self.server_nodes.len() {
-                    self.server_nodes.resize_with(node_server_id + 1, || None);
-                }
-
-                *self
-                    .server_nodes
-                    .get_mut(node_server_id)
-                    .expect("valid entry") = Some((input.server_socket_address(), Some(sender)));
 
                 self.commit_messages
                     .entry(*log_entry_ids.first().expect("valid log entry id"))
@@ -476,18 +488,18 @@ impl ServerTask {
             }
             ServerType::Follower(follower) => {
                 let leader_server_socket_address = match self
-                    .server_nodes
+                    .server_socket_addresses
                     .get(usize::from(follower.leader_server_id()))
                 {
-                    Some(Some(node)) => node.0,
-                    _ => {
+                    Some(Some(leader_server_socket_address)) => leader_server_socket_address,
+                    None | Some(None) => {
                         panic!("Expected leader server socket address");
                     }
                 };
 
                 output_sender
                     .do_send(ServerRegistrationMessageNotALeaderOutput::new(
-                        leader_server_socket_address,
+                        *leader_server_socket_address,
                     ))
                     .await;
             }
@@ -505,30 +517,22 @@ impl ServerTask {
             ServerType::Follower(_) => panic!("Server should be leader"),
         };
 
-        let node = match self.server_nodes.get(usize::from(input.node_server_id())) {
-            Some(Some(node)) => node,
+        let server_node_message_sender = match self
+            .server_node_message_senders
+            .get(usize::from(input.node_server_id()))
+        {
+            Some(Some(server_node_message_sender)) => server_node_message_sender.clone(),
             None | Some(None) => panic!("Server node {} should exist", input.node_server_id()),
-        };
-
-        let node_sender = match &node.1 {
-            Some(node_sender) => node_sender.clone(),
-            None => panic!(
-                "Server node {} should have assigned sender",
-                input.node_server_id()
-            ),
         };
 
         output_sender
             .do_send(ServerRegistrationMessageSuccessOutput::new(
                 input.node_server_id(),
                 self.server_id,
-                self.server_nodes
-                    .iter()
-                    .map(|node| node.as_ref().map(|x| x.0))
-                    .collect(),
+                self.server_socket_addresses.clone(),
                 leader.log().last_committed_log_entry_id(),
                 leader.log().current_term(),
-                node_sender,
+                server_node_message_sender,
             ))
             .await;
     }
@@ -536,45 +540,49 @@ impl ServerTask {
     async fn on_server_recovery_message(&mut self, message: ServerRecoveryMessage) {
         let (input, sender) = message.into();
 
-        match &self.r#type {
-            ServerType::Leader(leader) => {
-                match self.server_nodes.get(usize::from(input.server_id())) {
-                    None | Some(None) => {
-                        sender.do_send(ServerRecoveryMessageOutput::Unknown).await;
-                    }
-                    Some(Some(node)) => match &node.1 {
-                        None => sender.do_send(ServerRecoveryMessageOutput::Unknown).await,
-                        Some(node_sender) => {
-                            sender
-                                .do_send(ServerRecoveryMessageSuccessOutput::new(
-                                    self.server_id,
-                                    self.server_nodes
-                                        .iter()
-                                        .map(|node| node.as_ref().map(|x| x.0))
-                                        .collect(),
-                                    leader.log().last_committed_log_entry_id(),
-                                    leader.log().current_term(),
-                                    node_sender.clone(),
-                                ))
-                                .await;
-                        }
-                    },
-                };
+        if self.server_id != self.leader_server_id {
+            let leader_server_socket_address = match self
+                .server_socket_addresses
+                .get(usize::from(self.leader_server_id))
+            {
+                Some(Some(leader_server_socket_address)) => *leader_server_socket_address,
+                None | Some(None) => {
+                    panic!("Expected leader server socket address");
+                }
+            };
+
+            sender
+                .do_send(ServerRecoveryMessageNotALeaderOutput::new(
+                    leader_server_socket_address,
+                ))
+                .await;
+
+            return;
+        }
+
+        match self
+            .server_node_message_senders
+            .get(usize::from(input.server_id()))
+        {
+            None | Some(None) => {
+                sender.do_send(ServerRecoveryMessageOutput::Unknown).await;
+                return;
             }
-            ServerType::Follower(follower) => {
-                let leader_server_socket_address = match self
-                    .server_nodes
-                    .get(usize::from(follower.leader_server_id()))
-                {
-                    Some(Some(node)) => node.0,
-                    _ => {
-                        panic!("Expected leader server socket address");
+            Some(Some(server_node_message_senders)) => {
+                let log = match &self.r#type {
+                    ServerType::Leader(leader) => leader.log(),
+                    ServerType::Follower(_) => {
+                        panic!();
                     }
                 };
 
                 sender
-                    .do_send(ServerRecoveryMessageNotALeaderOutput::new(
-                        leader_server_socket_address,
+                    .do_send(ServerRecoveryMessageSuccessOutput::new(
+                        self.server_id,
+                        self.server_socket_addresses.clone(),
+                        log.last_committed_log_entry_id(),
+                        log.current_term(),
+                        server_node_message_senders.clone(),
                     ))
                     .await;
             }
@@ -678,19 +686,17 @@ impl ServerTask {
             .cloned()
             .collect::<Vec<_>>();
 
-        let node_queue_sender = match self
-            .server_nodes
+        let server_node_message_sender = match self
+            .server_node_message_senders
             .get(usize::from(input.server_id()))
-            .map(|entry| entry.as_ref().map(|node| &node.1))
-            .flatten()
         {
-            Some(Some(node_queue_sender)) => node_queue_sender,
+            Some(Some(server_node_message_sender)) => server_node_message_sender,
             None | Some(None) => {
                 panic!("Node does not exist");
             }
         };
 
-        node_queue_sender
+        server_node_message_sender
             .do_send(ServerNodeReplicationMessage::new(
                 ServerNodeReplicationMessageInput::new(
                     log_entries,
@@ -759,43 +765,8 @@ impl ServerTask {
         }
 
         if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
-            for committed_log_entry_id in committed_log_entry_id_range.clone() {
-                let log_entry = match follower
-                    .log()
-                    .entries()
-                    .get(committed_log_entry_id)
-                    .cloned()
-                {
-                    None | Some(None) => continue,
-                    Some(Some(log_entry)) => log_entry,
-                };
-
-                for module in self.module_manager.iter().cloned() {
-                    let sender = self.sender.clone();
-                    let log_entry = log_entry.clone();
-
-                    spawn(async move {
-                        module
-                            .on_commit(ServerModuleCommitEventInput::new(
-                                ServerHandle::new(sender),
-                                log_entry,
-                            ))
-                            .await;
-                    });
-                }
-
-                debug!("Committed log entry {}", committed_log_entry_id);
-            }
-
-            for committed_log_entry_id in committed_log_entry_id_range.clone() {
-                for message in self
-                    .commit_messages
-                    .remove(&committed_log_entry_id)
-                    .unwrap_or_default()
-                {
-                    self.on_server_message(message).await;
-                }
-            }
+            self.on_commit_log_entries(committed_log_entry_id_range)
+                .await;
         }
     }
 
@@ -864,7 +835,7 @@ impl ServerTask {
             ServerType::Leader(ref mut leader) => {
                 let log_entry_ids = leader.log_mut().append(
                     log_entries_data,
-                    self.server_nodes
+                    self.server_socket_addresses
                         .iter()
                         .enumerate()
                         .flat_map(|node| node.1.as_ref().map(|_| node.0))
@@ -878,9 +849,8 @@ impl ServerTask {
                     .cloned()
                     .collect::<Vec<_>>();
 
-                for server_node in &self.server_nodes {
-                    if let Some(Some(sender)) = server_node.as_ref().map(|node| &node.1) {
-                        sender
+                for server_node_socket_sender in self.server_node_message_senders.iter().flatten() {
+                        server_node_socket_sender
                             .do_send(ServerNodeReplicationMessage::new(
                                 ServerNodeReplicationMessageInput::new(
                                     log_entries.clone(),
@@ -889,25 +859,7 @@ impl ServerTask {
                                 ),
                             ))
                             .await;
-                    }
                 }
-
-                /*
-                   causes compiler bug:
-                */
-                /*for node_sender in self
-                    .server_nodes
-                    .iter()
-                    .flatten()
-                    .map(|node| &node.1)
-                    .flatten()
-                {
-                    node_sender
-                        .do_send(ServerNodeReplicationMessage::new(
-                            ServerNodeReplicationMessageInput::new(vec![]),
-                        ))
-                        .await;
-                }*/
 
                 log_entry_ids
             }
@@ -960,45 +912,11 @@ impl ServerTask {
             let last_committed_log_entry_id = leader.log_mut().last_committed_log_entry_id();
             let current_term = leader.log_mut().current_term();
 
-            for committed_log_entry_id in committed_log_entry_id_range.clone() {
-                let log_entry = match leader.log().entries().get(committed_log_entry_id).cloned() {
-                    Some(log_entry) => log_entry,
-                    None => continue,
-                };
+            self.on_commit_log_entries(committed_log_entry_id_range)
+                .await;
 
-                for module in self.module_manager.iter().cloned() {
-                    let sender = self.sender.clone();
-                    let log_entry = log_entry.clone();
-
-                    spawn(async move {
-                        module
-                            .on_commit(ServerModuleCommitEventInput::new(
-                                ServerHandle::new(sender),
-                                log_entry,
-                            ))
-                            .await;
-                    });
-                }
-
-                debug!(
-                    "Committed log entry {} by acknowledgement of server {}",
-                    committed_log_entry_id, server_id
-                );
-            }
-
-            for committed_log_entry_id in committed_log_entry_id_range {
-                for message in self
-                    .commit_messages
-                    .remove(&committed_log_entry_id)
-                    .unwrap_or_default()
-                {
-                    self.on_server_message(message).await;
-                }
-            }
-
-            for server_node in &mut self.server_nodes {
-                if let Some(Some(sender)) = server_node.as_ref().map(|node| &node.1) {
-                    sender
+            for server_node_message_sender in self.server_node_message_senders.iter().flatten() {
+                    server_node_message_sender
                         .do_send(ServerNodeReplicationMessage::new(
                             ServerNodeReplicationMessageInput::new(
                                 Vec::default(),
@@ -1007,71 +925,183 @@ impl ServerTask {
                             ),
                         ))
                         .await;
-                }
             }
         }
     }
 
-    async fn handshake(&mut self) {
-        for (server_id, socket_address) in self.server_socket_addresses.iter().enumerate().map(|(server_id, socket_address)| (ServerId::from(server_id), socket_address)) {
-            if server_id >= self.server_id || server_id == self.leader_server_id {
-                continue;
-            }
+    async fn ensure_node_handshake(&mut self, server_id: ServerId) {
+        let is_leader = self.leader_server_id == self.server_id;
 
-            let socket_address = match socket_address {
-                None => continue,
-                Some(socket_address) => socket_address,
-            };
+        if server_id == self.leader_server_id
+            || server_id == self.server_id
+            || (is_leader && server_id > self.server_id)
+            || (!is_leader && server_id < self.server_id)
+        {
+            return;
+        }
 
-            let socket = match TcpStream::connect(socket_address).await {
-                Err(_) => None,
-                Ok(socket) => {
-                    (async move || {
-                        let (reader, writer) = socket.into_split();
+        let socket_address = match self.server_socket_addresses.get(usize::from(server_id)) {
+            None | Some(None) => return,
+            Some(Some(socket_address)) => socket_address,
+        };
 
-                        let (mut sender, mut receiver) = (
-                            MessageSocketSender::<GeneralMessage>::new(writer),
-                            MessageSocketReceiver::<GeneralMessage>::new(reader),
-                        );
+        let socket = match TcpStream::connect(socket_address).await {
+            Err(_) => None,
+            Ok(socket) => {
+                (async move || {
+                    let (reader, writer) = socket.into_split();
 
-                        if sender
-                            .send(GeneralNodeHandshakeRequestMessage::new(
-                                GeneralNodeHandshakeRequestMessageInput::new(server_id),
-                            ))
-                            .await.is_err() {
-                                return None;
-                            }
+                    let (mut sender, mut receiver) = (
+                        MessageSocketSender::<GeneralMessage>::new(writer),
+                        MessageSocketReceiver::<GeneralMessage>::new(reader),
+                    );
 
-                        let message = match receiver.receive().await {
-                            Err(_) | Ok(None) | Ok(Some(_)) => return None,
-                            Ok(Some(GeneralMessage::NodeHandshakeResponse(message))) => message,
-                        };
+                    if sender
+                        .send(GeneralNodeHandshakeRequestMessage::new(
+                            GeneralNodeHandshakeRequestMessageInput::new(server_id),
+                        ))
+                        .await
+                        .is_err()
+                    {
+                        return None;
+                    }
 
-                        let (input, ) = message.into();
+                    let message = match receiver.receive().await {
+                        Err(_) | Ok(None) | Ok(Some(_)) => return None,
+                        Ok(Some(GeneralMessage::NodeHandshakeResponse(message))) => message,
+                    };
 
-                        match input.result() {
-                            GeneralNodeHandshakeResponseMessageInputResult::Success => Some((sender, receiver)),
-                            result => {
-                                error!("{:?}", result);
-                                None
-                            }
+                    let (input,) = message.into();
+
+                    match input.result() {
+                        GeneralNodeHandshakeResponseMessageInputResult::Success => {
+                            Some((sender, receiver))
                         }
-                    })().await
-                }
-            };
-
-            let task = ServerNodeTask::new(
-                server_id,
-                self.sender.clone(),
-                socket,
-            );
-
-            self.server_node_message_senders.resize_with(usize::from(server_id) + 1, || None);
-            if let Some(server_node_message_senders) = self.server_node_message_senders.get_mut(usize::from(server_id)) {
-                *server_node_message_senders = Some(task.sender().clone());
+                        result => {
+                            error!("{:?}", result);
+                            None
+                        }
+                    }
+                })()
+                .await
             }
+        };
 
-            task.spawn();
+        let task = ServerNodeTask::new(server_id, self.sender.clone(), socket);
+
+        self.server_node_message_senders
+            .resize_with(usize::from(server_id) + 1, || None);
+        if let Some(server_node_message_senders) = self
+            .server_node_message_senders
+            .get_mut(usize::from(server_id))
+        {
+            *server_node_message_senders = Some(task.sender().clone());
+        }
+
+        task.spawn();
+
+        debug!("Handshake with server {} successful", server_id);
+    }
+
+    async fn ensure_node_handshakes(&mut self) {
+        for server_id in self
+            .server_socket_addresses
+            .iter()
+            .enumerate()
+            .map(|(server_id, _)| ServerId::from(server_id))
+            .collect::<Vec<_>>()
+            .iter()
+        {
+            self.ensure_node_handshake(*server_id).await;
+        }
+    }
+
+    async fn ensure_node_shutdown(&mut self, server_id: ServerId) {
+        let server_node_sender = match self.server_node_message_senders.get(usize::from(server_id))
+        {
+            None | Some(None) => return,
+            Some(Some(server_node_sender)) => server_node_sender,
+        };
+
+        server_node_sender
+            .do_send_asynchronous(ServerNodeShutdownMessageInput::new())
+            .await;
+    }
+
+    async fn ensure_node_shutdowns(&mut self) {
+        for server_id in self
+            .server_socket_addresses
+            .iter()
+            .enumerate()
+            .map(|(server_id, _)| ServerId::from(server_id))
+            .collect::<Vec<_>>()
+            .iter()
+        {
+            self.ensure_node_shutdown(*server_id).await;
+        }
+    }
+
+    async fn on_commit_log_entries<T>(&mut self, log_entry_ids: T)
+    where
+        T: Iterator<Item = LogEntryId>,
+    {
+        for log_entry_id in log_entry_ids {
+            self.on_commit_log_entry(log_entry_id).await;
+        }
+    }
+
+    async fn on_commit_log_entry(&mut self, log_entry_id: LogEntryId) {
+        for module in self.module_manager.iter().cloned() {
+            let sender = self.sender.clone();
+
+            spawn(async move {
+                module
+                    .on_commit(ServerModuleCommitEventInput::new(
+                        ServerHandle::new(sender),
+                        log_entry_id,
+                    ))
+                    .await;
+            });
+        }
+
+        debug!("Committed log entry {}", log_entry_id,);
+
+        let log_entry = match &self.r#type {
+            ServerType::Leader(leader) => leader.log().entries().get(log_entry_id),
+            ServerType::Follower(follower) => match follower.log().entries().get(log_entry_id) {
+                None | Some(None) => None,
+                Some(Some(log_entry)) => Some(log_entry),
+            },
+        };
+
+        if let Some(log_entry) = log_entry {
+            match log_entry.data() {
+                LogEntryData::AddServer(data) => {
+                    if self.leader_server_id != self.server_id {
+                        self.server_socket_addresses.insert(
+                            usize::from(data.server_id()),
+                            Some(data.server_socket_address()),
+                        );
+                        self.ensure_node_handshake(data.server_id()).await;
+                    }
+                }
+                LogEntryData::RemoveServer(data) => {
+                    if self.leader_server_id != self.server_id {
+                        self.server_socket_addresses
+                            .remove(usize::from(data.server_id()));
+                        self.ensure_node_shutdown(data.server_id()).await;
+                    }
+                }
+                LogEntryData::Data(_) => {}
+            }
+        }
+
+        for message in self
+            .commit_messages
+            .remove(&log_entry_id)
+            .unwrap_or_default()
+        {
+            self.on_server_message(message).await;
         }
     }
 }
