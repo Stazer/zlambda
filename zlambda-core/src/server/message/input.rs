@@ -430,3 +430,60 @@ impl ServerLogAppendRequestMessageInput {
         self.log_current_term
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerServerSocketAddressGetMessageInput {
+    server_id: ServerId,
+}
+
+impl From<ServerServerSocketAddressGetMessageInput> for (ServerId,) {
+    fn from(input: ServerServerSocketAddressGetMessageInput) -> Self {
+        (input.server_id,)
+    }
+}
+
+impl ServerServerSocketAddressGetMessageInput {
+    pub fn new(server_id: ServerId) -> Self {
+        Self { server_id }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerServerIdGetMessageInput {}
+
+impl From<ServerServerIdGetMessageInput> for () {
+    fn from(_input: ServerServerIdGetMessageInput) -> Self {
+
+    }
+}
+
+impl ServerServerIdGetMessageInput {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLeaderServerIdGetMessageInput {}
+
+impl From<ServerLeaderServerIdGetMessageInput> for () {
+    fn from(_input: ServerLeaderServerIdGetMessageInput) -> Self {
+
+    }
+}
+
+impl ServerLeaderServerIdGetMessageInput{
+    pub fn new() -> Self {
+        Self {}
+    }
+}

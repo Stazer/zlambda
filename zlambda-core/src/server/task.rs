@@ -34,7 +34,10 @@ use crate::server::{
     ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
+    ServerServerSocketAddressGetMessage, ServerServerSocketAddressGetMessageOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
+    ServerServerIdGetMessage, ServerServerIdGetMessageOutput,
+    ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
 };
 use async_recursion::async_recursion;
 use std::cmp::max;
@@ -401,6 +404,16 @@ impl ServerTask {
             ServerMessage::ClientResignation(message) => {
                 self.on_server_client_resignation(message).await
             }
+            ServerMessage::ServerSocketAddressGet(message) => {
+                self.on_server_server_socket_address_get_message(message)
+                    .await
+            }
+            ServerMessage::ServerIdGet(message) => {
+                self.on_server_server_id_get_message(message).await
+            }
+            ServerMessage::LeaderServerIdGet(message) => {
+                self.on_server_leader_server_id_get_message(message).await
+            }
         }
     }
 
@@ -451,7 +464,6 @@ impl ServerTask {
                 let task = ServerNodeTask::new(node_server_id.into(), self.sender.clone(), None);
                 let sender = task.sender().clone();
                 task.spawn();
-
 
                 if let Some(server_socket_address) =
                     self.server_socket_addresses.get_mut(node_server_id)
@@ -830,6 +842,43 @@ impl ServerTask {
             .take();
     }
 
+    async fn on_server_server_socket_address_get_message(
+        &mut self,
+        message: ServerServerSocketAddressGetMessage,
+    ) {
+        let (input, sender) = message.into();
+
+        let server_socket_address = match self
+            .server_socket_addresses
+            .get(usize::from(input.server_id()))
+        {
+            None | Some(None) => None,
+            Some(Some(server_socket_address)) => Some(*server_socket_address),
+        };
+
+        sender
+            .do_send(ServerServerSocketAddressGetMessageOutput::new(
+                server_socket_address,
+            ))
+            .await;
+    }
+
+    async fn on_server_server_id_get_message(
+        &mut self,
+        message: ServerServerIdGetMessage,
+    ) {
+        let (_input, sender) = message.into();
+        sender.do_send(ServerServerIdGetMessageOutput::new(self.server_id)).await;
+    }
+
+    async fn on_server_leader_server_id_get_message(
+        &mut self,
+        message: ServerLeaderServerIdGetMessage,
+    ) {
+        let (_input, sender) = message.into();
+        sender.do_send(ServerLeaderServerIdGetMessageOutput::new(self.leader_server_id)).await;
+    }
+
     async fn replicate(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {
         match &mut self.r#type {
             ServerType::Leader(ref mut leader) => {
@@ -850,15 +899,15 @@ impl ServerTask {
                     .collect::<Vec<_>>();
 
                 for server_node_socket_sender in self.server_node_message_senders.iter().flatten() {
-                        server_node_socket_sender
-                            .do_send(ServerNodeReplicationMessage::new(
-                                ServerNodeReplicationMessageInput::new(
-                                    log_entries.clone(),
-                                    leader.log().last_committed_log_entry_id(),
-                                    leader.log().current_term(),
-                                ),
-                            ))
-                            .await;
+                    server_node_socket_sender
+                        .do_send(ServerNodeReplicationMessage::new(
+                            ServerNodeReplicationMessageInput::new(
+                                log_entries.clone(),
+                                leader.log().last_committed_log_entry_id(),
+                                leader.log().current_term(),
+                            ),
+                        ))
+                        .await;
                 }
 
                 log_entry_ids
@@ -916,15 +965,15 @@ impl ServerTask {
                 .await;
 
             for server_node_message_sender in self.server_node_message_senders.iter().flatten() {
-                    server_node_message_sender
-                        .do_send(ServerNodeReplicationMessage::new(
-                            ServerNodeReplicationMessageInput::new(
-                                Vec::default(),
-                                last_committed_log_entry_id,
-                                current_term,
-                            ),
-                        ))
-                        .await;
+                server_node_message_sender
+                    .do_send(ServerNodeReplicationMessage::new(
+                        ServerNodeReplicationMessageInput::new(
+                            Vec::default(),
+                            last_committed_log_entry_id,
+                            current_term,
+                        ),
+                    ))
+                    .await;
             }
         }
     }

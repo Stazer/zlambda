@@ -335,3 +335,80 @@ impl ServerModuleUnloadMessageOutput {
         &self.result
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerServerSocketAddressGetMessageOutput {
+    socket_address: Option<SocketAddr>,
+}
+
+impl From<ServerServerSocketAddressGetMessageOutput> for (Option<SocketAddr>,) {
+    fn from(output: ServerServerSocketAddressGetMessageOutput) -> Self {
+        (output.socket_address,)
+    }
+}
+
+impl ServerServerSocketAddressGetMessageOutput {
+    pub fn new(socket_address: Option<SocketAddr>) -> Self {
+        Self { socket_address }
+    }
+
+    pub fn socket_address(&self) -> Option<SocketAddr> {
+        self.socket_address
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerServerIdGetMessageOutput {
+    server_id: ServerId
+}
+
+impl From<ServerServerIdGetMessageOutput> for (ServerId,) {
+    fn from(output: ServerServerIdGetMessageOutput) -> Self {
+        (output.server_id,)
+    }
+}
+
+impl ServerServerIdGetMessageOutput {
+    pub fn new(
+        server_id: ServerId
+    ) -> Self {
+        Self {
+            server_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLeaderServerIdGetMessageOutput {
+    leader_server_id: ServerId
+}
+
+impl From<ServerLeaderServerIdGetMessageOutput> for (ServerId,) {
+    fn from(output: ServerLeaderServerIdGetMessageOutput) -> Self {
+        (output.leader_server_id,)
+    }
+}
+
+impl ServerLeaderServerIdGetMessageOutput {
+    pub fn new(
+        leader_server_id: ServerId
+    ) -> Self {
+        Self {
+            leader_server_id,
+        }
+    }
+
+    pub fn leader_server_id(&self) -> ServerId {
+        self.leader_server_id
+    }
+}

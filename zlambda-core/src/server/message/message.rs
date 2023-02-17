@@ -8,7 +8,12 @@ use crate::server::{
     ServerModuleLoadMessageOutput, ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
     ServerNodeHandshakeMessageInput, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
     ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
+    ServerServerSocketAddressGetMessageInput, ServerServerSocketAddressGetMessageOutput,
     ServerSocketAcceptMessageInput,
+    ServerServerIdGetMessageInput,
+    ServerServerIdGetMessageOutput,
+    ServerLeaderServerIdGetMessageInput,
+    ServerLeaderServerIdGetMessageOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,6 +86,27 @@ pub type ServerLogAppendRequestMessage = AsynchronousMessage<ServerLogAppendRequ
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerServerSocketAddressGetMessage = SynchronousMessage<
+    ServerServerSocketAddressGetMessageInput,
+    ServerServerSocketAddressGetMessageOutput,
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerServerIdGetMessage = SynchronousMessage<
+    ServerServerIdGetMessageInput,
+    ServerServerIdGetMessageOutput,
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerLeaderServerIdGetMessage = SynchronousMessage<
+    ServerLeaderServerIdGetMessageInput,
+    ServerLeaderServerIdGetMessageOutput,
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
@@ -98,6 +124,9 @@ pub enum ServerMessage {
     ModuleUnload(ServerModuleUnloadMessage),
     ClientRegistration(ServerClientRegistrationMessage),
     ClientResignation(ServerClientResignationMessage),
+    ServerSocketAddressGet(ServerServerSocketAddressGetMessage),
+    ServerIdGet(ServerServerIdGetMessage),
+    LeaderServerIdGet(ServerLeaderServerIdGetMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -181,5 +210,23 @@ impl From<ServerClientResignationMessage> for ServerMessage {
 impl From<ServerLogAppendRequestMessage> for ServerMessage {
     fn from(message: ServerLogAppendRequestMessage) -> Self {
         Self::LogAppendRequest(message)
+    }
+}
+
+impl From<ServerServerSocketAddressGetMessage> for ServerMessage {
+    fn from(message: ServerServerSocketAddressGetMessage) -> Self {
+        Self::ServerSocketAddressGet(message)
+    }
+}
+
+impl From<ServerServerIdGetMessage> for ServerMessage {
+    fn from(message: ServerServerIdGetMessage) -> Self {
+        Self::ServerIdGet(message)
+    }
+}
+
+impl From<ServerLeaderServerIdGetMessage> for ServerMessage {
+    fn from(message: ServerLeaderServerIdGetMessage) -> Self {
+        Self::LeaderServerIdGet(message)
     }
 }

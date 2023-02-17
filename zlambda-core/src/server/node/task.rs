@@ -2,8 +2,10 @@ use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };
+use crate::common::net::TcpStream;
 use crate::common::runtime::{select, spawn};
 use crate::common::utility::Bytes;
+use std::io;
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
     GeneralLogEntriesAppendResponseMessage, GeneralLogEntriesAppendResponseMessageInput,
@@ -25,6 +27,8 @@ use crate::server::{
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
     ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventBody,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
+    ServerServerSocketAddressGetMessageInput, ServerLeaderServerIdGetMessageInput,
+    ServerServerIdGetMessageInput
 };
 use std::collections::HashMap;
 use tracing::{debug, error, info};
@@ -110,13 +114,103 @@ impl ServerNodeTask {
                 )
             }
             None => {
+                let socket_address = self
+                    .server_message_sender
+                    .do_send_synchronous(ServerServerSocketAddressGetMessageInput::new(
+                        self.server_id,
+                    ))
+                    .await
+                    .socket_address();
+
+                let server_id = self
+                    .server_message_sender
+                    .do_send_synchronous(ServerServerIdGetMessageInput::new())
+                    .await
+                    .server_id();
+
+                let leader_server_id = self
+                    .server_message_sender
+                    .do_send_synchronous(ServerLeaderServerIdGetMessageInput::new())
+                    .await
+                    .leader_server_id();
+
+                let future = async move || {
+                    if server_id == leader_server_id {
+                        return None;
+                    }
+
+                    let socket_address = match socket_address {
+                        None => return None,
+                        Some(socket_address) => socket_address,
+                    };
+
+                    match TcpStream::connect(socket_address).await {
+                        Err(error) => Some(Err(error)),
+                        Ok(stream) => Some(Ok(stream)),
+                    }
+                };
+
                 select!(
                     message = self.receiver.do_receive() => {
                         self.on_server_node_message(message).await
                     }
+                    result = future() => {
+                        self.on_tcp_stream_connect_result(result).await
+                    }
                 )
             }
         }
+    }
+
+    async fn on_tcp_stream_connect_result(&mut self, result: Option<Result<TcpStream, io::Error>>) {
+                    /*let (mut sender, mut receiver) = (
+                        MessageSocketSender::<GeneralMessage>::new(writer),
+                        MessageSocketReceiver::<GeneralMessage>::new(reader),
+                    );
+
+                    sender
+                        .send(GeneralRegistrationRequestMessage::new(
+                            GeneralRegistrationRequestMessageInput::new(address),
+                        ))
+                        .await?;
+
+                    match receiver.receive().await? {
+                        None => return Err(MessageError::ExpectedMessage.into()),
+                        Some(GeneralMessage::RegistrationResponse(message)) => {
+                            let (input,) = message.into();
+
+                            match input {
+                                GeneralRegistrationResponseMessageInput::NotALeader(input) => {
+                                    socket =
+                                        TcpStream::connect(input.leader_server_socket_address())
+                                            .await?;
+                                    continue;
+                                }
+                                GeneralRegistrationResponseMessageInput::Success(input) => {
+                                    let (
+                                        server_id,
+                                        leader_server_id,
+                                        server_socket_addresses,
+                                        term,
+                                    ) = input.into();
+
+                                    break (
+                                        server_id,
+                                        leader_server_id,
+                                        server_socket_addresses,
+                                        term,
+                                        sender,
+                                        receiver,
+                                    );
+                                }
+                            }
+                        }
+                        Some(message) => {
+                            return Err(
+                                MessageError::UnexpectedMessage(format!("{message:?}")).into()
+                            )
+                        }
+                    }*/
     }
 
     async fn on_server_node_message(&mut self, message: ServerNodeMessage) {
