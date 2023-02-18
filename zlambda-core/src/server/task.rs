@@ -18,18 +18,17 @@ use crate::server::node::{
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
     NewServerError, ServerClientRegistrationMessage, ServerClientResignationMessage,
-    ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput,
-    ServerFollowerType, ServerHandle, ServerId, ServerLeaderServerIdGetMessage,
-    ServerLeaderServerIdGetMessageOutput, ServerLeaderType, ServerLogAppendRequestMessage,
-    ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
-    ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
-    ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
-    ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
-    ServerModuleShutdownEventInput, ServerModuleStartupEventInput, ServerModuleUnloadMessage,
-    ServerModuleUnloadMessageOutput, ServerNodeMessage, ServerNodeReplicationMessage,
-    ServerNodeReplicationMessageInput, ServerNodeTask, ServerRecoveryMessage,
-    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
-    ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
+    ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
+    ServerHandle, ServerId, ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
+    ServerLeaderType, ServerLogAppendRequestMessage, ServerLogEntriesAcknowledgementMessage,
+    ServerLogEntriesRecoveryMessage, ServerLogEntriesReplicationMessage,
+    ServerLogEntriesReplicationMessageOutput, ServerMessage, ServerModule,
+    ServerModuleCommitEventInput, ServerModuleGetMessage, ServerModuleGetMessageOutput,
+    ServerModuleLoadMessage, ServerModuleLoadMessageOutput, ServerModuleShutdownEventInput,
+    ServerModuleStartupEventInput, ServerModuleUnloadMessage, ServerModuleUnloadMessageOutput,
+    ServerNodeMessage, ServerNodeReplicationMessage, ServerNodeReplicationMessageInput,
+    ServerNodeTask, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
+    ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerServerIdGetMessage, ServerServerIdGetMessageOutput,
     ServerServerNodeMessageSenderGetMessage, ServerServerNodeMessageSenderGetMessageOutput,
@@ -315,8 +314,6 @@ impl ServerTask {
     }
 
     pub async fn run(mut self) {
-        self.ensure_node_handshakes().await;
-
         for module in self.module_manager.iter() {
             module
                 .on_startup(ServerModuleStartupEventInput::new(ServerHandle::new(
@@ -355,8 +352,6 @@ impl ServerTask {
                 )))
                 .await;
         }
-
-        self.ensure_node_shutdowns().await;
     }
 
     #[async_recursion]
@@ -449,7 +444,7 @@ impl ServerTask {
                     }
                 };
 
-                if node_server_id >= self.server_socket_addresses.len() {
+                /*if node_server_id >= self.server_socket_addresses.len() {
                     self.server_socket_addresses
                         .resize_with(node_server_id + 1, || None);
                 }
@@ -473,7 +468,7 @@ impl ServerTask {
                     self.server_node_message_senders.get_mut(node_server_id)
                 {
                     *server_node_message_sender = Some(sender);
-                }
+                }*/
 
                 let log_entry_ids = self
                     .replicate(vec![AddServerLogEntryData::new(
@@ -952,118 +947,6 @@ impl ServerTask {
         }
     }
 
-    async fn ensure_node_handshake(&mut self, server_id: ServerId) {
-        /*let is_leader = self.leader_server_id == self.server_id;
-
-        if server_id == self.leader_server_id
-            || server_id == self.server_id
-            || (is_leader && server_id > self.server_id)
-            || (!is_leader && server_id < self.server_id)
-        {
-            return;
-        }
-
-        let socket_address = match self.server_socket_addresses.get(usize::from(server_id)) {
-            None | Some(None) => return,
-            Some(Some(socket_address)) => socket_address,
-        };
-
-        let socket = match TcpStream::connect(socket_address).await {
-            Err(_) => None,
-            Ok(socket) => {
-                (async move || {
-                    let (reader, writer) = socket.into_split();
-
-                    let (mut sender, mut receiver) = (
-                        MessageSocketSender::<GeneralMessage>::new(writer),
-                        MessageSocketReceiver::<GeneralMessage>::new(reader),
-                    );
-
-                    if sender
-                        .send(GeneralNodeHandshakeRequestMessage::new(
-                            GeneralNodeHandshakeRequestMessageInput::new(server_id),
-                        ))
-                        .await
-                        .is_err()
-                    {
-                        return None;
-                    }
-
-                    let message = match receiver.receive().await {
-                        Err(_) | Ok(None) | Ok(Some(_)) => return None,
-                        Ok(Some(GeneralMessage::NodeHandshakeResponse(message))) => message,
-                    };
-
-                    let (input,) = message.into();
-
-                    match input.result() {
-                        GeneralNodeHandshakeResponseMessageInputResult::Success => {
-                            Some((sender, receiver))
-                        }
-                        result => {
-                            error!("{:?}", result);
-                            None
-                        }
-                    }
-                })()
-                .await
-            }
-        };
-
-        let task = ServerNodeTask::new(server_id, self.sender.clone(), socket);
-
-        self.server_node_message_senders
-            .resize_with(usize::from(server_id) + 1, || None);
-        if let Some(server_node_message_senders) = self
-            .server_node_message_senders
-            .get_mut(usize::from(server_id))
-        {
-            *server_node_message_senders = Some(task.sender().clone());
-        }
-
-        task.spawn();
-
-        debug!("Handshake with server {} successful", server_id);*/
-    }
-
-    async fn ensure_node_handshakes(&mut self) {
-        for server_id in self
-            .server_socket_addresses
-            .iter()
-            .enumerate()
-            .map(|(server_id, _)| ServerId::from(server_id))
-            .collect::<Vec<_>>()
-            .iter()
-        {
-            self.ensure_node_handshake(*server_id).await;
-        }
-    }
-
-    async fn ensure_node_shutdown(&mut self, server_id: ServerId) {
-        let server_node_sender = match self.server_node_message_senders.get(usize::from(server_id))
-        {
-            None | Some(None) => return,
-            Some(Some(server_node_sender)) => server_node_sender,
-        };
-
-        server_node_sender
-            .do_send_asynchronous(ServerNodeShutdownMessageInput::new())
-            .await;
-    }
-
-    async fn ensure_node_shutdowns(&mut self) {
-        for server_id in self
-            .server_socket_addresses
-            .iter()
-            .enumerate()
-            .map(|(server_id, _)| ServerId::from(server_id))
-            .collect::<Vec<_>>()
-            .iter()
-        {
-            self.ensure_node_shutdown(*server_id).await;
-        }
-    }
-
     async fn on_commit_log_entries<T>(&mut self, log_entry_ids: T)
     where
         T: Iterator<Item = LogEntryId>,
@@ -1100,19 +983,11 @@ impl ServerTask {
         if let Some(log_entry) = log_entry {
             match log_entry.data() {
                 LogEntryData::AddServer(data) => {
-                    if self.leader_server_id != self.server_id {
-                        self.server_socket_addresses.insert(
-                            usize::from(data.server_id()),
-                            Some(data.server_socket_address()),
-                        );
-                        self.ensure_node_handshake(data.server_id()).await;
-                    }
+                    self.on_commit_add_server_log_entry_data(data.clone()).await
                 }
-                LogEntryData::RemoveServer(data) => {
+                LogEntryData::RemoveServer(_data) => {
                     if self.leader_server_id != self.server_id {
-                        self.server_socket_addresses
-                            .remove(usize::from(data.server_id()));
-                        self.ensure_node_shutdown(data.server_id()).await;
+                        todo!();
                     }
                 }
                 LogEntryData::Data(_) => {}
@@ -1125,6 +1000,31 @@ impl ServerTask {
             .unwrap_or_default()
         {
             self.on_server_message(message).await;
+        }
+    }
+
+    async fn on_commit_add_server_log_entry_data(&mut self, data: AddServerLogEntryData) {
+        let server_id = usize::from(data.server_id());
+
+        if server_id >= self.server_socket_addresses.len() {
+            self.server_socket_addresses
+                .resize_with(server_id + 1, || None);
+        }
+
+        if server_id >= self.server_node_message_senders.len() {
+            self.server_node_message_senders
+                .resize_with(server_id + 1, || None);
+        }
+
+        if let Some(server_socket_addresses) = self.server_socket_addresses.get_mut(server_id) {
+            *server_socket_addresses = Some(data.server_socket_address());
+        }
+
+        if let Some(server_node_message_sender) = self.server_node_message_senders.get_mut(server_id) && server_node_message_sender.is_none() && data.server_id() != self.server_id {
+            let task = ServerNodeTask::new(data.server_id(), self.sender.clone(), None);
+            *server_node_message_sender = Some(task.sender().clone());
+
+            task.spawn();
         }
     }
 }

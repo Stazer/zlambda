@@ -62,6 +62,8 @@ impl ServerNodeTask {
     ) -> Self {
         let (sender, receiver) = message_queue();
 
+        debug!("Spawned node {}", server_id);
+
         Self {
             running: true,
             server_id,
@@ -83,8 +85,6 @@ impl ServerNodeTask {
     }
 
     pub async fn run(mut self) {
-        println!("running {:?}", self.server_id);
-
         while self.running {
             self.select().await
         }
@@ -141,7 +141,7 @@ impl ServerNodeTask {
                 let future = async move || {
                     let is_leader = server_id == leader_server_id;
 
-                    if is_leader || server_node_id < server_id {
+                    if is_leader || server_node_id > server_id {
                         pending::<()>().await;
                     }
 
@@ -149,8 +149,6 @@ impl ServerNodeTask {
                         None => pending().await,
                         Some(socket_address) => socket_address,
                     };
-
-                    //println!("connect to {}", &socket_address);
 
                     TcpStream::connect(socket_address).await
                 };
@@ -168,6 +166,12 @@ impl ServerNodeTask {
     }
 
     async fn on_tcp_stream_connect_result(&mut self, result: Result<TcpStream, io::Error>) {
+        let server_id = self
+            .server_message_sender
+            .do_send_synchronous(ServerServerIdGetMessageInput::new())
+            .await
+            .server_id();
+
         let (reader, writer) = match result {
             Err(_) => {
                 return;
@@ -182,7 +186,7 @@ impl ServerNodeTask {
 
         if sender
             .send(GeneralNodeHandshakeRequestMessage::new(
-                GeneralNodeHandshakeRequestMessageInput::new(self.server_id),
+                GeneralNodeHandshakeRequestMessageInput::new(server_id),
             ))
             .await
             .is_err()
@@ -190,22 +194,24 @@ impl ServerNodeTask {
             return;
         }
 
-        println!("here1....");
-
         let message = match receiver.receive().await {
-            Ok(Some(message)) => {
-                println!("{:?}", message);
-                return;
-            }
-            Err(_) | Ok(None) => return,
             Ok(Some(GeneralMessage::NodeHandshakeResponse(message))) => message,
+            Err(_) | Ok(None) => return,
+            Ok(Some(_message)) => return,
         };
 
-        println!("here2....");
+        let (input,) = message.into();
+
+        if !matches!(
+            input.result(),
+            GeneralNodeHandshakeResponseMessageInputResult::Success
+        ) {
+            return;
+        }
 
         self.general_socket = Some((sender, receiver));
 
-        debug!("Handshake");
+        debug!("Handshake with server {}", self.server_id);
     }
 
     async fn on_server_node_message(&mut self, message: ServerNodeMessage) {

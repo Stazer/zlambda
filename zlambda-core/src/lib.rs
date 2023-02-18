@@ -1,6 +1,7 @@
-#![feature(async_fn_in_trait)]
-#![feature(trait_upcasting)]
 #![feature(async_closure)]
+#![feature(async_fn_in_trait)]
+#![feature(let_chains)]
+#![feature(trait_upcasting)]
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
