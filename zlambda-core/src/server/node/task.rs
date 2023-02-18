@@ -5,11 +5,11 @@ use crate::common::message::{
 use crate::common::net::TcpStream;
 use crate::common::runtime::{select, spawn};
 use crate::common::utility::Bytes;
-use std::io;
 use crate::general::{
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
     GeneralLogEntriesAppendResponseMessage, GeneralLogEntriesAppendResponseMessageInput,
-    GeneralMessage, GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
+    GeneralMessage, GeneralNodeHandshakeRequestMessage, GeneralNodeHandshakeRequestMessageInput,
+    GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
     GeneralNodeHandshakeResponseMessageInputResult, GeneralNotificationMessage,
     GeneralNotificationMessageInput, GeneralNotificationMessageInputEndType,
     GeneralNotificationMessageInputImmediateType, GeneralNotificationMessageInputNextType,
@@ -23,14 +23,16 @@ use crate::server::node::{
     ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeShutdownMessage,
 };
 use crate::server::{
-    ServerHandle, ServerId, ServerLogAppendRequestMessageInput,
-    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
-    ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventBody,
-    ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
-    ServerServerSocketAddressGetMessageInput, ServerLeaderServerIdGetMessageInput,
-    ServerServerIdGetMessageInput
+    ServerHandle, ServerId, ServerLeaderServerIdGetMessageInput,
+    ServerLogAppendRequestMessageInput, ServerLogEntriesAcknowledgementMessageInput,
+    ServerLogEntriesRecoveryMessageInput, ServerMessage, ServerModuleGetMessageInput,
+    ServerModuleNotificationEventBody, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventInputServerSource, ServerServerIdGetMessageInput,
+    ServerServerSocketAddressGetMessageInput,
 };
 use std::collections::HashMap;
+use std::future::pending;
+use std::io;
 use tracing::{debug, error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -128,6 +130,8 @@ impl ServerNodeTask {
                     .await
                     .server_id();
 
+                let server_node_id = self.server_id;
+
                 let leader_server_id = self
                     .server_message_sender
                     .do_send_synchronous(ServerLeaderServerIdGetMessageInput::new())
@@ -135,19 +139,20 @@ impl ServerNodeTask {
                     .leader_server_id();
 
                 let future = async move || {
-                    if server_id == leader_server_id {
-                        return None;
+                    let is_leader = server_id == leader_server_id;
+
+                    if is_leader || server_node_id < server_id {
+                        pending::<()>().await;
                     }
 
                     let socket_address = match socket_address {
-                        None => return None,
+                        None => pending().await,
                         Some(socket_address) => socket_address,
                     };
 
-                    match TcpStream::connect(socket_address).await {
-                        Err(error) => Some(Err(error)),
-                        Ok(stream) => Some(Ok(stream)),
-                    }
+                    //println!("connect to {}", &socket_address);
+
+                    TcpStream::connect(socket_address).await
                 };
 
                 select!(
@@ -162,55 +167,45 @@ impl ServerNodeTask {
         }
     }
 
-    async fn on_tcp_stream_connect_result(&mut self, result: Option<Result<TcpStream, io::Error>>) {
-                    /*let (mut sender, mut receiver) = (
-                        MessageSocketSender::<GeneralMessage>::new(writer),
-                        MessageSocketReceiver::<GeneralMessage>::new(reader),
-                    );
+    async fn on_tcp_stream_connect_result(&mut self, result: Result<TcpStream, io::Error>) {
+        let (reader, writer) = match result {
+            Err(_) => {
+                return;
+            }
+            Ok(stream) => stream.into_split(),
+        };
 
-                    sender
-                        .send(GeneralRegistrationRequestMessage::new(
-                            GeneralRegistrationRequestMessageInput::new(address),
-                        ))
-                        .await?;
+        let (mut sender, mut receiver) = (
+            MessageSocketSender::<GeneralMessage>::new(writer),
+            MessageSocketReceiver::<GeneralMessage>::new(reader),
+        );
 
-                    match receiver.receive().await? {
-                        None => return Err(MessageError::ExpectedMessage.into()),
-                        Some(GeneralMessage::RegistrationResponse(message)) => {
-                            let (input,) = message.into();
+        if sender
+            .send(GeneralNodeHandshakeRequestMessage::new(
+                GeneralNodeHandshakeRequestMessageInput::new(self.server_id),
+            ))
+            .await
+            .is_err()
+        {
+            return;
+        }
 
-                            match input {
-                                GeneralRegistrationResponseMessageInput::NotALeader(input) => {
-                                    socket =
-                                        TcpStream::connect(input.leader_server_socket_address())
-                                            .await?;
-                                    continue;
-                                }
-                                GeneralRegistrationResponseMessageInput::Success(input) => {
-                                    let (
-                                        server_id,
-                                        leader_server_id,
-                                        server_socket_addresses,
-                                        term,
-                                    ) = input.into();
+        println!("here1....");
 
-                                    break (
-                                        server_id,
-                                        leader_server_id,
-                                        server_socket_addresses,
-                                        term,
-                                        sender,
-                                        receiver,
-                                    );
-                                }
-                            }
-                        }
-                        Some(message) => {
-                            return Err(
-                                MessageError::UnexpectedMessage(format!("{message:?}")).into()
-                            )
-                        }
-                    }*/
+        let message = match receiver.receive().await {
+            Ok(Some(message)) => {
+                println!("{:?}", message);
+                return;
+            }
+            Err(_) | Ok(None) => return,
+            Ok(Some(GeneralMessage::NodeHandshakeResponse(message))) => message,
+        };
+
+        println!("here2....");
+
+        self.general_socket = Some((sender, receiver));
+
+        debug!("Handshake");
     }
 
     async fn on_server_node_message(&mut self, message: ServerNodeMessage) {

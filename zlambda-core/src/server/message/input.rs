@@ -112,57 +112,6 @@ impl ServerRecoveryMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerNodeHandshakeMessageInput {
-    general_message_sender: MessageSocketSender<GeneralMessage>,
-    general_message_receiver: MessageSocketReceiver<GeneralMessage>,
-    server_id: ServerId,
-}
-
-impl From<ServerNodeHandshakeMessageInput>
-    for (
-        MessageSocketSender<GeneralMessage>,
-        MessageSocketReceiver<GeneralMessage>,
-        ServerId,
-    )
-{
-    fn from(input: ServerNodeHandshakeMessageInput) -> Self {
-        (
-            input.general_message_sender,
-            input.general_message_receiver,
-            input.server_id,
-        )
-    }
-}
-
-impl ServerNodeHandshakeMessageInput {
-    pub fn new(
-        general_message_sender: MessageSocketSender<GeneralMessage>,
-        general_message_receiver: MessageSocketReceiver<GeneralMessage>,
-        server_id: ServerId,
-    ) -> Self {
-        Self {
-            general_message_sender,
-            general_message_receiver,
-            server_id,
-        }
-    }
-
-    pub fn general_message_sender(&self) -> &MessageSocketSender<GeneralMessage> {
-        &self.general_message_sender
-    }
-
-    pub fn general_message_receiver(&self) -> &MessageSocketReceiver<GeneralMessage> {
-        &self.general_message_receiver
-    }
-
-    pub fn server_id(&self) -> ServerId {
-        self.server_id
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
 pub struct ServerLogEntriesReplicationMessageInput {
     log_entries_data: Vec<LogEntryData>,
 }
@@ -460,9 +409,7 @@ impl ServerServerSocketAddressGetMessageInput {
 pub struct ServerServerIdGetMessageInput {}
 
 impl From<ServerServerIdGetMessageInput> for () {
-    fn from(_input: ServerServerIdGetMessageInput) -> Self {
-
-    }
+    fn from(_input: ServerServerIdGetMessageInput) -> Self {}
 }
 
 impl ServerServerIdGetMessageInput {
@@ -477,13 +424,34 @@ impl ServerServerIdGetMessageInput {
 pub struct ServerLeaderServerIdGetMessageInput {}
 
 impl From<ServerLeaderServerIdGetMessageInput> for () {
-    fn from(_input: ServerLeaderServerIdGetMessageInput) -> Self {
+    fn from(_input: ServerLeaderServerIdGetMessageInput) -> Self {}
+}
 
+impl ServerLeaderServerIdGetMessageInput {
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
-impl ServerLeaderServerIdGetMessageInput{
-    pub fn new() -> Self {
-        Self {}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerServerNodeMessageSenderGetMessageInput {
+    server_id: ServerId,
+}
+
+impl From<ServerServerNodeMessageSenderGetMessageInput> for (ServerId,) {
+    fn from(input: ServerServerNodeMessageSenderGetMessageInput) -> Self {
+        (input.server_id,)
+    }
+}
+
+impl ServerServerNodeMessageSenderGetMessageInput {
+    pub fn new(server_id: ServerId) -> Self {
+        Self { server_id }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
     }
 }

@@ -1,19 +1,17 @@
 use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::{
     ServerClientRegistrationMessageInput, ServerClientResignationMessageInput,
-    ServerCommitRegistrationMessageInput, ServerLogAppendRequestMessageInput,
+    ServerCommitRegistrationMessageInput, ServerLeaderServerIdGetMessageInput,
+    ServerLeaderServerIdGetMessageOutput, ServerLogAppendRequestMessageInput,
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
     ServerLogEntriesReplicationMessageInput, ServerLogEntriesReplicationMessageOutput,
     ServerModuleGetMessageInput, ServerModuleGetMessageOutput, ServerModuleLoadMessageInput,
     ServerModuleLoadMessageOutput, ServerModuleUnloadMessageInput, ServerModuleUnloadMessageOutput,
-    ServerNodeHandshakeMessageInput, ServerRecoveryMessageInput, ServerRecoveryMessageOutput,
-    ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
+    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
+    ServerRegistrationMessageOutput, ServerServerIdGetMessageInput, ServerServerIdGetMessageOutput,
+    ServerServerNodeMessageSenderGetMessageInput, ServerServerNodeMessageSenderGetMessageOutput,
     ServerServerSocketAddressGetMessageInput, ServerServerSocketAddressGetMessageOutput,
     ServerSocketAcceptMessageInput,
-    ServerServerIdGetMessageInput,
-    ServerServerIdGetMessageOutput,
-    ServerLeaderServerIdGetMessageInput,
-    ServerLeaderServerIdGetMessageOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,10 +32,6 @@ pub type ServerCommitRegistrationMessage =
 
 pub type ServerRecoveryMessage =
     SynchronousMessage<ServerRecoveryMessageInput, ServerRecoveryMessageOutput>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub type ServerNodeHandshakeMessage = AsynchronousMessage<ServerNodeHandshakeMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -93,16 +87,19 @@ pub type ServerServerSocketAddressGetMessage = SynchronousMessage<
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerServerIdGetMessage = SynchronousMessage<
-    ServerServerIdGetMessageInput,
-    ServerServerIdGetMessageOutput,
->;
+pub type ServerServerIdGetMessage =
+    SynchronousMessage<ServerServerIdGetMessageInput, ServerServerIdGetMessageOutput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerLeaderServerIdGetMessage = SynchronousMessage<
-    ServerLeaderServerIdGetMessageInput,
-    ServerLeaderServerIdGetMessageOutput,
+pub type ServerLeaderServerIdGetMessage =
+    SynchronousMessage<ServerLeaderServerIdGetMessageInput, ServerLeaderServerIdGetMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerServerNodeMessageSenderGetMessage = SynchronousMessage<
+    ServerServerNodeMessageSenderGetMessageInput,
+    ServerServerNodeMessageSenderGetMessageOutput,
 >;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,7 +111,6 @@ pub enum ServerMessage {
     Registration(ServerRegistrationMessage),
     CommitRegistration(ServerCommitRegistrationMessage),
     Recovery(ServerRecoveryMessage),
-    NodeHandshake(ServerNodeHandshakeMessage),
     LogEntriesReplication(ServerLogEntriesReplicationMessage),
     LogEntriesAcknowledgement(ServerLogEntriesAcknowledgementMessage),
     LogEntriesRecovery(ServerLogEntriesRecoveryMessage),
@@ -127,6 +123,7 @@ pub enum ServerMessage {
     ServerSocketAddressGet(ServerServerSocketAddressGetMessage),
     ServerIdGet(ServerServerIdGetMessage),
     LeaderServerIdGet(ServerLeaderServerIdGetMessage),
+    ServerNodeMessageSenderGet(ServerServerNodeMessageSenderGetMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -150,12 +147,6 @@ impl From<ServerCommitRegistrationMessage> for ServerMessage {
 impl From<ServerRecoveryMessage> for ServerMessage {
     fn from(message: ServerRecoveryMessage) -> Self {
         Self::Recovery(message)
-    }
-}
-
-impl From<ServerNodeHandshakeMessage> for ServerMessage {
-    fn from(message: ServerNodeHandshakeMessage) -> Self {
-        Self::NodeHandshake(message)
     }
 }
 
@@ -228,5 +219,11 @@ impl From<ServerServerIdGetMessage> for ServerMessage {
 impl From<ServerLeaderServerIdGetMessage> for ServerMessage {
     fn from(message: ServerLeaderServerIdGetMessage) -> Self {
         Self::LeaderServerIdGet(message)
+    }
+}
+
+impl From<ServerServerNodeMessageSenderGetMessage> for ServerMessage {
+    fn from(message: ServerServerNodeMessageSenderGetMessage) -> Self {
+        Self::ServerNodeMessageSenderGet(message)
     }
 }

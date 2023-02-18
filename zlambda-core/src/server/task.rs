@@ -6,38 +6,35 @@ use crate::common::module::ModuleManager;
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
 use crate::general::{
-    GeneralMessage, GeneralNodeHandshakeRequestMessage, GeneralNodeHandshakeRequestMessageInput,
-    GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
-    GeneralNodeHandshakeResponseMessageInputResult, GeneralRecoveryRequestMessage,
-    GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
-    GeneralRegistrationRequestMessage, GeneralRegistrationRequestMessageInput,
-    GeneralRegistrationResponseMessageInput,
+    GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryRequestMessageInput,
+    GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessage,
+    GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
 };
 use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTask};
 use crate::server::connection::ServerConnectionTask;
 use crate::server::node::{
-    ServerNodeLogAppendResponseMessageInput, ServerNodeNodeHandshakeMessageInput,
-    ServerNodeShutdownMessageInput,
+    ServerNodeLogAppendResponseMessageInput, ServerNodeShutdownMessageInput,
 };
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
     NewServerError, ServerClientRegistrationMessage, ServerClientResignationMessage,
-    ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
-    ServerHandle, ServerId, ServerLeaderType, ServerLogAppendRequestMessage,
+    ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput,
+    ServerFollowerType, ServerHandle, ServerId, ServerLeaderServerIdGetMessage,
+    ServerLeaderServerIdGetMessageOutput, ServerLeaderType, ServerLogAppendRequestMessage,
     ServerLogEntriesAcknowledgementMessage, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
     ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
     ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
     ServerModuleShutdownEventInput, ServerModuleStartupEventInput, ServerModuleUnloadMessage,
-    ServerModuleUnloadMessageOutput, ServerNodeHandshakeMessage, ServerNodeMessage,
-    ServerNodeReplicationMessage, ServerNodeReplicationMessageInput, ServerNodeTask,
-    ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
+    ServerModuleUnloadMessageOutput, ServerNodeMessage, ServerNodeReplicationMessage,
+    ServerNodeReplicationMessageInput, ServerNodeTask, ServerRecoveryMessage,
+    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
+    ServerServerIdGetMessage, ServerServerIdGetMessageOutput,
+    ServerServerNodeMessageSenderGetMessage, ServerServerNodeMessageSenderGetMessageOutput,
     ServerServerSocketAddressGetMessage, ServerServerSocketAddressGetMessageOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
-    ServerServerIdGetMessage, ServerServerIdGetMessageOutput,
-    ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
 };
 use async_recursion::async_recursion;
 use std::cmp::max;
@@ -376,9 +373,6 @@ impl ServerTask {
                 self.on_server_commit_registration_message(message).await
             }
             ServerMessage::Recovery(message) => self.on_server_recovery_message(message).await,
-            ServerMessage::NodeHandshake(message) => {
-                self.on_server_node_handshake_message(message).await
-            }
             ServerMessage::LogEntriesReplication(message) => {
                 self.on_server_log_entries_replication_message(message)
                     .await
@@ -413,6 +407,10 @@ impl ServerTask {
             }
             ServerMessage::LeaderServerIdGet(message) => {
                 self.on_server_leader_server_id_get_message(message).await
+            }
+            ServerMessage::ServerNodeMessageSenderGet(message) => {
+                self.on_server_server_node_message_sender_get_message(message)
+                    .await
             }
         }
     }
@@ -599,54 +597,6 @@ impl ServerTask {
                     .await;
             }
         }
-    }
-
-    async fn on_server_node_handshake_message(&mut self, message: ServerNodeHandshakeMessage) {
-        let (input,) = message.into();
-        let (mut general_message_sender, general_message_receiver, server_id) = input.into();
-
-        if server_id <= self.server_id || server_id == self.leader_server_id {
-            if general_message_sender
-                .send(GeneralNodeHandshakeResponseMessage::new(
-                    GeneralNodeHandshakeResponseMessageInput::new(
-                        GeneralNodeHandshakeResponseMessageInputResult::ServerIdUnfeasible,
-                    ),
-                ))
-                .await
-                .is_err()
-            {
-                return;
-            }
-
-            return;
-        }
-
-        let server_node_message_sender =
-            match self.server_node_message_senders.get(usize::from(server_id)) {
-                None | Some(None) => {
-                    if general_message_sender
-                        .send(GeneralNodeHandshakeResponseMessage::new(
-                            GeneralNodeHandshakeResponseMessageInput::new(
-                                GeneralNodeHandshakeResponseMessageInputResult::Unknown,
-                            ),
-                        ))
-                        .await
-                        .is_err()
-                    {
-                        return;
-                    }
-
-                    return;
-                }
-                Some(Some(server_node_message_sender)) => server_node_message_sender,
-            };
-
-        server_node_message_sender
-            .do_send_asynchronous(ServerNodeNodeHandshakeMessageInput::new(
-                general_message_sender,
-                general_message_receiver,
-            ))
-            .await;
     }
 
     async fn on_server_log_entries_replication_message(
@@ -863,12 +813,11 @@ impl ServerTask {
             .await;
     }
 
-    async fn on_server_server_id_get_message(
-        &mut self,
-        message: ServerServerIdGetMessage,
-    ) {
+    async fn on_server_server_id_get_message(&mut self, message: ServerServerIdGetMessage) {
         let (_input, sender) = message.into();
-        sender.do_send(ServerServerIdGetMessageOutput::new(self.server_id)).await;
+        sender
+            .do_send(ServerServerIdGetMessageOutput::new(self.server_id))
+            .await;
     }
 
     async fn on_server_leader_server_id_get_message(
@@ -876,7 +825,32 @@ impl ServerTask {
         message: ServerLeaderServerIdGetMessage,
     ) {
         let (_input, sender) = message.into();
-        sender.do_send(ServerLeaderServerIdGetMessageOutput::new(self.leader_server_id)).await;
+        sender
+            .do_send(ServerLeaderServerIdGetMessageOutput::new(
+                self.leader_server_id,
+            ))
+            .await;
+    }
+
+    async fn on_server_server_node_message_sender_get_message(
+        &mut self,
+        message: ServerServerNodeMessageSenderGetMessage,
+    ) {
+        let (input, sender) = message.into();
+
+        let server_node_message_sender = match self
+            .server_node_message_senders
+            .get(usize::from(input.server_id()))
+        {
+            None | Some(None) => None,
+            Some(Some(server_node_message_sender)) => Some(server_node_message_sender.clone()),
+        };
+
+        sender
+            .do_send(ServerServerNodeMessageSenderGetMessageOutput::new(
+                server_node_message_sender,
+            ))
+            .await;
     }
 
     async fn replicate(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {
@@ -979,7 +953,7 @@ impl ServerTask {
     }
 
     async fn ensure_node_handshake(&mut self, server_id: ServerId) {
-        let is_leader = self.leader_server_id == self.server_id;
+        /*let is_leader = self.leader_server_id == self.server_id;
 
         if server_id == self.leader_server_id
             || server_id == self.server_id
@@ -1049,7 +1023,7 @@ impl ServerTask {
 
         task.spawn();
 
-        debug!("Handshake with server {} successful", server_id);
+        debug!("Handshake with server {} successful", server_id);*/
     }
 
     async fn ensure_node_handshakes(&mut self) {

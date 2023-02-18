@@ -3,17 +3,21 @@ use crate::common::message::{
 };
 use crate::general::{
     GeneralClientRegistrationRequestMessage, GeneralMessage, GeneralNodeHandshakeRequestMessage,
-    GeneralRecoveryRequestMessage, GeneralRecoveryResponseMessageInput,
-    GeneralRecoveryResponseMessageNotALeaderInput, GeneralRecoveryResponseMessageSuccessInput,
-    GeneralRegistrationRequestMessage, GeneralRegistrationResponseMessageInput,
-    GeneralRegistrationResponseMessageNotALeaderInput,
+    GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
+    GeneralNodeHandshakeResponseMessageInputResult, GeneralRecoveryRequestMessage,
+    GeneralRecoveryResponseMessageInput, GeneralRecoveryResponseMessageNotALeaderInput,
+    GeneralRecoveryResponseMessageSuccessInput, GeneralRegistrationRequestMessage,
+    GeneralRegistrationResponseMessageInput, GeneralRegistrationResponseMessageNotALeaderInput,
     GeneralRegistrationResponseMessageSuccessInput,
 };
-use crate::server::node::{ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput};
+use crate::server::node::{
+    ServerNodeNodeHandshakeMessageInput, ServerNodeRecoveryMessageInput,
+    ServerNodeRegistrationMessageInput,
+};
 use crate::server::{
-    ServerClientRegistrationMessageInput, ServerMessage, ServerNodeHandshakeMessageInput,
-    ServerRecoveryMessageInput, ServerRecoveryMessageOutput, ServerRegistrationMessageInput,
-    ServerRegistrationMessageOutput,
+    ServerClientRegistrationMessageInput, ServerMessage, ServerRecoveryMessageInput,
+    ServerRecoveryMessageOutput, ServerRegistrationMessageInput, ServerRegistrationMessageOutput,
+    ServerServerNodeMessageSenderGetMessageInput,
 };
 use tokio::spawn;
 use tracing::error;
@@ -218,16 +222,42 @@ impl ServerConnectionTask {
     }
 
     async fn on_general_node_handshake_request_message(
-        self,
+        mut self,
         message: GeneralNodeHandshakeRequestMessage,
     ) {
         let (input,) = message.into();
 
-        self.server_message_sender
-            .do_send_asynchronous(ServerNodeHandshakeMessageInput::new(
+        let output = self
+            .server_message_sender
+            .do_send_synchronous(ServerServerNodeMessageSenderGetMessageInput::new(
+                input.server_id(),
+            ))
+            .await;
+
+        let server_node_message_sender = match output.into() {
+            (Some(server_node_message_sender),) => server_node_message_sender,
+            (None,) => {
+                if self
+                    .general_message_sender
+                    .send(GeneralNodeHandshakeResponseMessage::new(
+                        GeneralNodeHandshakeResponseMessageInput::new(
+                            GeneralNodeHandshakeResponseMessageInputResult::Unknown,
+                        ),
+                    ))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+
+                return;
+            }
+        };
+
+        server_node_message_sender
+            .do_send_asynchronous(ServerNodeNodeHandshakeMessageInput::new(
                 self.general_message_sender,
                 self.general_message_receiver,
-                input.server_id(),
             ))
             .await;
     }

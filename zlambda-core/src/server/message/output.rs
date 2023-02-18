@@ -363,7 +363,7 @@ impl ServerServerSocketAddressGetMessageOutput {
 
 #[derive(Debug)]
 pub struct ServerServerIdGetMessageOutput {
-    server_id: ServerId
+    server_id: ServerId,
 }
 
 impl From<ServerServerIdGetMessageOutput> for (ServerId,) {
@@ -373,12 +373,8 @@ impl From<ServerServerIdGetMessageOutput> for (ServerId,) {
 }
 
 impl ServerServerIdGetMessageOutput {
-    pub fn new(
-        server_id: ServerId
-    ) -> Self {
-        Self {
-            server_id,
-        }
+    pub fn new(server_id: ServerId) -> Self {
+        Self { server_id }
     }
 
     pub fn server_id(&self) -> ServerId {
@@ -390,7 +386,7 @@ impl ServerServerIdGetMessageOutput {
 
 #[derive(Debug)]
 pub struct ServerLeaderServerIdGetMessageOutput {
-    leader_server_id: ServerId
+    leader_server_id: ServerId,
 }
 
 impl From<ServerLeaderServerIdGetMessageOutput> for (ServerId,) {
@@ -400,15 +396,38 @@ impl From<ServerLeaderServerIdGetMessageOutput> for (ServerId,) {
 }
 
 impl ServerLeaderServerIdGetMessageOutput {
-    pub fn new(
-        leader_server_id: ServerId
-    ) -> Self {
-        Self {
-            leader_server_id,
-        }
+    pub fn new(leader_server_id: ServerId) -> Self {
+        Self { leader_server_id }
     }
 
     pub fn leader_server_id(&self) -> ServerId {
         self.leader_server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerServerNodeMessageSenderGetMessageOutput {
+    server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>,
+}
+
+impl From<ServerServerNodeMessageSenderGetMessageOutput>
+    for (Option<MessageQueueSender<ServerNodeMessage>>,)
+{
+    fn from(input: ServerServerNodeMessageSenderGetMessageOutput) -> Self {
+        (input.server_node_message_sender,)
+    }
+}
+
+impl ServerServerNodeMessageSenderGetMessageOutput {
+    pub fn new(server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>) -> Self {
+        Self {
+            server_node_message_sender,
+        }
+    }
+
+    pub fn server_node_message_sender(&self) -> &Option<MessageQueueSender<ServerNodeMessage>> {
+        &self.server_node_message_sender
     }
 }
