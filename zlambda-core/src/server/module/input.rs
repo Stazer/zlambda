@@ -2,33 +2,34 @@ use crate::common::message::MessageQueueReceiver;
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
 use crate::server::client::ServerClientId;
-use crate::server::{LogEntryId, ServerHandle, ServerId};
+use crate::server::{LogEntryId, Server, ServerId};
 use async_stream::stream;
 use futures::Stream;
+use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
 pub struct ServerModuleStartupEventInput {
-    server: ServerHandle,
+    server: Arc<Server>,
 }
 
-impl From<ServerModuleStartupEventInput> for (ServerHandle,) {
+impl From<ServerModuleStartupEventInput> for (Arc<Server>,) {
     fn from(input: ServerModuleStartupEventInput) -> Self {
         (input.server,)
     }
 }
 
 impl ServerModuleStartupEventInput {
-    pub fn new(server: ServerHandle) -> Self {
+    pub fn new(server: Arc<Server>) -> Self {
         Self { server }
     }
 
-    pub fn server(&self) -> &ServerHandle {
+    pub fn server(&self) -> &Arc<Server> {
         &self.server
     }
 
-    pub fn server_mut(&mut self) -> &mut ServerHandle {
+    pub fn server_mut(&mut self) -> &mut Arc<Server> {
         &mut self.server
     }
 }
@@ -37,25 +38,25 @@ impl ServerModuleStartupEventInput {
 
 #[derive(Clone, Debug)]
 pub struct ServerModuleShutdownEventInput {
-    server: ServerHandle,
+    server: Arc<Server>,
 }
 
-impl From<ServerModuleShutdownEventInput> for (ServerHandle,) {
+impl From<ServerModuleShutdownEventInput> for (Arc<Server>,) {
     fn from(input: ServerModuleShutdownEventInput) -> Self {
         (input.server,)
     }
 }
 
 impl ServerModuleShutdownEventInput {
-    pub fn new(server: ServerHandle) -> Self {
+    pub fn new(server: Arc<Server>) -> Self {
         Self { server }
     }
 
-    pub fn server(&self) -> &ServerHandle {
+    pub fn server(&self) -> &Arc<Server> {
         &self.server
     }
 
-    pub fn server_mut(&mut self) -> &mut ServerHandle {
+    pub fn server_mut(&mut self) -> &mut Arc<Server> {
         &mut self.server
     }
 }
@@ -65,17 +66,17 @@ impl ServerModuleShutdownEventInput {
 #[derive(Clone, Debug)]
 pub struct ServerModuleLoadEventInput {
     module_id: ModuleId,
-    server: ServerHandle,
+    server: Arc<Server>,
 }
 
-impl From<ServerModuleLoadEventInput> for (ModuleId, ServerHandle) {
+impl From<ServerModuleLoadEventInput> for (ModuleId, Arc<Server>) {
     fn from(input: ServerModuleLoadEventInput) -> Self {
         (input.module_id, input.server)
     }
 }
 
 impl ServerModuleLoadEventInput {
-    pub fn new(module_id: ModuleId, server: ServerHandle) -> Self {
+    pub fn new(module_id: ModuleId, server: Arc<Server>) -> Self {
         Self { module_id, server }
     }
 
@@ -83,11 +84,11 @@ impl ServerModuleLoadEventInput {
         self.module_id
     }
 
-    pub fn server(&self) -> &ServerHandle {
+    pub fn server(&self) -> &Arc<Server> {
         &self.server
     }
 
-    pub fn server_mut(&mut self) -> &mut ServerHandle {
+    pub fn server_mut(&mut self) -> &mut Arc<Server> {
         &mut self.server
     }
 }
@@ -96,25 +97,25 @@ impl ServerModuleLoadEventInput {
 
 #[derive(Clone, Debug)]
 pub struct ServerModuleUnloadEventInput {
-    server: ServerHandle,
+    server: Arc<Server>,
 }
 
-impl From<ServerModuleUnloadEventInput> for (ServerHandle,) {
+impl From<ServerModuleUnloadEventInput> for (Arc<Server>,) {
     fn from(input: ServerModuleUnloadEventInput) -> Self {
         (input.server,)
     }
 }
 
 impl ServerModuleUnloadEventInput {
-    pub fn new(server: ServerHandle) -> Self {
+    pub fn new(server: Arc<Server>) -> Self {
         Self { server }
     }
 
-    pub fn server(&self) -> &ServerHandle {
+    pub fn server(&self) -> &Arc<Server> {
         &self.server
     }
 
-    pub fn server_mut(&mut self) -> &mut ServerHandle {
+    pub fn server_mut(&mut self) -> &mut Arc<Server> {
         &mut self.server
     }
 }
@@ -212,14 +213,14 @@ impl ServerModuleNotificationEventBody {
 
 #[derive(Debug)]
 pub struct ServerModuleNotificationEventInput {
-    server: ServerHandle,
+    server: Arc<Server>,
     source: ServerModuleNotificationEventInputSource,
     body: ServerModuleNotificationEventBody,
 }
 
 impl From<ServerModuleNotificationEventInput>
     for (
-        ServerHandle,
+        Arc<Server>,
         ServerModuleNotificationEventInputSource,
         ServerModuleNotificationEventBody,
     )
@@ -231,7 +232,7 @@ impl From<ServerModuleNotificationEventInput>
 
 impl ServerModuleNotificationEventInput {
     pub fn new(
-        server: ServerHandle,
+        server: Arc<Server>,
         source: ServerModuleNotificationEventInputSource,
         body: ServerModuleNotificationEventBody,
     ) -> Self {
@@ -242,7 +243,7 @@ impl ServerModuleNotificationEventInput {
         }
     }
 
-    pub fn server(&self) -> &ServerHandle {
+    pub fn server(&self) -> &Arc<Server> {
         &self.server
     }
 
@@ -263,29 +264,29 @@ impl ServerModuleNotificationEventInput {
 
 #[derive(Clone, Debug)]
 pub struct ServerModuleCommitEventInput {
-    server: ServerHandle,
+    server: Arc<Server>,
     log_entry_id: LogEntryId,
 }
 
-impl From<ServerModuleCommitEventInput> for (ServerHandle, LogEntryId) {
+impl From<ServerModuleCommitEventInput> for (Arc<Server>, LogEntryId) {
     fn from(input: ServerModuleCommitEventInput) -> Self {
         (input.server, input.log_entry_id)
     }
 }
 
 impl ServerModuleCommitEventInput {
-    pub fn new(server: ServerHandle, log_entry_id: LogEntryId) -> Self {
+    pub fn new(server: Arc<Server>, log_entry_id: LogEntryId) -> Self {
         Self {
             server,
             log_entry_id,
         }
     }
 
-    pub fn server(&self) -> &ServerHandle {
+    pub fn server(&self) -> &Arc<Server> {
         &self.server
     }
 
-    pub fn server_mut(&mut self) -> &mut ServerHandle {
+    pub fn server_mut(&mut self) -> &mut Arc<Server> {
         &mut self.server
     }
 

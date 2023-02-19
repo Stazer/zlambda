@@ -18,11 +18,12 @@ use crate::server::client::{
     ServerClientShutdownMessage,
 };
 use crate::server::{
-    ServerClientResignationMessageInput, ServerHandle, ServerMessage, ServerModuleGetMessageInput,
+    Server, ServerClientResignationMessageInput, ServerMessage, ServerModuleGetMessageInput,
     ServerModuleNotificationEventBody, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventInputClientSource,
 };
 use std::collections::HashMap;
+use std::sync::Arc;
 use tracing::{debug, error};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +39,7 @@ pub struct ServerClientTask {
     receiver: MessageQueueReceiver<ServerClientMessage>,
     incoming_notification_senders: HashMap<usize, MessageQueueSender<Bytes>>,
     outgoing_notification_counter: usize,
+    server: Arc<Server>,
 }
 
 impl ServerClientTask {
@@ -46,6 +48,7 @@ impl ServerClientTask {
         server_message_sender: MessageQueueSender<ServerMessage>,
         general_message_sender: MessageSocketSender<GeneralMessage>,
         general_message_receiver: MessageSocketReceiver<GeneralMessage>,
+        server: Arc<Server>,
     ) -> Self {
         let (sender, receiver) = message_queue();
 
@@ -59,6 +62,7 @@ impl ServerClientTask {
             receiver,
             incoming_notification_senders: HashMap::default(),
             outgoing_notification_counter: 0,
+            server,
         }
     }
 
@@ -266,7 +270,7 @@ impl ServerClientTask {
                     (Some(module),) => module,
                 };
 
-                let handle = ServerHandle::new(self.server_message_sender.clone());
+                let server = self.server.clone();
                 let client_source =
                     ServerModuleNotificationEventInputClientSource::new(self.client_id);
 
@@ -276,7 +280,7 @@ impl ServerClientTask {
                 spawn(async move {
                     module
                         .on_notification(ServerModuleNotificationEventInput::new(
-                            handle,
+                            server,
                             client_source.into(),
                             ServerModuleNotificationEventBody::new(receiver),
                         ))
@@ -299,14 +303,14 @@ impl ServerClientTask {
                 self.incoming_notification_senders
                     .insert(r#type.notification_id(), sender);
 
-                let handle = ServerHandle::new(self.server_message_sender.clone());
+                let server = self.server.clone();
                 let client_source =
                     ServerModuleNotificationEventInputClientSource::new(self.client_id);
 
                 spawn(async move {
                     module
                         .on_notification(ServerModuleNotificationEventInput::new(
-                            handle,
+                            server,
                             client_source.into(),
                             ServerModuleNotificationEventBody::new(receiver),
                         ))

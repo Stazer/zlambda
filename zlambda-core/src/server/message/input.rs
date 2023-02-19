@@ -1,6 +1,9 @@
-use crate::common::message::{MessageSocketReceiver, MessageSocketSender};
+use crate::common::message::{
+    MessageSocketReceiver, MessageSocketSender, SynchronizableMessageOutputSender,
+};
 use crate::common::module::ModuleId;
 use crate::common::net::TcpStream;
+use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::client::ServerClientId;
 use crate::server::{LogEntry, LogEntryData, LogEntryId, LogTerm, ServerId, ServerModule};
@@ -453,5 +456,51 @@ impl ServerServerNodeMessageSenderGetMessageInput {
 
     pub fn server_id(&self) -> ServerId {
         self.server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerCommitMessageInput {
+    data: Bytes,
+}
+
+impl From<ServerCommitMessageInput> for (Bytes,) {
+    fn from(input: ServerCommitMessageInput) -> Self {
+        (input.data,)
+    }
+}
+
+impl ServerCommitMessageInput {
+    pub fn new(data: Bytes) -> Self {
+        Self { data }
+    }
+
+    pub fn data(&self) -> &Bytes {
+        &self.data
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerCommitCommitMessageInput {
+    output_sender: SynchronizableMessageOutputSender,
+}
+
+impl From<ServerCommitCommitMessageInput> for (SynchronizableMessageOutputSender,) {
+    fn from(input: ServerCommitCommitMessageInput) -> Self {
+        (input.output_sender,)
+    }
+}
+
+impl ServerCommitCommitMessageInput {
+    pub fn new(output_sender: SynchronizableMessageOutputSender) -> Self {
+        Self { output_sender }
+    }
+
+    pub fn output_sender(&self) -> &SynchronizableMessageOutputSender {
+        &self.output_sender
     }
 }

@@ -13,8 +13,8 @@ use zlambda_core::client::{
 };
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::server::{
-    ServerId, ServerModule, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventOutput, ServerTask,
+    ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,23 +156,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 tracing_subscriber::fmt::init();
             }
 
-            ServerTask::new(
-                listener_address,
-                match command {
-                    ServerCommand::Leader => None,
-                    ServerCommand::Follower {
-                        leader_address,
-                        server_id,
-                    } => Some((leader_address, server_id)),
-                },
-                vec![Box::<dyn ServerModule>::from(Box::new(
-                    TestServerModule::new(),
-                ))]
-                .into_iter(),
-            )
-            .await?
-            .run()
-            .await
+            ServerBuilder::default()
+                .add_module(TestServerModule::new())
+                .build(
+                    listener_address,
+                    match command {
+                        ServerCommand::Leader => None,
+                        ServerCommand::Follower {
+                            leader_address,
+                            server_id,
+                        } => Some((leader_address, server_id)),
+                    },
+                )
+                .await?
+                .wait()
+                .await;
         }
         MainCommand::Client { address, command } => {
             let client_task = ClientTask::new(

@@ -23,16 +23,16 @@ use crate::server::node::{
     ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeShutdownMessage,
 };
 use crate::server::{
-    ServerHandle, ServerId, ServerLeaderServerIdGetMessageInput,
-    ServerLogAppendRequestMessageInput, ServerLogEntriesAcknowledgementMessageInput,
-    ServerLogEntriesRecoveryMessageInput, ServerMessage, ServerModuleGetMessageInput,
-    ServerModuleNotificationEventBody, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventInputServerSource, ServerServerIdGetMessageInput,
-    ServerServerSocketAddressGetMessageInput,
+    Server, ServerId, ServerLeaderServerIdGetMessageInput, ServerLogAppendRequestMessageInput,
+    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
+    ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventBody,
+    ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
+    ServerServerIdGetMessageInput, ServerServerSocketAddressGetMessageInput,
 };
 use std::collections::HashMap;
 use std::future::pending;
 use std::io;
+use std::sync::Arc;
 use tracing::{debug, error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,6 +49,7 @@ pub struct ServerNodeTask {
     receiver: MessageQueueReceiver<ServerNodeMessage>,
     incoming_notification_senders: HashMap<usize, MessageQueueSender<Bytes>>,
     outgoing_notification_counter: usize,
+    server: Arc<Server>,
 }
 
 impl ServerNodeTask {
@@ -59,6 +60,7 @@ impl ServerNodeTask {
             MessageSocketSender<GeneralMessage>,
             MessageSocketReceiver<GeneralMessage>,
         )>,
+        server: Arc<Server>,
     ) -> Self {
         let (sender, receiver) = message_queue();
 
@@ -73,6 +75,7 @@ impl ServerNodeTask {
             receiver,
             incoming_notification_senders: HashMap::default(),
             outgoing_notification_counter: 0,
+            server,
         }
     }
 
@@ -591,7 +594,7 @@ impl ServerNodeTask {
                     (Some(module),) => module,
                 };
 
-                let handle = ServerHandle::new(self.server_message_sender.clone());
+                let server = self.server.clone();
                 let server_source =
                     ServerModuleNotificationEventInputServerSource::new(self.server_id);
 
@@ -601,7 +604,7 @@ impl ServerNodeTask {
                 spawn(async move {
                     module
                         .on_notification(ServerModuleNotificationEventInput::new(
-                            handle,
+                            server,
                             server_source.into(),
                             ServerModuleNotificationEventBody::new(receiver),
                         ))
@@ -624,14 +627,14 @@ impl ServerNodeTask {
                 self.incoming_notification_senders
                     .insert(r#type.notification_id(), sender);
 
-                let handle = ServerHandle::new(self.server_message_sender.clone());
+                let server = self.server.clone();
                 let server_source =
                     ServerModuleNotificationEventInputServerSource::new(self.server_id);
 
                 spawn(async move {
                     module
                         .on_notification(ServerModuleNotificationEventInput::new(
-                            handle,
+                            server,
                             server_source.into(),
                             ServerModuleNotificationEventBody::new(receiver),
                         ))

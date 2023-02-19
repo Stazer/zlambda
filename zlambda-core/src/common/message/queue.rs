@@ -1,5 +1,6 @@
 use crate::common::message::{
-    synchronous_message_output_channel, AsynchronousMessage, DoReceive, DoSend, SynchronousMessage,
+    synchronizable_message_output_channel, synchronous_message_output_channel, AsynchronousMessage,
+    DoReceive, DoSend, SynchronizableMessage, SynchronousMessage,
 };
 use std::fmt::Debug;
 use tokio::sync::mpsc;
@@ -55,6 +56,18 @@ where
         self.do_send(SynchronousMessage::new(input, sender)).await;
 
         receiver.do_receive().await
+    }
+
+    pub async fn do_send_synchronized<I>(&self, input: I)
+    where
+        T: From<SynchronizableMessage<I>>,
+    {
+        let (sender, receiver) = synchronizable_message_output_channel();
+
+        self.do_send(SynchronizableMessage::new(input, Some(sender)))
+            .await;
+
+        receiver.wait().await;
     }
 }
 

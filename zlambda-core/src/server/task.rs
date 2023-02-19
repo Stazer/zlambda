@@ -12,14 +12,13 @@ use crate::general::{
 };
 use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTask};
 use crate::server::connection::ServerConnectionTask;
-use crate::server::node::{
-    ServerNodeLogAppendResponseMessageInput, ServerNodeShutdownMessageInput,
-};
+use crate::server::node::ServerNodeLogAppendResponseMessageInput;
 use crate::server::{
     AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
-    NewServerError, ServerClientRegistrationMessage, ServerClientResignationMessage,
+    NewServerError, Server, ServerClientRegistrationMessage, ServerClientResignationMessage,
+    ServerCommitCommitMessage, ServerCommitCommitMessageInput, ServerCommitMessage,
     ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
-    ServerHandle, ServerId, ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
+    ServerId, ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
     ServerLeaderType, ServerLogAppendRequestMessage, ServerLogEntriesAcknowledgementMessage,
     ServerLogEntriesRecoveryMessage, ServerLogEntriesReplicationMessage,
     ServerLogEntriesReplicationMessageOutput, ServerMessage, ServerModule,
@@ -45,7 +44,7 @@ use tracing::{debug, error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct ServerTask {
+pub(crate) struct ServerTask {
     server_id: ServerId,
     leader_server_id: ServerId,
     r#type: ServerType,
@@ -57,6 +56,7 @@ pub struct ServerTask {
     server_client_message_senders: Vec<Option<MessageQueueSender<ServerClientMessage>>>,
     server_node_message_senders: Vec<Option<MessageQueueSender<ServerNodeMessage>>>,
     server_socket_addresses: Vec<Option<SocketAddr>>,
+    server: Arc<Server>,
     running: bool,
 }
 
@@ -64,7 +64,7 @@ impl ServerTask {
     pub async fn new<S, T>(
         listener_address: S,
         follower_data: Option<(T, Option<ServerId>)>,
-        modules: impl Iterator<Item = Box<dyn ServerModule>>,
+        modules: impl Iterator<Item = Arc<dyn ServerModule>>,
     ) -> Result<Self, NewServerError>
     where
         S: ToSocketAddrs + Debug,
@@ -77,8 +77,10 @@ impl ServerTask {
         let mut module_manager = ModuleManager::default();
 
         for module in modules {
-            module_manager.load(Arc::from(module))?;
+            module_manager.load(module)?;
         }
+
+        let server = Server::new(queue_sender.clone());
 
         match follower_data {
             None => Ok(Self {
@@ -94,6 +96,7 @@ impl ServerTask {
                 server_node_message_senders: Vec::default(),
                 server_socket_addresses: vec![Some(local_addr)],
                 running: true,
+                server,
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -171,6 +174,7 @@ impl ServerTask {
                     leader_server_id,
                     queue_sender.clone(),
                     Some((socket_sender, socket_receiver)),
+                    server.clone(),
                 );
 
                 server_node_message_senders.resize_with(max_id + 1, || None);
@@ -199,6 +203,7 @@ impl ServerTask {
                     server_node_message_senders,
                     server_socket_addresses,
                     running: true,
+                    server,
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -272,6 +277,7 @@ impl ServerTask {
                     leader_server_id,
                     queue_sender.clone(),
                     Some((socket_sender, socket_receiver)),
+                    server.clone(),
                 );
 
                 server_node_message_senders.resize_with(max_id + 1, || None);
@@ -300,25 +306,26 @@ impl ServerTask {
                     server_node_message_senders,
                     server_socket_addresses,
                     running: true,
+                    server,
                 })
             }
         }
     }
 
-    pub fn handle(&self) -> ServerHandle {
-        ServerHandle::new(self.sender.clone())
+    pub fn server(&self) -> &Arc<Server> {
+        &self.server
     }
 
-    pub async fn spawn(self) {
+    pub fn spawn(self) {
         spawn(async move { self.run().await });
     }
 
     pub async fn run(mut self) {
         for module in self.module_manager.iter() {
             module
-                .on_startup(ServerModuleStartupEventInput::new(ServerHandle::new(
+                .on_startup(ServerModuleStartupEventInput::new(Arc::new(Server::from(
                     self.sender.clone(),
-                )))
+                ))))
                 .await;
         }
 
@@ -347,9 +354,7 @@ impl ServerTask {
 
         for module in self.module_manager.iter() {
             module
-                .on_shutdown(ServerModuleShutdownEventInput::new(ServerHandle::new(
-                    self.sender.clone(),
-                )))
+                .on_shutdown(ServerModuleShutdownEventInput::new(self.server.clone()))
                 .await;
         }
     }
@@ -406,6 +411,10 @@ impl ServerTask {
             ServerMessage::ServerNodeMessageSenderGet(message) => {
                 self.on_server_server_node_message_sender_get_message(message)
                     .await
+            }
+            ServerMessage::Commit(message) => self.on_server_commit_message(message).await,
+            ServerMessage::CommitCommit(message) => {
+                self.on_server_commit_commit_message(message).await
             }
         }
     }
@@ -771,6 +780,7 @@ impl ServerTask {
             self.sender.clone(),
             sender,
             receiver,
+            self.server.clone(),
         );
 
         self.server_client_message_senders
@@ -846,6 +856,35 @@ impl ServerTask {
                 server_node_message_sender,
             ))
             .await;
+    }
+
+    async fn on_server_commit_message(&mut self, message: ServerCommitMessage) {
+        let (input, output_sender) = message.into();
+        let (data,) = input.into();
+
+        let log_entry_id = match self.replicate(vec![data.into()]).await.into_iter().next() {
+            Some(log_entry_id) => log_entry_id,
+            None => return,
+        };
+
+        if let Some(output_sender) = output_sender {
+            self.commit_messages
+                .entry(log_entry_id)
+                .or_insert(Vec::default())
+                .push(
+                    ServerCommitCommitMessage::new(ServerCommitCommitMessageInput::new(
+                        output_sender,
+                    ))
+                    .into(),
+                );
+        }
+    }
+
+    async fn on_server_commit_commit_message(&mut self, message: ServerCommitCommitMessage) {
+        let (input,) = message.into();
+        let (sender,) = input.into();
+
+        sender.notify().await;
     }
 
     async fn replicate(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {
@@ -958,14 +997,11 @@ impl ServerTask {
 
     async fn on_commit_log_entry(&mut self, log_entry_id: LogEntryId) {
         for module in self.module_manager.iter().cloned() {
-            let sender = self.sender.clone();
+            let server = self.server.clone();
 
             spawn(async move {
                 module
-                    .on_commit(ServerModuleCommitEventInput::new(
-                        ServerHandle::new(sender),
-                        log_entry_id,
-                    ))
+                    .on_commit(ServerModuleCommitEventInput::new(server, log_entry_id))
                     .await;
             });
         }
@@ -1021,7 +1057,7 @@ impl ServerTask {
         }
 
         if let Some(server_node_message_sender) = self.server_node_message_senders.get_mut(server_id) && server_node_message_sender.is_none() && data.server_id() != self.server_id {
-            let task = ServerNodeTask::new(data.server_id(), self.sender.clone(), None);
+            let task = ServerNodeTask::new(data.server_id(), self.sender.clone(), None, self.server.clone());
             *server_node_message_sender = Some(task.sender().clone());
 
             task.spawn();
