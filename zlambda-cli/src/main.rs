@@ -74,11 +74,6 @@ enum ClientCommand {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use futures::pin_mut;
-use zlambda_core::common::utility::Bytes;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #[derive(Debug)]
 pub struct TestClientModule {}
 
@@ -91,7 +86,7 @@ impl ClientModule for TestClientModule {
         &self,
         event: ClientModuleInitializeEventInput,
     ) -> ClientModuleInitializeEventOutput {
-        let s = async_stream::stream! {
+        /*let s = async_stream::stream! {
             while let Some(bytes) = ReaderStream::new(stdin()).next().await {
                 yield bytes.unwrap();
             }
@@ -99,7 +94,7 @@ impl ClientModule for TestClientModule {
 
         pin_mut!(s);
 
-        event.client_handle().server().notify(0, s).await;
+        event.client_handle().server().notify(0, s).await;*/
     }
 }
 
@@ -123,13 +118,13 @@ impl ServerModule for TestServerModule {
         &self,
         mut input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        println!("{:?}", input.source());
+        /*println!("{:?}", input.source());
 
         let mut stream = Box::pin(input.body_mut().stream());
 
         while let Some(bytes) = stream.next().await {
             println!("{:?}", bytes);
-        }
+        }*/
     }
 }
 

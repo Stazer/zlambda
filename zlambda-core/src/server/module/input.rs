@@ -202,10 +202,8 @@ impl ServerModuleNotificationEventBody {
         Self { receiver }
     }
 
-    pub fn stream(&mut self) -> impl Stream<Item = Bytes> + '_ {
-        stream!(while let Some(bytes) = self.receiver.receive().await {
-            yield bytes
-        })
+    pub async fn next(&mut self) -> Option<Bytes> {
+        self.receiver.receive().await
     }
 }
 

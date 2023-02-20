@@ -2,5 +2,6 @@
 members = [
     "zlambda-core",
     "zlambda-so",
+    "zlambda-scheduling",
     "zlambda-cli",
 ]

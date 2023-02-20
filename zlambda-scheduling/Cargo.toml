@@ -1,0 +1,10 @@
+[package]
+name = "zlambda-scheduling"
+version = "0.1.0"
+authors = [ "Justus Flerlage <justus@sutsuj.com>" ]
+edition = "2021"
+
+[dependencies]
+async-trait = "*"
+zlambda-core = { path = "../zlambda-core" }
+serde = { version = "1", features = ["derive"] }
