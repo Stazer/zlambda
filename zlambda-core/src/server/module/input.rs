@@ -6,6 +6,8 @@ use crate::server::{LogEntryId, Server, ServerId};
 use async_stream::stream;
 use futures::Stream;
 use std::sync::Arc;
+use std::task::{Context, Poll};
+use std::pin::Pin;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -201,9 +203,13 @@ impl ServerModuleNotificationEventBody {
     pub fn new(receiver: MessageQueueReceiver<Bytes>) -> Self {
         Self { receiver }
     }
+}
 
-    pub async fn next(&mut self) -> Option<Bytes> {
-        self.receiver.receive().await
+impl Stream for ServerModuleNotificationEventBody {
+    type Item = Bytes;
+
+    fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Bytes>> {
+        Pin::new(&mut self.receiver).poll_next(context)
     }
 }
 

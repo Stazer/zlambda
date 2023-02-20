@@ -4,6 +4,9 @@ use crate::common::message::{
 };
 use std::fmt::Debug;
 use tokio::sync::mpsc;
+use std::task::{Context, Poll};
+use std::pin::Pin;
+use crate::common::future::Stream;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,6 +82,17 @@ where
     T: Debug + Send,
 {
     receiver: mpsc::Receiver<T>,
+}
+
+impl<T> Stream for MessageQueueReceiver<T>
+where
+    T: Debug + Send,
+{
+    type Item = T;
+
+    fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.receiver.poll_recv(context)
+    }
 }
 
 impl<T> MessageQueueReceiver<T>

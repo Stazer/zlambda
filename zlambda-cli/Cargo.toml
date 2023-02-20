@@ -4,12 +4,13 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-async-trait = "*"
 async-stream = "*"
+async-trait = "*"
 clap = { version = "4", features = ["derive"] }
+console-subscriber = { version = "*" }
+futures = "*"
 tokio = { version = "1", features = ["full"] }
 tokio-util = "*"
-futures = "*"
-console-subscriber = { version = "*" }
 tracing-subscriber = { version = "0", features = ["fmt"] }
 zlambda-core = { path = "../zlambda-core" }
+zlambda-scheduling = { path = "../zlambda-scheduling" }
