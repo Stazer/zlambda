@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use zlambda_core::common::future::StreamExt;
 use zlambda_core::common::module::{Module, ModuleId};
+use zlambda_core::common::notification::{
+    NotificationBodyItemSinkExt, NotificationBodyItemStreamExt,
+};
 use zlambda_core::server::{
     ServerId, ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
 };
@@ -45,11 +48,14 @@ impl ServerModule for RoundRobinSchedulingModule {
         &self,
         mut input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        println!("hello world");
-        //let server_id = self.next_server_id.fetch_add(1, Ordering::Relaxed);
+        let server_id = self.next_server_id.fetch_add(1, Ordering::Relaxed);
 
-        //let header_body = input.body_mut().stream_mut().reader().read::<RoundRobinNotificationHeader>().await;
+        let mut reader = input.notification_body_item_queue_receiver_mut().reader();
+        let header = reader
+            .deserialize::<RoundRobinNotificationHeader>()
+            .await
+            .unwrap();
 
-        //println!("{:?}", header_body);
+        println!("{} {:?}", server_id, header);
     }
 }

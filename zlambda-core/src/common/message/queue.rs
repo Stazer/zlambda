@@ -1,4 +1,4 @@
-use crate::common::future::{Sink, Stream};
+use crate::common::future::{Sink, SinkExt, Stream};
 use crate::common::message::{
     synchronizable_message_output_channel, synchronous_message_output_channel, AsynchronousMessage,
     DoReceive, DoSend, SynchronizableMessage, SynchronousMessage,
@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc;
+use tokio_util::sync::PollSender;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,37 +28,37 @@ where
     }
 }
 
-impl<T> Sink<T> for MessageQueueSender<T>
+/*impl<T> Sink<T> for MessageQueueSender<T>
 where
-    T: Debug + Send,
+    T: Debug + Send + 'static,
 {
-    type Error = ();
+    type Error = <PollSender<T> as Sink<T>>::Error;
 
     fn poll_ready(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         context: &mut Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+        Pin::new(&mut self.sender).poll_ready(context)
     }
 
-    fn start_send(self: Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
-        Ok(())
+    fn start_send(mut self: Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
+        Pin::new(&mut self.sender).start_send(item)
     }
 
     fn poll_flush(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         context: &mut Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+        Pin::new(&mut self.sender).poll_flush(context)
     }
 
     fn poll_close(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         context: &mut Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+        Pin::new(&mut self.sender).poll_close(context)
     }
-}
+}*/
 
 impl<T> MessageQueueSender<T>
 where
@@ -71,7 +72,7 @@ where
     where
         T: From<M>,
     {
-        self.sender.do_send(T::from(message)).await
+        self.sender.do_send(T::from(message)).await;
     }
 
     pub async fn do_send_asynchronous<I>(&self, input: I)
@@ -148,7 +149,7 @@ where
 
 pub fn message_queue<T>() -> (MessageQueueSender<T>, MessageQueueReceiver<T>)
 where
-    T: Debug + Send,
+    T: Debug + Send + 'static,
 {
     let (sender, receiver) = mpsc::channel(16);
 

@@ -5,18 +5,19 @@
 use clap::{Args, Parser, Subcommand};
 use futures::stream::StreamExt;
 use std::error::Error;
-use tokio::io::stdin;
-use tokio_util::io::ReaderStream;
 use zlambda_core::client::{
     ClientModule, ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput, ClientTask,
 };
-use zlambda_core::common::future::pin_mut;
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
 use zlambda_scheduling::round_robin::RoundRobinSchedulingModule;
+use zlambda_core::common::notification::{NotificationBodyItemStreamExt};
+use zlambda_scheduling::round_robin::RoundRobinNotificationHeader;
+use zlambda_core::common::future::stream::{iter, empty};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -87,25 +88,14 @@ impl ClientModule for TestClientModule {
         &self,
         event: ClientModuleInitializeEventInput,
     ) -> ClientModuleInitializeEventOutput {
-        /*use zlambda_core::common::to_allocvec;
-            use zlambda_scheduling::round_robin::RoundRobinNotificationHeader;
-            use zlambda_core::common::utility::Bytes;
+        let mut iter = iter([]);
 
-            let a = to_allocvec(&RoundRobinNotificationHeader::new(ModuleId::from(1usize))).unwrap();
+        let mut stream = iter.writer();
+        stream.serialize(&RoundRobinNotificationHeader::new(
+            1usize,
+        )).unwrap();
 
-            let bytes = Bytes::from(a);
-
-        let s = async_stream::stream! {
-            yield bytes;
-
-            while let Some(bytes) = ReaderStream::new(stdin()).next().await {
-                yield bytes.unwrap();
-            }
-        };
-
-        pin_mut!(s);
-
-        event.client_handle().server().notify(0, s).await;*/
+        event.client_handle().server().notify(0, stream).await;
     }
 }
 
@@ -123,7 +113,11 @@ impl ServerModule for PrintServerModule {
         &self,
         mut input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        while let Some(bytes) = input.notification_body_item_queue_receiver_mut().next().await {
+        while let Some(bytes) = input
+            .notification_body_item_queue_receiver_mut()
+            .next()
+            .await
+        {
             println!("{:?}", bytes);
         }
     }

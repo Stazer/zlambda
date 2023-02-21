@@ -1,4 +1,4 @@
-use crate::common::future::{Sink, Stream, StreamExt, SinkExt};
+use crate::common::future::{Sink, SinkExt, Stream, StreamExt};
 use crate::common::message::MessageQueueReceiver;
 use crate::common::message::{message_queue, MessageQueueSender};
 use crate::common::utility::{Bytes, BytesMut};
@@ -41,10 +41,6 @@ pub type NotificationId = usize;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type NotificationBodyStream = dyn Stream<Item = NotificationBodyItem>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 pub type NotificationBodyItemQueueSender = MessageQueueSender<NotificationBodyItem>;
 pub type NotificationBodyItemQueueReceiver = MessageQueueReceiver<NotificationBodyItem>;
 
@@ -83,7 +79,16 @@ pub trait NotificationBodyItemStreamExt: Stream<Item = NotificationBodyItem> {
     {
         NotificationBodyStreamReader::new(self)
     }
+
+    fn writer(&mut self) -> NotificationBodyStreamWriter<'_, Self>
+    where
+        Self: Sized + Unpin,
+    {
+        NotificationBodyStreamWriter::new(self)
+    }
 }
+
+impl<T> NotificationBodyItemStreamExt for T where T: Stream<Item = NotificationBodyItem> {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -158,6 +163,61 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
+pub struct NotificationBodyStreamWriter<'a, T>
+where
+    T: Stream<Item = NotificationBodyItem> + Unpin,
+{
+    stream: &'a mut T,
+    buffer: BytesMut,
+}
+
+impl<'a, T> NotificationBodyStreamWriter<'a, T>
+where
+    T: Stream<Item = NotificationBodyItem> + Unpin,
+{
+    pub(crate) fn new(
+        stream: &'a mut T,
+    ) -> Self {
+        Self {
+            stream,
+            buffer: BytesMut::default(),
+        }
+    }
+
+    pub fn serialize<S>(&mut self, value: &S) -> Result<(), NotificationError>
+    where
+        S: Serialize,
+    {
+        self.buffer.extend_from_slice(&to_allocvec(&value)?);
+
+        Ok(())
+    }
+}
+
+impl<'a, T> Stream for NotificationBodyStreamWriter<'a, T>
+where
+    T: Stream<Item = NotificationBodyItem> + Unpin,
+{
+    type Item = NotificationBodyItem;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+    ) -> Poll<Option<NotificationBodyItem>> {
+        if !self.buffer.is_empty() {
+            return Poll::Ready(Some(self.buffer.split().freeze()));
+        }
+
+        match Pin::new(&mut self.stream).poll_next(context) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(item) => Poll::Ready(item),
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub trait NotificationBodyItemSinkExt: Sink<NotificationBodyItem> {
     fn writer(&mut self) -> NotificationBodySinkWriter<'_, Self>
     where
@@ -166,6 +226,8 @@ pub trait NotificationBodyItemSinkExt: Sink<NotificationBodyItem> {
         NotificationBodySinkWriter::new(self)
     }
 }
+
+impl<T> NotificationBodyItemSinkExt for T where T: Sink<NotificationBodyItem> {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -177,17 +239,12 @@ where
     sink: &'a mut T,
 }
 
-
 impl<'a, T> NotificationBodySinkWriter<'a, T>
 where
     T: Sink<NotificationBodyItem> + Unpin,
 {
-    pub(crate) fn new(
-        sink: &'a mut T,
-    ) -> Self {
-        Self {
-            sink,
-        }
+    pub(crate) fn new(sink: &'a mut T) -> Self {
+        Self { sink }
     }
 
     pub async fn serialize<S>(&mut self, value: &S) -> Result<(), NotificationError>
