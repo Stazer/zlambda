@@ -24,10 +24,10 @@ pub use task::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use crate::common::message::message_queue;
 use crate::common::message::MessageQueueSender;
 use crate::common::module::{LoadModuleError, ModuleId, UnloadModuleError};
 use crate::common::net::ToSocketAddrs;
+use crate::common::notification::notification_body_item_queue;
 use crate::common::runtime::spawn;
 use crate::common::utility::Bytes;
 use futures::{Stream, StreamExt};
@@ -169,16 +169,15 @@ impl Server {
             (None,) => return,
         };
 
-        let (sender, receiver) = message_queue();
+        let (sender, receiver) = notification_body_item_queue();
         let server_source =
             ServerModuleNotificationEventInputServerSource::new(self.server_id().await);
 
         module
             .on_notification(ServerModuleNotificationEventInput::new(
-                //self.clone(),
                 Server::new(self.server_message_sender.clone()),
                 server_source.into(),
-                ServerModuleNotificationEventBody::new(receiver),
+                receiver,
             ))
             .await;
 

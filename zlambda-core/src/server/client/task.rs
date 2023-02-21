@@ -2,6 +2,7 @@ use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };
+use crate::common::notification::notification_body_item_queue;
 use crate::common::runtime::{select, spawn};
 use crate::common::utility::Bytes;
 use crate::general::{
@@ -19,8 +20,7 @@ use crate::server::client::{
 };
 use crate::server::{
     Server, ServerClientResignationMessageInput, ServerMessage, ServerModuleGetMessageInput,
-    ServerModuleNotificationEventBody, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventInputClientSource,
+    ServerModuleNotificationEventInput, ServerModuleNotificationEventInputClientSource,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -274,7 +274,7 @@ impl ServerClientTask {
                 let client_source =
                     ServerModuleNotificationEventInputClientSource::new(self.client_id);
 
-                let (sender, receiver) = message_queue();
+                let (sender, receiver) = notification_body_item_queue();
                 sender.do_send(body).await;
 
                 spawn(async move {
@@ -282,7 +282,7 @@ impl ServerClientTask {
                         .on_notification(ServerModuleNotificationEventInput::new(
                             server,
                             client_source.into(),
-                            ServerModuleNotificationEventBody::new(receiver),
+                            receiver,
                         ))
                         .await;
                 });
@@ -298,7 +298,7 @@ impl ServerClientTask {
                     (Some(module),) => module,
                 };
 
-                let (sender, receiver) = message_queue();
+                let (sender, receiver) = notification_body_item_queue();
                 sender.do_send(body).await;
                 self.incoming_notification_senders
                     .insert(r#type.notification_id(), sender);
@@ -312,7 +312,7 @@ impl ServerClientTask {
                         .on_notification(ServerModuleNotificationEventInput::new(
                             server,
                             client_source.into(),
-                            ServerModuleNotificationEventBody::new(receiver),
+                            receiver,
                         ))
                         .await;
                 });

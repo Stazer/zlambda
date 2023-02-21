@@ -1,12 +1,12 @@
+use crate::common::future::{Sink, Stream};
 use crate::common::message::{
     synchronizable_message_output_channel, synchronous_message_output_channel, AsynchronousMessage,
     DoReceive, DoSend, SynchronizableMessage, SynchronousMessage,
 };
 use std::fmt::Debug;
-use tokio::sync::mpsc;
-use std::task::{Context, Poll};
 use std::pin::Pin;
-use crate::common::future::Stream;
+use std::task::{Context, Poll};
+use tokio::sync::mpsc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,6 +24,38 @@ where
 {
     fn clone(&self) -> Self {
         Self::new(self.sender.clone())
+    }
+}
+
+impl<T> Sink<T> for MessageQueueSender<T>
+where
+    T: Debug + Send,
+{
+    type Error = ();
+
+    fn poll_ready(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn start_send(self: Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_close(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 }
 

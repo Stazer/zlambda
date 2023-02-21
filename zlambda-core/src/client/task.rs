@@ -257,7 +257,7 @@ impl ClientTask {
             GeneralMessage::Notification(message) => {
                 self.on_general_notification_message(message).await
             }
-            message => {
+            _message => {
                 todo!()
             }
         }

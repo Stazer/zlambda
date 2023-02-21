@@ -1,13 +1,8 @@
-use crate::common::message::MessageQueueReceiver;
 use crate::common::module::ModuleId;
-use crate::common::utility::Bytes;
+use crate::common::notification::NotificationBodyItemQueueReceiver;
 use crate::server::client::ServerClientId;
 use crate::server::{LogEntryId, Server, ServerId};
-use async_stream::stream;
-use futures::Stream;
 use std::sync::Arc;
-use std::task::{Context, Poll};
-use std::pin::Pin;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -195,42 +190,25 @@ impl From<ServerModuleNotificationEventInputClientSource>
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerModuleNotificationEventBody {
-    receiver: MessageQueueReceiver<Bytes>,
-}
-
-impl ServerModuleNotificationEventBody {
-    pub fn new(receiver: MessageQueueReceiver<Bytes>) -> Self {
-        Self { receiver }
-    }
-}
-
-impl Stream for ServerModuleNotificationEventBody {
-    type Item = Bytes;
-
-    fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Bytes>> {
-        Pin::new(&mut self.receiver).poll_next(context)
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
 pub struct ServerModuleNotificationEventInput {
     server: Arc<Server>,
     source: ServerModuleNotificationEventInputSource,
-    body: ServerModuleNotificationEventBody,
+    notification_body_item_queue_receiver: NotificationBodyItemQueueReceiver,
 }
 
 impl From<ServerModuleNotificationEventInput>
     for (
         Arc<Server>,
         ServerModuleNotificationEventInputSource,
-        ServerModuleNotificationEventBody,
+        NotificationBodyItemQueueReceiver,
     )
 {
     fn from(input: ServerModuleNotificationEventInput) -> Self {
-        (input.server, input.source, input.body)
+        (
+            input.server,
+            input.source,
+            input.notification_body_item_queue_receiver,
+        )
     }
 }
 
@@ -238,12 +216,12 @@ impl ServerModuleNotificationEventInput {
     pub fn new(
         server: Arc<Server>,
         source: ServerModuleNotificationEventInputSource,
-        body: ServerModuleNotificationEventBody,
+        notification_body_item_queue_receiver: NotificationBodyItemQueueReceiver,
     ) -> Self {
         Self {
             server,
             source,
-            body,
+            notification_body_item_queue_receiver,
         }
     }
 
@@ -255,12 +233,14 @@ impl ServerModuleNotificationEventInput {
         &self.source
     }
 
-    pub fn body(&self) -> &ServerModuleNotificationEventBody {
-        &self.body
+    pub fn notification_body_item_queue_receiver(&self) -> &NotificationBodyItemQueueReceiver {
+        &self.notification_body_item_queue_receiver
     }
 
-    pub fn body_mut(&mut self) -> &mut ServerModuleNotificationEventBody {
-        &mut self.body
+    pub fn notification_body_item_queue_receiver_mut(
+        &mut self,
+    ) -> &mut NotificationBodyItemQueueReceiver {
+        &mut self.notification_body_item_queue_receiver
     }
 }
 

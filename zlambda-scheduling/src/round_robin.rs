@@ -8,18 +8,18 @@ use zlambda_core::server::{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Deserialize, Serialize)]
-pub struct RoundRobinNotificationEnvelope {
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RoundRobinNotificationHeader {
     module_id: ModuleId,
 }
 
-impl From<RoundRobinNotificationEnvelope> for (ModuleId,) {
-    fn from(envelope: RoundRobinNotificationEnvelope) -> Self {
+impl From<RoundRobinNotificationHeader> for (ModuleId,) {
+    fn from(envelope: RoundRobinNotificationHeader) -> Self {
         (envelope.module_id,)
     }
 }
 
-impl RoundRobinNotificationEnvelope {
+impl RoundRobinNotificationHeader {
     pub fn new(module_id: ModuleId) -> Self {
         Self { module_id }
     }
@@ -32,24 +32,24 @@ impl RoundRobinNotificationEnvelope {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Default, Debug)]
-pub struct RoundRobinScheduler {
+pub struct RoundRobinSchedulingModule {
     next_server_id: AtomicUsize,
 }
 
 #[async_trait::async_trait]
-impl Module for RoundRobinScheduler {}
+impl Module for RoundRobinSchedulingModule {}
 
 #[async_trait::async_trait]
-impl ServerModule for RoundRobinScheduler {
+impl ServerModule for RoundRobinSchedulingModule {
     async fn on_notification(
         &self,
         mut input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let server_id = self.next_server_id.fetch_add(1, Ordering::Relaxed);
+        println!("hello world");
+        //let server_id = self.next_server_id.fetch_add(1, Ordering::Relaxed);
 
-        let envelope_body = match input.body_mut().next().await {
-            None => return,
-            Some(envelope_body) => envelope_body,
-        };
+        //let header_body = input.body_mut().stream_mut().reader().read::<RoundRobinNotificationHeader>().await;
+
+        //println!("{:?}", header_body);
     }
 }

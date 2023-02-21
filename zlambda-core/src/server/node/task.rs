@@ -3,6 +3,7 @@ use crate::common::message::{
     MessageSocketSender,
 };
 use crate::common::net::TcpStream;
+use crate::common::notification::notification_body_item_queue;
 use crate::common::runtime::{select, spawn};
 use crate::common::utility::Bytes;
 use crate::general::{
@@ -25,9 +26,9 @@ use crate::server::node::{
 use crate::server::{
     Server, ServerId, ServerLeaderServerIdGetMessageInput, ServerLogAppendRequestMessageInput,
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
-    ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventBody,
-    ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
-    ServerServerIdGetMessageInput, ServerServerSocketAddressGetMessageInput,
+    ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventInputServerSource, ServerServerIdGetMessageInput,
+    ServerServerSocketAddressGetMessageInput,
 };
 use std::collections::HashMap;
 use std::future::pending;
@@ -598,7 +599,7 @@ impl ServerNodeTask {
                 let server_source =
                     ServerModuleNotificationEventInputServerSource::new(self.server_id);
 
-                let (sender, receiver) = message_queue();
+                let (sender, receiver) = notification_body_item_queue();
                 sender.do_send(body).await;
 
                 spawn(async move {
@@ -606,7 +607,7 @@ impl ServerNodeTask {
                         .on_notification(ServerModuleNotificationEventInput::new(
                             server,
                             server_source.into(),
-                            ServerModuleNotificationEventBody::new(receiver),
+                            receiver,
                         ))
                         .await;
                 });
@@ -622,7 +623,7 @@ impl ServerNodeTask {
                     (Some(module),) => module,
                 };
 
-                let (sender, receiver) = message_queue();
+                let (sender, receiver) = notification_body_item_queue();
                 sender.do_send(body).await;
                 self.incoming_notification_senders
                     .insert(r#type.notification_id(), sender);
@@ -636,7 +637,7 @@ impl ServerNodeTask {
                         .on_notification(ServerModuleNotificationEventInput::new(
                             server,
                             server_source.into(),
-                            ServerModuleNotificationEventBody::new(receiver),
+                            receiver,
                         ))
                         .await;
                 });

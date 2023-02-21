@@ -5,17 +5,18 @@
 use clap::{Args, Parser, Subcommand};
 use futures::stream::StreamExt;
 use std::error::Error;
-use std::iter::empty;
 use tokio::io::stdin;
 use tokio_util::io::ReaderStream;
 use zlambda_core::client::{
     ClientModule, ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput, ClientTask,
 };
+use zlambda_core::common::future::pin_mut;
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
+use zlambda_scheduling::round_robin::RoundRobinSchedulingModule;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,7 +75,7 @@ enum ClientCommand {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct TestClientModule {}
 
 #[async_trait::async_trait]
@@ -86,7 +87,17 @@ impl ClientModule for TestClientModule {
         &self,
         event: ClientModuleInitializeEventInput,
     ) -> ClientModuleInitializeEventOutput {
-        /*let s = async_stream::stream! {
+        /*use zlambda_core::common::to_allocvec;
+            use zlambda_scheduling::round_robin::RoundRobinNotificationHeader;
+            use zlambda_core::common::utility::Bytes;
+
+            let a = to_allocvec(&RoundRobinNotificationHeader::new(ModuleId::from(1usize))).unwrap();
+
+            let bytes = Bytes::from(a);
+
+        let s = async_stream::stream! {
+            yield bytes;
+
             while let Some(bytes) = ReaderStream::new(stdin()).next().await {
                 yield bytes.unwrap();
             }
@@ -98,37 +109,27 @@ impl ClientModule for TestClientModule {
     }
 }
 
-impl TestClientModule {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
-pub struct TestServerModule {}
+#[derive(Default, Debug)]
+pub struct PrintServerModule {}
 
 #[async_trait::async_trait]
-impl Module for TestServerModule {}
+impl Module for PrintServerModule {}
 
 #[async_trait::async_trait]
-impl ServerModule for TestServerModule {
+impl ServerModule for PrintServerModule {
     async fn on_notification(
         &self,
         mut input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        /*println!("{:?}", input.source());
-
-        let mut stream = Box::pin(input.body_mut().stream());
-
-        while let Some(bytes) = stream.next().await {
+        while let Some(bytes) = input.notification_body_item_queue_receiver_mut().next().await {
             println!("{:?}", bytes);
-        }*/
+        }
     }
 }
 
-impl TestServerModule {
+impl PrintServerModule {
     pub fn new() -> Self {
         Self {}
     }
@@ -152,7 +153,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             ServerBuilder::default()
-                .add_module(TestServerModule::new())
+                .add_module(RoundRobinSchedulingModule::default())
+                .add_module(PrintServerModule::default())
                 .build(
                     listener_address,
                     match command {
@@ -171,7 +173,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let client_task = ClientTask::new(
                 address,
                 vec![Box::<dyn ClientModule>::from(Box::new(
-                    TestClientModule::new(),
+                    TestClientModule::default(),
                 ))]
                 .into_iter(),
             )
