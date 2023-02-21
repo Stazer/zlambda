@@ -8,16 +8,15 @@ use std::error::Error;
 use zlambda_core::client::{
     ClientModule, ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput, ClientTask,
 };
+use zlambda_core::common::future::stream::{empty, iter};
 use zlambda_core::common::module::{Module, ModuleId};
+use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
-use zlambda_scheduling::round_robin::RoundRobinSchedulingModule;
-use zlambda_core::common::notification::{NotificationBodyItemStreamExt};
 use zlambda_scheduling::round_robin::RoundRobinNotificationHeader;
-use zlambda_core::common::future::stream::{iter, empty};
-
+use zlambda_scheduling::round_robin::RoundRobinSchedulingModule;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -91,9 +90,9 @@ impl ClientModule for TestClientModule {
         let mut iter = iter([]);
 
         let mut stream = iter.writer();
-        stream.serialize(&RoundRobinNotificationHeader::new(
-            1usize,
-        )).unwrap();
+        stream
+            .serialize(&RoundRobinNotificationHeader::new(1usize))
+            .unwrap();
 
         event.client_handle().server().notify(0, stream).await;
     }

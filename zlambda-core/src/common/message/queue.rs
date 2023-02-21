@@ -1,4 +1,4 @@
-use crate::common::future::{Sink, SinkExt, Stream};
+use crate::common::future::Stream;
 use crate::common::message::{
     synchronizable_message_output_channel, synchronous_message_output_channel, AsynchronousMessage,
     DoReceive, DoSend, SynchronizableMessage, SynchronousMessage,
@@ -7,7 +7,6 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc;
-use tokio_util::sync::PollSender;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

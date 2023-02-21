@@ -176,9 +176,7 @@ impl<'a, T> NotificationBodyStreamWriter<'a, T>
 where
     T: Stream<Item = NotificationBodyItem> + Unpin,
 {
-    pub(crate) fn new(
-        stream: &'a mut T,
-    ) -> Self {
+    pub(crate) fn new(stream: &'a mut T) -> Self {
         Self {
             stream,
             buffer: BytesMut::default(),

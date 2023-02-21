@@ -1,12 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use zlambda_core::common::future::StreamExt;
 use zlambda_core::common::module::{Module, ModuleId};
-use zlambda_core::common::notification::{
-    NotificationBodyItemSinkExt, NotificationBodyItemStreamExt,
-};
+use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::server::{
-    ServerId, ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
+    ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
