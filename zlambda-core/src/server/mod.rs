@@ -33,8 +33,8 @@ use crate::common::utility::Bytes;
 use futures::{Stream, StreamExt};
 use std::fmt::Debug;
 use std::future::pending;
-use std::sync::Arc;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -179,6 +179,12 @@ impl Server {
         let server_source =
             ServerModuleNotificationEventInputServerSource::new(self.server_id().await);
 
+        spawn(async move {
+            while let Some(body) = body.next().await {
+                sender.do_send(body).await;
+            }
+        });
+
         module
             .on_notification(ServerModuleNotificationEventInput::new(
                 Server::new(self.server_message_sender.clone()),
@@ -186,12 +192,6 @@ impl Server {
                 receiver,
             ))
             .await;
-
-        spawn(async move {
-            while let Some(body) = body.next().await {
-                sender.do_send(body).await;
-            }
-        });
     }
 
     pub async fn commit(&self, data: Bytes) {
@@ -265,8 +265,12 @@ impl<'a> ServerServers<'a> {
     }
 
     pub async fn socket_addresses(&self) -> Vec<Option<SocketAddr>> {
-        let output = self.server().server_message_sender().do_send_synchronous(ServerServerSocketAddressesGetMessageInput::new()).await;
-        let (socket_addresses, ) = output.into();
+        let output = self
+            .server()
+            .server_message_sender()
+            .do_send_synchronous(ServerServerSocketAddressesGetMessageInput::new())
+            .await;
+        let (socket_addresses,) = output.into();
 
         socket_addresses
     }

@@ -3,20 +3,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use clap::{Args, Parser, Subcommand};
-use futures::stream::StreamExt;
 use std::error::Error;
-use zlambda_core::client::{
-    ClientModule, ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput, ClientTask,
-};
-use zlambda_core::common::future::stream::{empty, iter};
+use zlambda_core::client::ClientTask;
+use zlambda_core::common::fs::read;
+use zlambda_core::common::future::stream::{empty, StreamExt};
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
+use zlambda_core::common::utility::Bytes;
 use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
-use zlambda_scheduling::round_robin::RoundRobinNotificationHeader;
-use zlambda_scheduling::round_robin::RoundRobinSchedulingModule;
+use zlambda_scheduling::round_robin::LocalRoundRobinScheduler;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -70,32 +68,10 @@ enum ServerCommand {
 
 #[derive(Debug, Subcommand)]
 enum ClientCommand {
-    Notify { module_id: ModuleId },
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Default, Debug)]
-pub struct TestClientModule {}
-
-#[async_trait::async_trait]
-impl Module for TestClientModule {}
-
-#[async_trait::async_trait]
-impl ClientModule for TestClientModule {
-    async fn on_initialize(
-        &self,
-        event: ClientModuleInitializeEventInput,
-    ) -> ClientModuleInitializeEventOutput {
-        let mut iter = iter([]);
-
-        let mut stream = iter.writer();
-        stream
-            .serialize(&RoundRobinNotificationHeader::new(1usize))
-            .unwrap();
-
-        event.client_handle().server().notify(0, stream).await;
-    }
+    Notify {
+        module_id: ModuleId,
+        bodies: Vec<String>,
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -146,7 +122,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             ServerBuilder::default()
-                .add_module(RoundRobinSchedulingModule::default())
+                .add_module(LocalRoundRobinScheduler::default())
                 .add_module(PrintServerModule::default())
                 .build(
                     listener_address,
@@ -163,24 +139,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .await;
         }
         MainCommand::Client { address, command } => {
-            let client_task = ClientTask::new(
-                address,
-                vec![Box::<dyn ClientModule>::from(Box::new(
-                    TestClientModule::default(),
-                ))]
-                .into_iter(),
-            )
-            .await?;
+            let client_task = ClientTask::new(address, vec![].into_iter()).await?;
 
-            /*match command {
-                /*ClientCommand::Notify { module_id } => {
+            // TODO
+
+            match command {
+                ClientCommand::Notify { module_id, bodies } => {
+                    let mut serializer = empty().serializer();
+
+                    for body in bodies {
+                        serializer.serialize_json(Bytes::from(read(body).await?))?;
+                    }
+
                     client_task
                         .handle()
                         .server()
-                        .notify(module_id, ReaderStream::new(stdin()).map(|x| x.unwrap()))
+                        .notify(module_id, serializer)
                         .await;
-                }*/
-            }*/
+                }
+            }
 
             client_task.run().await
         }

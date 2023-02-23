@@ -1,35 +1,16 @@
-use crate::common::future::{Sink, SinkExt, Stream, StreamExt};
+use crate::common::future::{Stream, StreamExt};
 use crate::common::message::MessageQueueReceiver;
 use crate::common::message::{message_queue, MessageQueueSender};
 use crate::common::utility::{Bytes, BytesMut};
 use postcard::{take_from_bytes, to_allocvec};
 use serde::de::DeserializeOwned;
-use serde::ser::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::from_slice;
+use std::error::Error;
+use std::fmt::Debug;
+use std::fmt::{self, Display, Formatter};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/*pub struct NotificationHeader<T> {
-    data: T,
-}
-
-impl<T> NotificationHeader<T> {
-    pub fn new(data: T) -> Self {
-        Self { data }
-    }
-
-    pub fn data(&self) -> &T {
-        &self.data
-    }
-
-    pub fn write(&self) -> Result<Bytes, NotificationError>
-    where
-        T: Serialize,
-    {
-        Ok(Bytes::from(to_allocvec(&self.data)?))
-    }
-}*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,8 +39,21 @@ pub fn notification_body_item_queue() -> (
 #[derive(Debug)]
 pub enum NotificationError {
     PostcardError(postcard::Error),
+    JsonError(serde_json::Error),
     UnexpectedEnd,
 }
+
+impl Display for NotificationError {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::PostcardError(error) => Display::fmt(error, formatter),
+            Self::JsonError(error) => Display::fmt(error, formatter),
+            Self::UnexpectedEnd => write!(formatter, "Unexpected end"),
+        }
+    }
+}
+
+impl Error for NotificationError {}
 
 impl From<postcard::Error> for NotificationError {
     fn from(error: postcard::Error) -> Self {
@@ -70,21 +64,27 @@ impl From<postcard::Error> for NotificationError {
     }
 }
 
+impl From<serde_json::Error> for NotificationError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::JsonError(error)
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub trait NotificationBodyItemStreamExt: Stream<Item = NotificationBodyItem> {
-    fn reader(&mut self) -> NotificationBodyStreamReader<'_, Self>
+    fn deserializer(self) -> NotificationBodyStreamDeserializer<Self>
     where
         Self: Sized + Unpin,
     {
-        NotificationBodyStreamReader::new(self)
+        NotificationBodyStreamDeserializer::new(self)
     }
 
-    fn writer(&mut self) -> NotificationBodyStreamWriter<'_, Self>
+    fn serializer(self) -> NotificationBodyStreamSerializer<Self>
     where
         Self: Sized + Unpin,
     {
-        NotificationBodyStreamWriter::new(self)
+        NotificationBodyStreamSerializer::new(self)
     }
 }
 
@@ -93,15 +93,15 @@ impl<T> NotificationBodyItemStreamExt for T where T: Stream<Item = NotificationB
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct NotificationBodyStreamReader<'a, T>
+pub struct NotificationBodyStreamDeserializer<T>
 where
     T: Stream<Item = NotificationBodyItem> + Unpin,
 {
-    stream: &'a mut T,
+    stream: T,
     buffer: BytesMut,
 }
 
-impl<'a, T> Stream for NotificationBodyStreamReader<'a, T>
+impl<T> Stream for NotificationBodyStreamDeserializer<T>
 where
     T: Stream<Item = NotificationBodyItem> + Unpin,
 {
@@ -122,11 +122,11 @@ where
     }
 }
 
-impl<'a, T> NotificationBodyStreamReader<'a, T>
+impl<T> NotificationBodyStreamDeserializer<T>
 where
     T: Stream<Item = NotificationBodyItem> + Unpin,
 {
-    pub fn new(stream: &'a mut T) -> Self {
+    pub fn new(stream: T) -> Self {
         Self {
             stream,
             buffer: BytesMut::default(),
@@ -145,16 +145,22 @@ where
 
             self.buffer.extend_from_slice(&bytes);
 
-            let (notification, read) =
-                match take_from_bytes::<S>(&self.buffer).map_err(NotificationError::from) {
-                    Ok((notification, remaining)) => {
-                        (notification, self.buffer.len() - remaining.len())
-                    }
-                    Err(NotificationError::UnexpectedEnd) => continue,
-                    Err(error) => return Err(error),
-                };
+            let (bytes, read) = match take_from_bytes::<NotificationBodyItemType>(&self.buffer)
+                .map_err(NotificationError::from)
+            {
+                Ok((bytes, remaining)) => (bytes, self.buffer.len() - remaining.len()),
+                Err(NotificationError::UnexpectedEnd) => continue,
+                Err(error) => return Err(error),
+            };
 
             self.buffer = self.buffer.split_off(read);
+
+            // TODO
+
+            let notification = match bytes {
+                NotificationBodyItemType::Binary(bytes) => take_from_bytes::<S>(&bytes)?.0,
+                NotificationBodyItemType::Json(bytes) => from_slice::<S>(&bytes)?,
+            };
 
             return Ok(notification);
         }
@@ -164,36 +170,15 @@ where
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct NotificationBodyStreamWriter<'a, T>
+pub struct NotificationBodyStreamSerializer<T>
 where
     T: Stream<Item = NotificationBodyItem> + Unpin,
 {
-    stream: &'a mut T,
+    stream: T,
     buffer: BytesMut,
 }
 
-impl<'a, T> NotificationBodyStreamWriter<'a, T>
-where
-    T: Stream<Item = NotificationBodyItem> + Unpin,
-{
-    pub(crate) fn new(stream: &'a mut T) -> Self {
-        Self {
-            stream,
-            buffer: BytesMut::default(),
-        }
-    }
-
-    pub fn serialize<S>(&mut self, value: &S) -> Result<(), NotificationError>
-    where
-        S: Serialize,
-    {
-        self.buffer.extend_from_slice(&to_allocvec(&value)?);
-
-        Ok(())
-    }
-}
-
-impl<'a, T> Stream for NotificationBodyStreamWriter<'a, T>
+impl<T> Stream for NotificationBodyStreamSerializer<T>
 where
     T: Stream<Item = NotificationBodyItem> + Unpin,
 {
@@ -214,43 +199,45 @@ where
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-pub trait NotificationBodyItemSinkExt: Sink<NotificationBodyItem> {
-    fn writer(&mut self) -> NotificationBodySinkWriter<'_, Self>
-    where
-        Self: Sized + Unpin,
-    {
-        NotificationBodySinkWriter::new(self)
-    }
-}
-
-impl<T> NotificationBodyItemSinkExt for T where T: Sink<NotificationBodyItem> {}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct NotificationBodySinkWriter<'a, T>
+impl<T> NotificationBodyStreamSerializer<T>
 where
-    T: Sink<NotificationBodyItem> + Unpin,
+    T: Stream<Item = NotificationBodyItem> + Unpin,
 {
-    sink: &'a mut T,
-}
-
-impl<'a, T> NotificationBodySinkWriter<'a, T>
-where
-    T: Sink<NotificationBodyItem> + Unpin,
-{
-    pub(crate) fn new(sink: &'a mut T) -> Self {
-        Self { sink }
+    pub(crate) fn new(stream: T) -> Self {
+        Self {
+            stream,
+            buffer: BytesMut::default(),
+        }
     }
 
-    pub async fn serialize<S>(&mut self, value: &S) -> Result<(), NotificationError>
+    pub fn serialize<S>(&mut self, value: &S) -> Result<(), NotificationError>
     where
         S: Serialize,
     {
-        self.sink.send(Bytes::from(to_allocvec(&value)?)).await;
+        self.serialize_binary(Bytes::from(to_allocvec(value)?));
 
         Ok(())
     }
+
+    pub fn serialize_binary(&mut self, value: Bytes) -> Result<(), NotificationError> {
+        self.buffer
+            .extend_from_slice(&to_allocvec(&NotificationBodyItemType::Binary(value))?);
+
+        Ok(())
+    }
+
+    pub fn serialize_json(&mut self, value: Bytes) -> Result<(), NotificationError> {
+        self.buffer
+            .extend_from_slice(&to_allocvec(&NotificationBodyItemType::Json(value))?);
+
+        Ok(())
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize, Serialize)]
+enum NotificationBodyItemType {
+    Json(Bytes),
+    Binary(Bytes),
 }

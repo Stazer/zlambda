@@ -446,9 +446,7 @@ impl From<ServerServerSocketAddressesGetMessageOutput> for (Vec<Option<SocketAdd
 }
 
 impl ServerServerSocketAddressesGetMessageOutput {
-    pub fn new(
-        server_socket_addresses: Vec<Option<SocketAddr>>,
-    ) -> Self {
+    pub fn new(server_socket_addresses: Vec<Option<SocketAddr>>) -> Self {
         Self {
             server_socket_addresses,
         }

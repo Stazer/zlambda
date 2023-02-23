@@ -505,20 +505,19 @@ impl ServerCommitCommitMessageInput {
     }
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct ServerServerSocketAddressesGetMessageInput {}
 
 impl From<ServerServerSocketAddressesGetMessageInput> for () {
-    fn from(input: ServerServerSocketAddressesGetMessageInput) -> Self {
+    fn from(_input: ServerServerSocketAddressesGetMessageInput) -> Self {
         ()
     }
 }
 
 impl ServerServerSocketAddressesGetMessageInput {
     pub fn new() -> Self {
-        Self{}
+        Self {}
     }
 }
