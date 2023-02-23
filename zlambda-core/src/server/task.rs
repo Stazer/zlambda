@@ -33,6 +33,8 @@ use crate::server::{
     ServerServerNodeMessageSenderGetMessage, ServerServerNodeMessageSenderGetMessageOutput,
     ServerServerSocketAddressGetMessage, ServerServerSocketAddressGetMessageOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
+    ServerServerSocketAddressesGetMessage,
+    ServerServerSocketAddressesGetMessageOutput,
 };
 use async_recursion::async_recursion;
 use std::cmp::max;
@@ -415,6 +417,9 @@ impl ServerTask {
             ServerMessage::Commit(message) => self.on_server_commit_message(message).await,
             ServerMessage::CommitCommit(message) => {
                 self.on_server_commit_commit_message(message).await
+            }
+            ServerMessage::ServerSocketAddressesGet(message) => {
+                self.on_server_server_socket_addresses_get_message(message).await
             }
         }
     }
@@ -885,6 +890,14 @@ impl ServerTask {
         let (sender,) = input.into();
 
         sender.notify().await;
+    }
+
+    async fn on_server_server_socket_addresses_get_message(&mut self, message: ServerServerSocketAddressesGetMessage) {
+        let (_, sender) = message.into();
+
+        sender.do_send(ServerServerSocketAddressesGetMessageOutput::new(
+            self.server_socket_addresses.clone(),
+        )).await;
     }
 
     async fn replicate(&mut self, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {

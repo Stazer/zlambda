@@ -108,6 +108,13 @@ pub type ServerCommitCommitMessage = AsynchronousMessage<ServerCommitCommitMessa
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerServerSocketAddressesGetMessage = SynchronousMessage<
+    ServerServerSocketAddressesGetMessageInput,
+    ServerServerSocketAddressesGetMessageOutput,
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
@@ -130,6 +137,7 @@ pub enum ServerMessage {
     ServerNodeMessageSenderGet(ServerServerNodeMessageSenderGetMessage),
     Commit(ServerCommitMessage),
     CommitCommit(ServerCommitCommitMessage),
+    ServerSocketAddressesGet(ServerServerSocketAddressesGetMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -243,5 +251,11 @@ impl From<ServerCommitMessage> for ServerMessage {
 impl From<ServerCommitCommitMessage> for ServerMessage {
     fn from(message: ServerCommitCommitMessage) -> Self {
         Self::CommitCommit(message)
+    }
+}
+
+impl From<ServerServerSocketAddressesGetMessage> for ServerMessage {
+    fn from(message: ServerServerSocketAddressesGetMessage) -> Self {
+        Self::ServerSocketAddressesGet(message)
     }
 }

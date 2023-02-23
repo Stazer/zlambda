@@ -36,3 +36,53 @@ pub mod future {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub use postcard::*;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/*use message::MessageQueueReceiver;
+use std::fmt::Debug;
+use futures::future::BoxFuture;
+use futures::{FutureExt};
+
+pub enum ActorMessage<T> {
+    Handle {
+        function: Box<dyn FnOnce(&mut T) -> BoxFuture<'static, ()> + Sync>,
+    }
+}
+
+pub struct Actor<T> {
+    receiver: tokio::sync::mpsc::Receiver<ActorMessage<T>>,
+    inner: T,
+    running: bool,
+}
+
+impl<T> Actor<T> {
+    pub fn spawn(self) {
+        spawn(async move {
+            self.run().await
+        })
+    }
+
+    pub async fn run(&mut self) {
+        tokio::select!(
+            result = self.receiver.recv() => {
+                match result.unwrap() {
+                    ActorMessage::Handle { function } => {
+                        function(&mut self.inner).await
+                    }
+                }
+            }
+        )
+    }
+
+    pub async fn ok(sender: tokio::sync::mpsc::Sender<ActorMessage<T>>) {
+        sender.send(ActorMessage::Handle { function: Box::new(move |_| {
+            async move {
+                ()
+            }.boxed()
+        })});
+    }
+}*/

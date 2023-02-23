@@ -431,3 +431,30 @@ impl ServerServerNodeMessageSenderGetMessageOutput {
         &self.server_node_message_sender
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerServerSocketAddressesGetMessageOutput {
+    server_socket_addresses: Vec<Option<SocketAddr>>,
+}
+
+impl From<ServerServerSocketAddressesGetMessageOutput> for (Vec<Option<SocketAddr>>,) {
+    fn from(output: ServerServerSocketAddressesGetMessageOutput) -> Self {
+        (output.server_socket_addresses,)
+    }
+}
+
+impl ServerServerSocketAddressesGetMessageOutput {
+    pub fn new(
+        server_socket_addresses: Vec<Option<SocketAddr>>,
+    ) -> Self {
+        Self {
+            server_socket_addresses,
+        }
+    }
+
+    pub fn server_socket_addresses(&self) -> &Vec<Option<SocketAddr>> {
+        &self.server_socket_addresses
+    }
+}

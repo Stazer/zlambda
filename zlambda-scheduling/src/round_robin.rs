@@ -45,13 +45,18 @@ impl ServerModule for RoundRobinSchedulingModule {
         &self,
         mut input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let server_id = self.next_server_id.fetch_add(1, Ordering::Relaxed);
+        let server_id = self.next_server_id.load(Ordering::Relaxed);
 
         let mut reader = input.notification_body_item_queue_receiver_mut().reader();
         let header = reader
             .deserialize::<RoundRobinNotificationHeader>()
             .await
             .unwrap();
+
+        let socket_addresses = input.server().servers().socket_addresses().await;
+
+        for (socket_address_server_id, socket_address) in socket_addresses.iter().enumerate() {
+        }
 
         println!("{} {:?}", server_id, header);
     }

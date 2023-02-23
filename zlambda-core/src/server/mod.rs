@@ -34,6 +34,7 @@ use futures::{Stream, StreamExt};
 use std::fmt::Debug;
 use std::future::pending;
 use std::sync::Arc;
+use std::net::SocketAddr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -151,8 +152,13 @@ impl Server {
         ServerModules::new(self)
     }
 
-    pub fn nodes(&self) -> ServerNodes<'_> {
-        ServerNodes::new(self)
+    pub fn servers(&self) -> ServerServers<'_> {
+        ServerServers::new(self)
+    }
+
+    #[deprecated]
+    pub fn nodes(&self) -> ServerServers<'_> {
+        self.servers()
     }
 
     pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
@@ -245,11 +251,11 @@ impl<'a> ServerModules<'a> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
-pub struct ServerNodes<'a> {
+pub struct ServerServers<'a> {
     server: &'a Server,
 }
 
-impl<'a> ServerNodes<'a> {
+impl<'a> ServerServers<'a> {
     pub(crate) fn new(server: &'a Server) -> Self {
         Self { server }
     }
@@ -258,9 +264,16 @@ impl<'a> ServerNodes<'a> {
         self.server
     }
 
-    pub async fn get(&self, server_id: ServerId) -> Option<ServerNodesNode<'_>> {
+    pub async fn socket_addresses(&self) -> Vec<Option<SocketAddr>> {
+        let output = self.server().server_message_sender().do_send_synchronous(ServerServerSocketAddressesGetMessageInput::new()).await;
+        let (socket_addresses, ) = output.into();
+
+        socket_addresses
+    }
+
+    pub async fn get(&self, server_id: ServerId) -> Option<ServerServersServer<'_>> {
         if self.server().server_id().await == server_id {
-            Some(ServerNodesNode::new(self.server(), None))
+            Some(ServerServersServer::new(self.server(), None))
         } else {
             let output = self
                 .server
@@ -271,7 +284,7 @@ impl<'a> ServerNodes<'a> {
             let (server_node_message_sender,) = output.into();
 
             server_node_message_sender.map(|server_node_message_sender| {
-                ServerNodesNode::new(self.server(), Some(server_node_message_sender))
+                ServerServersServer::new(self.server(), Some(server_node_message_sender))
             })
         }
     }
@@ -280,12 +293,12 @@ impl<'a> ServerNodes<'a> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
-pub struct ServerNodesNode<'a> {
+pub struct ServerServersServer<'a> {
     server: &'a Server,
     server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>,
 }
 
-impl<'a> ServerNodesNode<'a> {
+impl<'a> ServerServersServer<'a> {
     pub(crate) fn new(
         server: &'a Server,
         server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>,

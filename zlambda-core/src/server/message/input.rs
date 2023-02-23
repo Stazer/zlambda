@@ -504,3 +504,21 @@ impl ServerCommitCommitMessageInput {
         &self.output_sender
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerServerSocketAddressesGetMessageInput {}
+
+impl From<ServerServerSocketAddressesGetMessageInput> for () {
+    fn from(input: ServerServerSocketAddressesGetMessageInput) -> Self {
+        ()
+    }
+}
+
+impl ServerServerSocketAddressesGetMessageInput {
+    pub fn new() -> Self {
+        Self{}
+    }
+}
