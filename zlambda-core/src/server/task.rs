@@ -192,7 +192,7 @@ impl ServerTask {
                     leader_server_id,
                     r#type: ServerFollowerType::new(
                         leader_server_id,
-                        FollowingLog::new(term, Vec::default(), 0),
+                        FollowingLog::new(term, Vec::default(), LogEntryId::from(0)),
                     )
                     .into(),
                     tcp_listener,
@@ -295,7 +295,7 @@ impl ServerTask {
                     leader_server_id,
                     r#type: ServerFollowerType::new(
                         leader_server_id,
-                        FollowingLog::new(term, Vec::default(), 0),
+                        FollowingLog::new(term, Vec::default(), LogEntryId::from(0)),
                     )
                     .into(),
                     tcp_listener,
@@ -648,7 +648,7 @@ impl ServerTask {
         let log_entries = input
             .log_entry_ids()
             .iter()
-            .filter_map(|log_entry_id| leader.log().entries().get(*log_entry_id))
+            .filter_map(|log_entry_id| leader.log().entries().get(usize::from(*log_entry_id)))
             .chain(
                 leader
                     .log()
@@ -700,14 +700,14 @@ impl ServerTask {
             match last_committed_log_entry_id {
                 Some(last_committed_log_entry_id) => {
                     let from_last_committed_log_entry_id =
-                        follower.log().last_committed_log_entry_id();
+                        follower.log().last_committed_log_entry_id().map(usize::from);
 
                     let missing_log_entry_ids = follower
                         .log_mut()
                         .commit(last_committed_log_entry_id, log_current_term);
 
                     let to_last_committed_log_entry_id =
-                        follower.log().last_committed_log_entry_id();
+                        follower.log().last_committed_log_entry_id().map(usize::from);
 
                     let committed_log_entry_id_range = match (
                         from_last_committed_log_entry_id,
@@ -736,7 +736,7 @@ impl ServerTask {
         }
 
         if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
-            self.on_commit_log_entries(committed_log_entry_id_range)
+            self.on_commit_log_entries(committed_log_entry_id_range.map(LogEntryId::from))
                 .await;
         }
     }
@@ -920,7 +920,7 @@ impl ServerTask {
 
                 let log_entries = log_entry_ids
                     .iter()
-                    .filter_map(|log_entry_id| leader.log().entries().get(*log_entry_id))
+                    .filter_map(|log_entry_id| leader.log().entries().get(usize::from(*log_entry_id)))
                     .cloned()
                     .collect::<Vec<_>>();
 
@@ -952,7 +952,7 @@ impl ServerTask {
             }
         };
 
-        let from_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
+        let from_last_committed_log_entry_id = leader.log().last_committed_log_entry_id().map(usize::from);
 
         for log_entry_id in log_entry_ids {
             if let Err(error) = leader.log_mut().acknowledge(*log_entry_id, server_id) {
@@ -972,7 +972,7 @@ impl ServerTask {
             );
         }
 
-        let to_last_committed_log_entry_id = leader.log().last_committed_log_entry_id();
+        let to_last_committed_log_entry_id = leader.log().last_committed_log_entry_id().map(usize::from);
 
         let committed_log_entry_id_range = match (
             from_last_committed_log_entry_id,
@@ -987,7 +987,7 @@ impl ServerTask {
             let last_committed_log_entry_id = leader.log_mut().last_committed_log_entry_id();
             let current_term = leader.log_mut().current_term();
 
-            self.on_commit_log_entries(committed_log_entry_id_range)
+            self.on_commit_log_entries(committed_log_entry_id_range.map(LogEntryId::from))
                 .await;
 
             for server_node_message_sender in self.server_node_message_senders.iter().flatten() {
@@ -995,7 +995,7 @@ impl ServerTask {
                     .do_send(ServerNodeReplicationMessage::new(
                         ServerNodeReplicationMessageInput::new(
                             Vec::default(),
-                            last_committed_log_entry_id,
+                            last_committed_log_entry_id.map(LogEntryId::from),
                             current_term,
                         ),
                     ))
@@ -1027,8 +1027,8 @@ impl ServerTask {
         debug!("Committed log entry {}", log_entry_id,);
 
         let log_entry = match &self.r#type {
-            ServerType::Leader(leader) => leader.log().entries().get(log_entry_id),
-            ServerType::Follower(follower) => match follower.log().entries().get(log_entry_id) {
+            ServerType::Leader(leader) => leader.log().entries().get(usize::from(log_entry_id)),
+            ServerType::Follower(follower) => match follower.log().entries().get(usize::from(log_entry_id)) {
                 None | Some(None) => None,
                 Some(Some(log_entry)) => Some(log_entry),
             },

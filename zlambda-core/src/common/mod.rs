@@ -48,47 +48,126 @@ pub mod fs {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/*use message::MessageQueueReceiver;
-use std::fmt::Debug;
-use futures::future::BoxFuture;
-use futures::{FutureExt};
-
-pub enum ActorMessage<T> {
-    Handle {
-        function: Box<dyn FnOnce(&mut T) -> BoxFuture<'static, ()> + Sync>,
-    }
+pub mod bytes {
+    pub use bytes::*;
 }
 
-pub struct Actor<T> {
-    receiver: tokio::sync::mpsc::Receiver<ActorMessage<T>>,
-    inner: T,
-    running: bool,
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-impl<T> Actor<T> {
-    pub fn spawn(self) {
-        spawn(async move {
-            self.run().await
-        })
+pub mod experimental {
+    use crate::common::runtime::{select, spawn};
+    use futures::future::BoxFuture;
+    use futures::FutureExt;
+    use std::future::Future;
+    use tokio::sync::{mpsc, oneshot};
+
+    enum ActorMessage<T>
+    where
+        T: Send + Sync + 'static,
+    {
+        Handle {
+            function: Box<dyn FnOnce(&mut T) -> BoxFuture<'static, ()> + Send + Sync>,
+        },
     }
 
-    pub async fn run(&mut self) {
-        tokio::select!(
-            result = self.receiver.recv() => {
-                match result.unwrap() {
-                    ActorMessage::Handle { function } => {
-                        function(&mut self.inner).await
+    #[derive(Clone)]
+    pub struct ActorAddress<T>
+    where
+        T: Send + Sync + 'static,
+    {
+        sender: mpsc::Sender<ActorMessage<T>>,
+    }
+
+    impl<T> ActorAddress<T>
+    where
+        T: Send + Sync + 'static,
+    {
+        fn new(sender: mpsc::Sender<ActorMessage<T>>) -> Self {
+            Self { sender }
+        }
+
+        /*pub async fn handle<'a, H, R, F>(&self, function: H)
+        where
+            H: FnOnce(&mut T) -> F + Send + Sync + 'static,
+            F: Future<Output = R> + Send + Sync,
+            R: Sync + Send + 'static,
+        {
+            let (sender, receiver) = oneshot::channel::<R>();
+
+            self.sender.send(ActorMessage::Handle { function: Box::new(move |data| {
+                async move {
+                    unsafe {
+                        function(data).await;
+                    }
+                }.boxed()
+            })});
+        }*/
+    }
+
+    pub struct ActorTask<T>
+    where
+        T: Send + Sync + 'static,
+    {
+        sender: mpsc::Sender<ActorMessage<T>>,
+        receiver: mpsc::Receiver<ActorMessage<T>>,
+        data: T,
+        running: bool,
+    }
+
+    impl<T> Default for ActorTask<T>
+    where
+        T: Default + Send + Sync + 'static,
+    {
+        fn default() -> Self {
+            Self::new(T::default())
+        }
+    }
+
+    impl<T> ActorTask<T>
+    where
+        T: Send + Sync + 'static,
+    {
+        pub fn new(data: T) -> Self {
+            let (sender, receiver) = mpsc::channel(16);
+
+            Self {
+                sender,
+                receiver,
+                data,
+                running: true,
+            }
+        }
+
+        pub fn address(&self) -> ActorAddress<T> {
+            ActorAddress::new(self.sender.clone())
+        }
+
+        pub fn spawn(mut self) {
+            spawn(async move { self.run().await });
+        }
+
+        pub async fn run(&mut self) {
+            while self.running {
+                self.select().await
+            }
+        }
+
+        async fn select(&mut self) {
+            select!(
+                result = self.receiver.recv() => {
+                    match result.unwrap() {
+                        ActorMessage::Handle { function } => {
+                            function(&mut self.data).await
+                        }
                     }
                 }
-            }
-        )
-    }
+            )
+        }
 
-    pub async fn ok(sender: tokio::sync::mpsc::Sender<ActorMessage<T>>) {
-        sender.send(ActorMessage::Handle { function: Box::new(move |_| {
-            async move {
-                ()
-            }.boxed()
-        })});
+        async fn ok(sender: tokio::sync::mpsc::Sender<ActorMessage<T>>) {
+            sender.send(ActorMessage::Handle {
+                function: Box::new(move |_| async move { () }.boxed()),
+            }).await;
+        }
     }
-}*/
+}

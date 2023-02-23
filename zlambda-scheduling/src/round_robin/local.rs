@@ -37,7 +37,7 @@ pub struct LocalRoundRobinScheduler {
 }
 
 #[async_trait::async_trait]
-impl Module for LocalRoundRobinScheduler{}
+impl Module for LocalRoundRobinScheduler {}
 
 #[async_trait::async_trait]
 impl ServerModule for LocalRoundRobinScheduler {
