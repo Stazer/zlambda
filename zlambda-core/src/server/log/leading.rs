@@ -59,7 +59,9 @@ impl LeadingLog {
     ) -> impl Iterator<Item = &LogEntry> {
         self.entries
             .iter()
-            .skip(usize::from(self.last_committed_log_entry_id().unwrap_or_default()))
+            .skip(usize::from(
+                self.last_committed_log_entry_id().unwrap_or_default(),
+            ))
             .filter(move |log_entry| {
                 self.remaining_acknowledgeable_server_ids(log_entry.id())
                     .map(|remaining_acknowledgeable_server_ids| {
@@ -79,7 +81,9 @@ impl LeadingLog {
     pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
         match usize::from(self.next_committing_log_entry_id) {
             0 => None,
-            next_committing_log_entry_id => Some(LogEntryId::from(next_committing_log_entry_id - 1)),
+            next_committing_log_entry_id => {
+                Some(LogEntryId::from(next_committing_log_entry_id - 1))
+            }
         }
     }
 
@@ -103,7 +107,8 @@ impl LeadingLog {
     }
 
     pub fn acknowledge(&mut self, id: LogEntryId, server_id: ServerId) -> Result<(), LogError> {
-        let acknowledgeable_server_ids = match self.acknowledgeable_server_ids.get(usize::from(id)) {
+        let acknowledgeable_server_ids = match self.acknowledgeable_server_ids.get(usize::from(id))
+        {
             Some(server_ids) => server_ids,
             None => return Err(LogError::NotExisting),
         };
@@ -129,7 +134,8 @@ impl LeadingLog {
             if self.is_acknowledged(current_log_entry_id)
                 && self.next_committing_log_entry_id == current_log_entry_id
             {
-                self.next_committing_log_entry_id = LogEntryId::from(usize::from(self.next_committing_log_entry_id) + 1);
+                self.next_committing_log_entry_id =
+                    LogEntryId::from(usize::from(self.next_committing_log_entry_id) + 1);
                 current_log_entry_id = LogEntryId::from(usize::from(current_log_entry_id) + 1);
             } else {
                 break;
@@ -151,14 +157,20 @@ impl LeadingLog {
             log_entries_data
                 .into_iter()
                 .enumerate()
-                .map(|(index, data)| LogEntry::new(LogEntryId::from(start + index), self.current_term, data)),
+                .map(|(index, data)| {
+                    LogEntry::new(LogEntryId::from(start + index), self.current_term, data)
+                }),
         );
 
-        let log_entry_ids = (start..self.entries.len()).map(LogEntryId::from).collect::<Vec<_>>();
+        let log_entry_ids = (start..self.entries.len())
+            .map(LogEntryId::from)
+            .collect::<Vec<_>>();
 
         for log_entry_id in &log_entry_ids {
-            self.acknowledgeable_server_ids
-                .insert(usize::from(*log_entry_id), acknowledgeable_server_ids.clone());
+            self.acknowledgeable_server_ids.insert(
+                usize::from(*log_entry_id),
+                acknowledgeable_server_ids.clone(),
+            );
             self.acknowledged_server_ids
                 .insert(usize::from(*log_entry_id), HashSet::default());
         }

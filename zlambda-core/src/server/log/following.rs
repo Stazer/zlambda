@@ -37,7 +37,9 @@ impl FollowingLog {
     pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
         match usize::from(self.next_committing_log_entry_id) {
             0 => None,
-            next_committing_log_entry_id => Some(LogEntryId::from(next_committing_log_entry_id - 1)),
+            next_committing_log_entry_id => {
+                Some(LogEntryId::from(next_committing_log_entry_id - 1))
+            }
         }
     }
 
@@ -54,7 +56,8 @@ impl FollowingLog {
     pub fn commit(&mut self, log_entry_id: LogEntryId, term: LogTerm) -> Vec<LogEntryId> {
         let mut missing_log_entry_ids = Vec::default();
 
-        let range = (usize::from(self.next_committing_log_entry_id)..usize::from(log_entry_id) + 1).map(LogEntryId::from);
+        let range = (usize::from(self.next_committing_log_entry_id)..usize::from(log_entry_id) + 1)
+            .map(LogEntryId::from);
 
         for log_entry_id in range {
             match self.entries.get_mut(usize::from(log_entry_id)) {
@@ -66,7 +69,8 @@ impl FollowingLog {
                 }
                 Some(Some(_)) => {
                     if self.next_committing_log_entry_id == log_entry_id {
-                        self.next_committing_log_entry_id = LogEntryId::from(usize::from(self.next_committing_log_entry_id) + 1);
+                        self.next_committing_log_entry_id =
+                            LogEntryId::from(usize::from(self.next_committing_log_entry_id) + 1);
                     }
                 }
             }

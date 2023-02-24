@@ -1,10 +1,12 @@
 pub mod message;
 pub mod module;
 pub mod notification;
+mod tagged;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub mod utility {
+    pub use super::tagged::*;
     pub use bytes::{Bytes, BytesMut};
     pub use serde::*;
 }
@@ -165,9 +167,11 @@ pub mod experimental {
         }
 
         async fn ok(sender: tokio::sync::mpsc::Sender<ActorMessage<T>>) {
-            sender.send(ActorMessage::Handle {
-                function: Box::new(move |_| async move { () }.boxed()),
-            }).await;
+            sender
+                .send(ActorMessage::Handle {
+                    function: Box::new(move |_| async move { () }.boxed()),
+                })
+                .await;
         }
     }
 }
