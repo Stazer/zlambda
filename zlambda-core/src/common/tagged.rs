@@ -3,6 +3,8 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::str::FromStr;
+use serde::ser::{Serialize, Serializer};
+use serde::de::{Deserialize, Deserializer};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,6 +39,18 @@ where
     }
 }
 
+impl<'de, T1, T2> Deserialize<'de> for TaggedType<T1, T2>
+where
+    T1: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        Ok(Self::new(T1::deserialize(deserializer)?))
+    }
+}
+
 impl<T1, T2> Display for TaggedType<T1, T2>
 where
     T1: Display,
@@ -49,16 +63,17 @@ where
 impl<T1, T2> Eq for TaggedType<T1, T2> where T1: Eq {}
 
 impl<T1, T2> From<T1> for TaggedType<T1, T2> {
-    fn from(value: T1) -> Self {
-        Self::new(value)
+    fn from(inner: T1) -> Self {
+        Self::new(inner)
     }
 }
 
-/*impl<T1, T2> From<TaggedType<T1, T2>> for T1 {
-    fn from(r#type: TaggedType<T1, T2>) -> Self {
+impl<T2> From<TaggedType<usize, T2>> for usize
+{
+    fn from(r#type: TaggedType<usize, T2>) -> Self {
         r#type.0
     }
-}*/
+}
 
 impl<T1, T2> FromStr for TaggedType<T1, T2>
 where
@@ -147,8 +162,20 @@ where
     }
 }
 
+impl<T1, T2> Serialize for TaggedType<T1, T2>
+where
+    T1: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        T1::serialize(&self.0, serializer)
+    }
+}
+
 impl<T1, T2> TaggedType<T1, T2> {
-    pub fn new(value: T1) -> Self {
-        Self(value, PhantomData::<T2>)
+    fn new(inner: T1) -> Self {
+        Self(inner, PhantomData::<T2>)
     }
 }

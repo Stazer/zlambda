@@ -9,6 +9,10 @@ pub mod utility {
     pub use super::tagged::*;
     pub use bytes::{Bytes, BytesMut};
     pub use serde::*;
+
+    pub struct ArcAny {
+
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
