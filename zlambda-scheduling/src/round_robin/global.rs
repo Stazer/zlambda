@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::common::sync::Mutex;
+use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::server::{
     ServerId, ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
@@ -32,6 +33,27 @@ impl GlobalRoundRobinSchedulerNotificationHeader {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GlobalRoundRobinLogEntryData {
+    issuer_server_id: ServerId,
+}
+
+impl GlobalRoundRobinLogEntryData {
+    pub fn new(
+        issuer_server_id: ServerId,
+    ) -> Self {
+        Self {
+            issuer_server_id,
+        }
+    }
+
+    pub fn issuer_server_id(&self) -> ServerId {
+        self.issuer_server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Default, Debug)]
 pub struct GlobalRoundRobinScheduler {
     counter: Mutex<ServerId>,
@@ -48,48 +70,23 @@ impl ServerModule for GlobalRoundRobinScheduler {
     ) -> ServerModuleNotificationEventOutput {
         let (server, _source, notification_body_item_queue_receiver) = input.into();
 
-        /*let next_server_id = {
-            let socket_addresses = server.servers().socket_addresses().await;
-
-            match socket_addresses
-                .iter()
-                .enumerate()
-                .map(|(server_id, _)| ServerId::from(server_id))
-                .filter(|server_id| server_id > &next_server_id)
-                .next()
-            {
-                Some(server_id) => {
-                    *next_server_id = server_id;
-                }
-                None => {
-                    if let Some(server_id) = socket_addresses
-                        .iter()
-                        .enumerate()
-                        .map(|(server_id, _)| ServerId::from(server_id))
-                        .next()
-                    {
-                        *next_server_id = server_id;
-                    }
-                }
-            }
-
-            *next_server_id
-        };*/
-
-        /*let mut deserializer = notification_body_item_queue_receiver.deserializer();
-        let header = deserializer
-            .deserialize::<GlobalRoundRobinSchedulerNotificationHeader>()
-            .await
-            .unwrap();
-
-        if let Some(server) = server.servers().get(next_server_id).await {
-            server.notify(header.module_id(), deserializer).await;
-        }*/
+        server.commit(serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(
+            server.server_id().await,
+        )).expect("").into()).await;
     }
 
     async fn on_commit(
         &self,
         input: ServerModuleCommitEventInput,
     ) -> ServerModuleCommitEventOutput {
+        let counter = {
+            let mut counter = self.counter.lock().await;
+            *counter = ServerId::from(usize::from(*counter) + 1);
+
+            *counter
+        };
+
+        println!("{:?}", counter);
+        println!("{:?}", input);
     }
 }

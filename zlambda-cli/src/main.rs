@@ -14,7 +14,10 @@ use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
-use zlambda_scheduling::round_robin::LocalRoundRobinScheduler;
+use zlambda_scheduling::round_robin::{
+    LocalRoundRobinScheduler,
+    GlobalRoundRobinScheduler,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -124,6 +127,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ServerBuilder::default()
                 .add_module(LocalRoundRobinScheduler::default())
                 .add_module(PrintServerModule::default())
+                .add_module(GlobalRoundRobinScheduler::default())
                 .build(
                     listener_address,
                     match command {
