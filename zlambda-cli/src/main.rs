@@ -14,10 +14,7 @@ use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
-use zlambda_scheduling::round_robin::{
-    LocalRoundRobinScheduler,
-    GlobalRoundRobinScheduler,
-};
+use zlambda_scheduling::round_robin::{GlobalRoundRobinScheduler, LocalRoundRobinScheduler};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

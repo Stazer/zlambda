@@ -1,10 +1,10 @@
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::str::FromStr;
-use serde::ser::{Serialize, Serializer};
-use serde::de::{Deserialize, Deserializer};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,7 +45,7 @@ where
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         Ok(Self::new(T1::deserialize(deserializer)?))
     }
@@ -68,8 +68,7 @@ impl<T1, T2> From<T1> for TaggedType<T1, T2> {
     }
 }
 
-impl<T2> From<TaggedType<usize, T2>> for usize
-{
+impl<T2> From<TaggedType<usize, T2>> for usize {
     fn from(r#type: TaggedType<usize, T2>) -> Self {
         r#type.0
     }

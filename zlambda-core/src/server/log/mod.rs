@@ -17,16 +17,16 @@ pub use term::*;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub mod experimental {
-    use crate::common::utility::TaggedType;
-    use crate::server::ServerId;
-    use crate::server::log::LogError;
     use crate::common::sync::RwLock;
+    use crate::common::utility::TaggedType;
+    use crate::server::log::LogError;
+    use crate::server::ServerId;
     use serde::{Deserialize, Serialize};
     use std::any::Any;
-    use std::collections::HashSet;
-    use std::sync::Arc;
     use std::collections::hash_map::RandomState;
     use std::collections::hash_set::Difference;
+    use std::collections::HashSet;
+    use std::sync::Arc;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -190,20 +190,21 @@ pub mod experimental {
         }
 
         pub fn acknowledge(&mut self, id: LogEntryId, server_id: ServerId) -> Result<(), LogError> {
-            let acknowledgeable_server_ids = match self.acknowledgeable_server_ids.get(usize::from(id))
-            {
-                Some(server_ids) => server_ids,
-                None => return Err(LogError::NotExisting),
-            };
+            let acknowledgeable_server_ids =
+                match self.acknowledgeable_server_ids.get(usize::from(id)) {
+                    Some(server_ids) => server_ids,
+                    None => return Err(LogError::NotExisting),
+                };
 
             if !acknowledgeable_server_ids.contains(&server_id) {
                 return Err(LogError::NotAcknowledgeable);
             }
 
-            let acknowledged_server_ids = match self.acknowledged_server_ids.get_mut(usize::from(id)) {
-                Some(server_ids) => server_ids,
-                None => return Err(LogError::NotExisting),
-            };
+            let acknowledged_server_ids =
+                match self.acknowledged_server_ids.get_mut(usize::from(id)) {
+                    Some(server_ids) => server_ids,
+                    None => return Err(LogError::NotExisting),
+                };
 
             if acknowledged_server_ids.contains(&server_id) {
                 return Err(LogError::AlreadyAcknowledged);
@@ -318,7 +319,8 @@ pub mod experimental {
         pub fn commit(&mut self, log_entry_id: LogEntryId, term: LogTerm) -> Vec<LogEntryId> {
             let mut missing_log_entry_ids = Vec::default();
 
-            let range = (usize::from(self.next_committing_log_entry_id)..usize::from(log_entry_id) + 1)
+            let range = (usize::from(self.next_committing_log_entry_id)
+                ..usize::from(log_entry_id) + 1)
                 .map(LogEntryId::from);
 
             for log_entry_id in range {
@@ -331,8 +333,9 @@ pub mod experimental {
                     }
                     Some(Some(_)) => {
                         if self.next_committing_log_entry_id == log_entry_id {
-                            self.next_committing_log_entry_id =
-                                LogEntryId::from(usize::from(self.next_committing_log_entry_id) + 1);
+                            self.next_committing_log_entry_id = LogEntryId::from(
+                                usize::from(self.next_committing_log_entry_id) + 1,
+                            );
                         }
                     }
                 }
@@ -429,7 +432,10 @@ pub mod experimental {
         #[test]
         fn test_name() {
             let mut log_manager = LogManager::default();
-            log_manager.logs.push(Some(Arc::from(RwLock::new(NoneLog { id: LogId::from(0), r#type: LogType::Leading(LogLeadingType::default()), }))));
+            log_manager.logs.push(Some(Arc::from(RwLock::new(NoneLog {
+                id: LogId::from(0),
+                r#type: LogType::Leading(LogLeadingType::default()),
+            }))));
 
             assert!(log_manager.get::<()>(LogId::from(0)).is_some());
         }

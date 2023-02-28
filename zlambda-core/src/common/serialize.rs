@@ -1,8 +1,8 @@
-use bytes::{BytesMut, BufMut};
-use postcard::{serialize_with_flavor};
+use bytes::{BufMut, BytesMut};
+use postcard::serialize_with_flavor;
 use serde::Serialize;
-use std::fmt::{self, Formatter, Display, Debug};
 use std::error;
+use std::fmt::{self, Debug, Display, Formatter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -62,7 +62,7 @@ impl SerializeError {
 
 pub fn serialize_to_bytes<T>(value: &T) -> Result<BytesMut, SerializeError>
 where
-    T: Serialize
+    T: Serialize,
 {
     Ok(serialize_with_flavor(
         value,

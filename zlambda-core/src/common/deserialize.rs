@@ -2,7 +2,7 @@ use bytes::Bytes;
 use postcard::take_from_bytes;
 use serde::Deserialize;
 use std::error;
-use std::fmt::{self, Formatter, Display, Debug};
+use std::fmt::{self, Debug, Display, Formatter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,7 +36,7 @@ impl DeserializeError {
 
 pub fn deserialize_from_bytes<'de, T>(bytes: &'de Bytes) -> Result<(T, Bytes), DeserializeError>
 where
-    T: Deserialize<'de>
+    T: Deserialize<'de>,
 {
     let (value, _) = take_from_bytes(bytes)?;
 

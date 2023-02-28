@@ -248,13 +248,10 @@ impl<'a> ServerModules<'a> {
     }
 
     pub async fn get(&self, module_id: ModuleId) -> Option<Arc<dyn ServerModule>> {
-        let output =
-            self
+        let output = self
             .server
             .server_message_sender()
-            .do_send_synchronous(
-                ServerModuleGetMessageInput::new(module_id)
-            )
+            .do_send_synchronous(ServerModuleGetMessageInput::new(module_id))
             .await;
 
         let (result,) = output.into();

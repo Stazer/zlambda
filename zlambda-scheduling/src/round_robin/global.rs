@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
-use zlambda_core::common::sync::Mutex;
 use zlambda_core::common::serialize::serialize_to_bytes;
+use zlambda_core::common::sync::Mutex;
 use zlambda_core::server::{
     ServerId, ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
@@ -36,19 +36,23 @@ impl GlobalRoundRobinSchedulerNotificationHeader {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GlobalRoundRobinLogEntryData {
     issuer_server_id: ServerId,
+    local_counter: usize,
 }
 
 impl GlobalRoundRobinLogEntryData {
-    pub fn new(
-        issuer_server_id: ServerId,
-    ) -> Self {
+    pub fn new(issuer_server_id: ServerId, local_counter: usize) -> Self {
         Self {
             issuer_server_id,
+            local_counter,
         }
     }
 
     pub fn issuer_server_id(&self) -> ServerId {
         self.issuer_server_id
+    }
+
+    pub fn local_counter(&self) -> usize {
+        self.local_counter
     }
 }
 
@@ -56,7 +60,8 @@ impl GlobalRoundRobinLogEntryData {
 
 #[derive(Default, Debug)]
 pub struct GlobalRoundRobinScheduler {
-    counter: Mutex<ServerId>,
+    global_counter: Mutex<usize>,
+    local_counter: Mutex<usize>,
 }
 
 #[async_trait::async_trait]
@@ -70,23 +75,29 @@ impl ServerModule for GlobalRoundRobinScheduler {
     ) -> ServerModuleNotificationEventOutput {
         let (server, _source, notification_body_item_queue_receiver) = input.into();
 
-        server.commit(serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(
-            server.server_id().await,
-        )).expect("").into()).await;
+        let local_counter = {
+            let mut local_counter = self.local_counter.lock().await;
+            *local_counter = *local_counter + 1;
+
+            *local_counter
+        };
+
+        server
+            .commit(
+                serialize_to_bytes(
+                    &GlobalRoundRobinLogEntryData::new(
+                    server.server_id().await,
+                        local_counter,
+                ))
+                    .expect("")
+                    .into(),
+            )
+            .await;
     }
 
     async fn on_commit(
         &self,
         input: ServerModuleCommitEventInput,
     ) -> ServerModuleCommitEventOutput {
-        let counter = {
-            let mut counter = self.counter.lock().await;
-            *counter = ServerId::from(usize::from(*counter) + 1);
-
-            *counter
-        };
-
-        println!("{:?}", counter);
-        println!("{:?}", input);
     }
 }
