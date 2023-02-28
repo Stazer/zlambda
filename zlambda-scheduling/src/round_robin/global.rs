@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use zlambda_core::common::module::{Module, ModuleId};
-use zlambda_core::common::notification::NotificationBodyItemStreamExt;
+use zlambda_core::common::notification::{NotificationBodyItemQueueReceiver, NotificationBodyItemStreamExt};
+use std::collections::HashMap;
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::Mutex;
 use zlambda_core::server::{
@@ -62,6 +63,7 @@ impl GlobalRoundRobinLogEntryData {
 pub struct GlobalRoundRobinScheduler {
     global_counter: Mutex<usize>,
     local_counter: Mutex<usize>,
+    receivers: Mutex<HashMap<usize, NotificationBodyItemQueueReceiver>>,
 }
 
 #[async_trait::async_trait]
@@ -99,5 +101,6 @@ impl ServerModule for GlobalRoundRobinScheduler {
         &self,
         input: ServerModuleCommitEventInput,
     ) -> ServerModuleCommitEventOutput {
+        let (server, log_entry_id) = input.into();
     }
 }

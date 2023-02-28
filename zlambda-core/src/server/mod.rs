@@ -161,6 +161,10 @@ impl Server {
         self.servers()
     }
 
+    pub fn logs(&self) -> ServerLogs<'_> {
+        ServerLogs::new(self)
+    }
+
     pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
     where
         T: Stream<Item = Bytes> + Unpin + Send + 'static,
@@ -382,6 +386,46 @@ impl<'a> ServerServersServer<'a> {
                 .await;
 
             previous = next;
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct ServerLogs<'a> {
+    server: &'a Server,
+}
+
+impl<'a> ServerLogs<'a> {
+    pub(crate) fn new(
+        server: &'a Server,
+    ) -> Self {
+        Self {
+            server,
+        }
+    }
+
+    pub(crate) fn server(&self) -> &Server {
+        self.server
+    }
+
+    pub fn get(&self, log_id: LogId) -> ServerLogsLog<'_> {
+        ServerLogsLog::new(self.server())
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct ServerLogsLog<'a> {
+    server: &'a Server,
+}
+
+impl<'a> ServerLogsLog<'a> {
+    pub(crate) fn new(
+        server: &'a Server,
+    ) -> Self {
+        Self {
+            server,
         }
     }
 }
