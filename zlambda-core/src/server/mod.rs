@@ -397,12 +397,8 @@ pub struct ServerLogs<'a> {
 }
 
 impl<'a> ServerLogs<'a> {
-    pub(crate) fn new(
-        server: &'a Server,
-    ) -> Self {
-        Self {
-            server,
-        }
+    pub(crate) fn new(server: &'a Server) -> Self {
+        Self { server }
     }
 
     pub(crate) fn server(&self) -> &Server {
@@ -410,22 +406,34 @@ impl<'a> ServerLogs<'a> {
     }
 
     pub fn get(&self, log_id: LogId) -> ServerLogsLog<'_> {
-        ServerLogsLog::new(self.server())
+        ServerLogsLog::new(log_id, self.server())
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct ServerLogsLog<'a> {
+    log_id: LogId,
     server: &'a Server,
 }
 
 impl<'a> ServerLogsLog<'a> {
-    pub(crate) fn new(
-        server: &'a Server,
-    ) -> Self {
-        Self {
-            server,
-        }
+    pub(crate) fn new(log_id: LogId, server: &'a Server) -> Self {
+        Self { log_id, server }
+    }
+
+    pub async fn get(&self, log_entry_id: LogEntryId) -> Option<LogEntry> {
+        let output = self
+            .server
+            .server_message_sender()
+            .do_send_synchronous(ServerLogEntriesGetMessageInput::new(
+                self.log_id,
+                log_entry_id,
+            ))
+            .await;
+
+        let (log_entry,) = output.into();
+
+        log_entry
     }
 }

@@ -48,6 +48,11 @@ pub type ServerLogEntriesRecoveryMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerLogEntriesGetMessage =
+    SynchronousMessage<ServerLogEntriesGetMessageInput, ServerLogEntriesGetMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub type ServerModuleGetMessage =
     SynchronousMessage<ServerModuleGetMessageInput, ServerModuleGetMessageOutput>;
 
@@ -125,6 +130,7 @@ pub enum ServerMessage {
     LogEntriesReplication(ServerLogEntriesReplicationMessage),
     LogEntriesAcknowledgement(ServerLogEntriesAcknowledgementMessage),
     LogEntriesRecovery(ServerLogEntriesRecoveryMessage),
+    LogEntriesGet(ServerLogEntriesGetMessage),
     LogAppendRequest(ServerLogAppendRequestMessage),
     ModuleGet(ServerModuleGetMessage),
     ModuleLoad(ServerModuleLoadMessage),
@@ -179,6 +185,12 @@ impl From<ServerLogEntriesAcknowledgementMessage> for ServerMessage {
 impl From<ServerLogEntriesRecoveryMessage> for ServerMessage {
     fn from(message: ServerLogEntriesRecoveryMessage) -> Self {
         Self::LogEntriesRecovery(message)
+    }
+}
+
+impl From<ServerLogEntriesGetMessage> for ServerMessage {
+    fn from(message: ServerLogEntriesGetMessage) -> Self {
+        Self::LogEntriesGet(message)
     }
 }
 

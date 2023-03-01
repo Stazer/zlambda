@@ -50,7 +50,3 @@ impl ModuleEventListener for EventListener {
         Ok(DispatchModuleEventOutput::new(stdout.into()))
     }
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-module_event_listener!(EventListener);

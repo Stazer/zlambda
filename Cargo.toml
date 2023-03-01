@@ -1,7 +1,9 @@
 [workspace]
 members = [
-    "zlambda-core",
-    "zlambda-so",
-    "zlambda-scheduling",
     "zlambda-cli",
+    "zlambda-core",
+    "zlambda-dynamic",
+    "zlambda-router",
+    "zlambda-scheduler",
+    "zlambda-wasm",
 ]

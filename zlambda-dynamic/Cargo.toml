@@ -1,6 +1,6 @@
 [package]
-name = "zlambda-so"
-version = "0.1.0"
+name = "zlambda-dynamic"
+version = "0.0.0"
 edition = "2021"
 
 [dependencies]

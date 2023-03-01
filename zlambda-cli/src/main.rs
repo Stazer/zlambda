@@ -4,17 +4,20 @@
 
 use clap::{Args, Parser, Subcommand};
 use std::error::Error;
+use std::path::Path;
 use zlambda_core::client::ClientTask;
+use zlambda_core::common::async_trait;
 use zlambda_core::common::fs::read;
 use zlambda_core::common::future::stream::{empty, StreamExt};
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::common::utility::Bytes;
+use zlambda_dynamic::DynamicLibraryManager;
 use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
-use zlambda_scheduling::round_robin::{GlobalRoundRobinScheduler, LocalRoundRobinScheduler};
+use zlambda_scheduler::round_robin::{GlobalRoundRobinScheduler, LocalRoundRobinScheduler};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,10 +82,10 @@ enum ClientCommand {
 #[derive(Default, Debug)]
 pub struct PrintServerModule {}
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Module for PrintServerModule {}
 
-#[async_trait::async_trait]
+#[async_trait]
 impl ServerModule for PrintServerModule {
     async fn on_notification(
         &self,
@@ -122,6 +125,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             ServerBuilder::default()
+                .add_module(DynamicLibraryManager::default())
                 .add_module(LocalRoundRobinScheduler::default())
                 .add_module(PrintServerModule::default())
                 .add_module(GlobalRoundRobinScheduler::default())
@@ -149,7 +153,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     let mut serializer = empty().serializer();
 
                     for body in bodies {
-                        serializer.serialize_json(Bytes::from(read(body).await?))?;
+                        if Path::new(&body).extension().map(|x| x.to_str()) == Some(Some("json")) {
+                            serializer.serialize_json(Bytes::from(read(body).await?))?;
+                        } else {
+                            serializer.serialize_binary(Bytes::from(read(body).await?))?;
+                        }
                     }
 
                     client_task

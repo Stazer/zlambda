@@ -1,7 +1,7 @@
 use crate::common::message::MessageQueueSender;
 use crate::common::module::{LoadModuleError, ModuleId, UnloadModuleError};
 use crate::server::node::ServerNodeMessage;
-use crate::server::{LogEntryId, LogTerm, ServerId, ServerModule};
+use crate::server::{LogEntry, LogEntryId, LogTerm, ServerId, ServerModule};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -264,6 +264,29 @@ impl ServerLogEntriesReplicationMessageOutput {
 
     pub fn log_entry_ids(&self) -> &Vec<LogEntryId> {
         &self.log_entry_ids
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLogEntriesGetMessageOutput {
+    log_entry: Option<LogEntry>,
+}
+
+impl From<ServerLogEntriesGetMessageOutput> for (Option<LogEntry>,) {
+    fn from(input: ServerLogEntriesGetMessageOutput) -> Self {
+        (input.log_entry,)
+    }
+}
+
+impl ServerLogEntriesGetMessageOutput {
+    pub fn new(log_entry: Option<LogEntry>) -> Self {
+        Self { log_entry }
+    }
+
+    pub fn log_entry(&self) -> &Option<LogEntry> {
+        &self.log_entry
     }
 }
 

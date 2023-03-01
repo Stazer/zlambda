@@ -20,14 +20,15 @@ use crate::server::{
     ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
     ServerId, ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
     ServerLeaderType, ServerLogAppendRequestMessage, ServerLogEntriesAcknowledgementMessage,
-    ServerLogEntriesRecoveryMessage, ServerLogEntriesReplicationMessage,
-    ServerLogEntriesReplicationMessageOutput, ServerMessage, ServerModule,
-    ServerModuleCommitEventInput, ServerModuleGetMessage, ServerModuleGetMessageOutput,
-    ServerModuleLoadMessage, ServerModuleLoadMessageOutput, ServerModuleShutdownEventInput,
-    ServerModuleStartupEventInput, ServerModuleUnloadMessage, ServerModuleUnloadMessageOutput,
-    ServerNodeMessage, ServerNodeReplicationMessage, ServerNodeReplicationMessageInput,
-    ServerNodeTask, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
-    ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
+    ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput, ServerLogEntriesRecoveryMessage,
+    ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
+    ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
+    ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
+    ServerModuleShutdownEventInput, ServerModuleStartupEventInput, ServerModuleUnloadMessage,
+    ServerModuleUnloadMessageOutput, ServerNodeMessage, ServerNodeReplicationMessage,
+    ServerNodeReplicationMessageInput, ServerNodeTask, ServerRecoveryMessage,
+    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
+    ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerServerIdGetMessage, ServerServerIdGetMessageOutput,
     ServerServerNodeMessageSenderGetMessage, ServerServerNodeMessageSenderGetMessageOutput,
@@ -386,7 +387,10 @@ impl ServerTask {
                 self.on_server_log_entries_recovery_message(message).await
             }
             ServerMessage::LogAppendRequest(message) => {
-                self.on_server_log_append_request(message).await
+                self.on_server_log_append_request_message(message).await
+            }
+            ServerMessage::LogEntriesGet(message) => {
+                self.on_server_log_entries_get_message(message).await
             }
             ServerMessage::ModuleGet(message) => self.on_server_module_get_message(message).await,
             ServerMessage::ModuleLoad(message) => self.on_server_module_load_message(message).await,
@@ -678,7 +682,32 @@ impl ServerTask {
             .await;
     }
 
-    async fn on_server_log_append_request(&mut self, message: ServerLogAppendRequestMessage) {
+    async fn on_server_log_entries_get_message(&mut self, message: ServerLogEntriesGetMessage) {
+        let (input, output_sender) = message.into();
+
+        let log_entry = match &self.r#type {
+            ServerType::Leader(leader) => leader
+                .log()
+                .entries()
+                .get(usize::from(input.log_entry_id()))
+                .cloned(),
+            ServerType::Follower(follower) => follower
+                .log()
+                .entries()
+                .get(usize::from(input.log_entry_id()))
+                .cloned()
+                .flatten(),
+        };
+
+        output_sender
+            .do_send(ServerLogEntriesGetMessageOutput::new(log_entry))
+            .await;
+    }
+
+    async fn on_server_log_append_request_message(
+        &mut self,
+        message: ServerLogAppendRequestMessage,
+    ) {
         let follower = match &mut self.r#type {
             ServerType::Leader(_) => {
                 panic!("Cannot append entries to leader node");

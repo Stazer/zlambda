@@ -6,7 +6,7 @@ use crate::common::net::TcpStream;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::client::ServerClientId;
-use crate::server::{LogEntry, LogEntryData, LogEntryId, LogTerm, ServerId, ServerModule};
+use crate::server::{LogEntry, LogEntryData, LogEntryId, LogId, LogTerm, ServerId, ServerModule};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -194,6 +194,37 @@ impl ServerLogEntriesRecoveryMessageInput {
 
     pub fn log_entry_ids(&self) -> &Vec<LogEntryId> {
         &self.log_entry_ids
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLogEntriesGetMessageInput {
+    log_id: LogId,
+    log_entry_id: LogEntryId,
+}
+
+impl From<ServerLogEntriesGetMessageInput> for (LogId, LogEntryId) {
+    fn from(input: ServerLogEntriesGetMessageInput) -> Self {
+        (input.log_id, input.log_entry_id)
+    }
+}
+
+impl ServerLogEntriesGetMessageInput {
+    pub fn new(log_id: LogId, log_entry_id: LogEntryId) -> Self {
+        Self {
+            log_id,
+            log_entry_id,
+        }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
+    }
+
+    pub fn log_entry_id(&self) -> LogEntryId {
+        self.log_entry_id
     }
 }
 
