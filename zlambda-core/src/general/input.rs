@@ -1,6 +1,6 @@
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
-use crate::server::{LogEntry, LogEntryId, LogTerm, ServerId};
+use crate::server::{LogId, LogEntry, LogEntryId, LogTerm, ServerId};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -312,16 +312,18 @@ impl GeneralNodeHandshakeResponseMessageInput {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralLogEntriesAppendRequestMessageInput {
+    log_id: LogId,
     log_entries: Vec<LogEntry>,
     last_committed_log_entry_id: Option<LogEntryId>,
     log_current_term: LogTerm,
 }
 
 impl From<GeneralLogEntriesAppendRequestMessageInput>
-    for (Vec<LogEntry>, Option<LogEntryId>, LogTerm)
+    for (LogId, Vec<LogEntry>, Option<LogEntryId>, LogTerm)
 {
     fn from(input: GeneralLogEntriesAppendRequestMessageInput) -> Self {
         (
+            input.log_id,
             input.log_entries,
             input.last_committed_log_entry_id,
             input.log_current_term,
@@ -331,15 +333,21 @@ impl From<GeneralLogEntriesAppendRequestMessageInput>
 
 impl GeneralLogEntriesAppendRequestMessageInput {
     pub fn new(
+        log_id: LogId,
         log_entries: Vec<LogEntry>,
         last_committed_log_entry_id: Option<LogEntryId>,
         log_current_term: LogTerm,
     ) -> Self {
         Self {
+            log_id,
             log_entries,
             last_committed_log_entry_id,
             log_current_term,
         }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 
     pub fn log_entries(&self) -> &Vec<LogEntry> {

@@ -13,7 +13,7 @@ use zlambda_core::server::{
 
 #[derive(Default, Debug)]
 pub struct DynamicLibraryManager {
-    libraries: Mutex<HashMap<ModuleId, Library>>,
+    _libraries: Mutex<HashMap<ModuleId, Library>>,
 }
 
 #[async_trait]
@@ -34,7 +34,7 @@ impl server::ServerModule for DynamicLibraryManager {
 
     async fn on_commit(
         &self,
-        input: ServerModuleCommitEventInput,
+        _input: ServerModuleCommitEventInput,
     ) -> ServerModuleCommitEventOutput {
     }
 }

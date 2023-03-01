@@ -10,7 +10,7 @@ use zlambda_core::common::notification::{
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::Mutex;
 use zlambda_core::server::{
-    LogEntryData, LogId, ServerId, ServerModule, ServerModuleCommitEventInput,
+    LogId, ServerId, ServerModule, ServerModuleCommitEventInput,
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput, ServerSystemLogEntryData,
 };

@@ -24,6 +24,7 @@ use crate::server::node::{
     ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeShutdownMessage,
 };
 use crate::server::{
+    SERVER_SYSTEM_LOG_ID,
     Server, ServerId, ServerLeaderServerIdGetMessageInput, ServerLogAppendRequestMessageInput,
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
     ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventInput,
@@ -269,6 +270,7 @@ impl ServerNodeTask {
                     .0
                     .send(GeneralLogEntriesAppendRequestMessage::new(
                         GeneralLogEntriesAppendRequestMessageInput::new(
+                            SERVER_SYSTEM_LOG_ID,
                             log_entries,
                             last_committed_log_entry_id,
                             log_current_term,
@@ -301,6 +303,7 @@ impl ServerNodeTask {
         if let Err(error) = sender
             .send(GeneralLogEntriesAppendRequestMessage::new(
                 GeneralLogEntriesAppendRequestMessageInput::new(
+                    SERVER_SYSTEM_LOG_ID,
                     Vec::default(),
                     last_committed_log_entry_id,
                     log_current_term,
@@ -326,6 +329,7 @@ impl ServerNodeTask {
         if let Err(error) = sender
             .send(GeneralLogEntriesAppendRequestMessage::new(
                 GeneralLogEntriesAppendRequestMessageInput::new(
+                    SERVER_SYSTEM_LOG_ID,
                     Vec::default(),
                     last_committed_log_entry_id,
                     log_current_term,
@@ -543,7 +547,7 @@ impl ServerNodeTask {
         message: GeneralLogEntriesAppendRequestMessage,
     ) {
         let (input,) = message.into();
-        let (log_entries, last_committed_log_entry_id, log_current_term) = input.into();
+        let (log_id, log_entries, last_committed_log_entry_id, log_current_term) = input.into();
 
         self.server_message_sender
             .do_send_asynchronous(ServerLogAppendRequestMessageInput::new(
