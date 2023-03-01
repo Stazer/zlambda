@@ -18,7 +18,7 @@ pub use term::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub mod experimental {
+/*pub mod experimental {
     use crate::common::sync::RwLock;
     use crate::common::utility::TaggedType;
     use crate::server::log::LogError;
@@ -442,4 +442,4 @@ pub mod experimental {
             assert!(log_manager.get::<()>(LogId::from(0)).is_some());
         }
     }
-}
+}*/

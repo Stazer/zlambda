@@ -12,6 +12,8 @@ use zlambda_core::server::{
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
+use zlambda_core::common::async_trait;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,15 +67,15 @@ impl GlobalRoundRobinLogEntryData {
 
 #[derive(Default, Debug)]
 pub struct GlobalRoundRobinScheduler {
-    global_counter: Mutex<usize>,
-    local_counter: Mutex<usize>,
+    global_counter: AtomicUsize,
+    local_counter: AtomicUsize,
     receivers: Mutex<HashMap<usize, NotificationBodyItemQueueReceiver>>,
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Module for GlobalRoundRobinScheduler {}
 
-#[async_trait::async_trait]
+#[async_trait]
 impl ServerModule for GlobalRoundRobinScheduler {
     async fn on_notification(
         &self,
@@ -81,11 +83,7 @@ impl ServerModule for GlobalRoundRobinScheduler {
     ) -> ServerModuleNotificationEventOutput {
         let (server, _source, notification_body_item_queue_receiver) = input.into();
 
-        let local_counter = {
-            let mut local_counter = self.local_counter.lock().await;
-            *local_counter += 1;
-            *local_counter
-        };
+        let local_counter = self.local_counter.fetch_add(1, Ordering::Relaxed);
 
         {
             let mut receivers = self.receivers.lock().await;
@@ -126,11 +124,7 @@ impl ServerModule for GlobalRoundRobinScheduler {
             .expect("derialized log entry data")
             .0;
 
-        let global_counter = {
-            let mut global_counter = self.global_counter.lock().await;
-            *global_counter += 1;
-            *global_counter
-        };
+        let global_counter = self.global_counter.fetch_add(1, Ordering::Relaxed);
 
         if log_entry_data.issuer_server_id() != server.server_id().await {
             return;

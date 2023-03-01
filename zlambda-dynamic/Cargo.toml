@@ -4,5 +4,5 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-zlambda-core = { path = "../zlambda-core" }
 libloading = "*"
+zlambda-core = { path = "../zlambda-core" }

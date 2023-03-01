@@ -5,7 +5,6 @@ authors = [ "Justus Flerlage <justus@sutsuj.com>" ]
 edition = "2021"
 
 [dependencies]
-async-trait = "*"
 serde = { version = "1", features = ["derive"] }
 zlambda-core = { path = "../zlambda-core" }
 
