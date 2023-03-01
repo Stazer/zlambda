@@ -16,6 +16,7 @@ use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTas
 use crate::server::connection::ServerConnectionTask;
 use crate::server::node::ServerNodeLogAppendResponseMessageInput;
 use crate::server::{
+    SERVER_SYSTEM_LOG_ID,
     AddServerLogEntryData, FollowingLog, LeadingLog, Log, LogEntryData, LogEntryId, LogError,
     LogFollowerType, LogId, LogLeaderType, LogManager, NewServerError, Server,
     ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
@@ -535,7 +536,7 @@ impl ServerTask {
                         .into(),
                     );
 
-                self.acknowledge(&log_entry_ids, self.server_id).await;
+                self.acknowledge(SERVER_SYSTEM_LOG_ID, &log_entry_ids, self.server_id).await;
             }
             ServerType::Follower(follower) => {
                 let leader_server_socket_address = match self
@@ -660,7 +661,7 @@ impl ServerTask {
     ) {
         let (input,) = message.into();
 
-        self.acknowledge(input.log_entry_ids(), input.server_id())
+        self.acknowledge(input.log_id(), input.log_entry_ids(), input.server_id())
             .await;
     }
 
@@ -744,7 +745,7 @@ impl ServerTask {
         };
 
         let (input,) = message.into();
-        let (server_id, log_entries, last_committed_log_entry_id, log_current_term) = input.into();
+        let (server_id, log_id, log_entries, last_committed_log_entry_id, log_current_term) = input.into();
 
         let mut log_entry_ids = Vec::with_capacity(log_entries.len());
 
@@ -789,6 +790,7 @@ impl ServerTask {
             {
                 sender
                     .do_send_asynchronous(ServerNodeLogAppendResponseMessageInput::new(
+                        log_id,
                         log_entry_ids,
                         missing_log_entry_ids,
                     ))
@@ -1007,7 +1009,7 @@ impl ServerTask {
         }
     }
 
-    async fn acknowledge(&mut self, log_entry_ids: &Vec<LogEntryId>, server_id: ServerId) {
+    async fn acknowledge(&mut self, log_id: LogId, log_entry_ids: &Vec<LogEntryId>, server_id: ServerId) {
         let leader = match &mut self.r#type {
             ServerType::Leader(leader) => leader,
             ServerType::Follower(_follower) => {

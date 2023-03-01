@@ -367,13 +367,15 @@ impl GeneralLogEntriesAppendRequestMessageInput {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralLogEntriesAppendResponseMessageInput {
+    log_id: LogId,
     acknowledged_log_entry_ids: Vec<LogEntryId>,
     missing_log_entry_ids: Vec<LogEntryId>,
 }
 
-impl From<GeneralLogEntriesAppendResponseMessageInput> for (Vec<LogEntryId>, Vec<LogEntryId>) {
+impl From<GeneralLogEntriesAppendResponseMessageInput> for (LogId, Vec<LogEntryId>, Vec<LogEntryId>) {
     fn from(input: GeneralLogEntriesAppendResponseMessageInput) -> Self {
         (
+            input.log_id,
             input.acknowledged_log_entry_ids,
             input.missing_log_entry_ids,
         )
@@ -382,13 +384,19 @@ impl From<GeneralLogEntriesAppendResponseMessageInput> for (Vec<LogEntryId>, Vec
 
 impl GeneralLogEntriesAppendResponseMessageInput {
     pub fn new(
+        log_id: LogId,
         acknowledged_log_entry_ids: Vec<LogEntryId>,
         missing_log_entry_ids: Vec<LogEntryId>,
     ) -> Self {
         Self {
+            log_id,
             acknowledged_log_entry_ids,
             missing_log_entry_ids,
         }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 
     pub fn acknowledged_log_entry_ids(&self) -> &Vec<LogEntryId> {

@@ -2,7 +2,7 @@ use crate::common::message::{MessageSocketReceiver, MessageSocketSender};
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
-use crate::server::{LogEntry, LogEntryId, LogTerm};
+use crate::server::{LogId, LogEntry, LogEntryId, LogTerm};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -223,22 +223,28 @@ impl ServerNodeNodeHandshakeMessageInput {
 
 #[derive(Debug)]
 pub struct ServerNodeLogAppendResponseMessageInput {
+    log_id: LogId,
     log_entry_ids: Vec<LogEntryId>,
     missing_log_entry_ids: Vec<LogEntryId>,
 }
 
-impl From<ServerNodeLogAppendResponseMessageInput> for (Vec<LogEntryId>, Vec<LogEntryId>) {
+impl From<ServerNodeLogAppendResponseMessageInput> for (LogId, Vec<LogEntryId>, Vec<LogEntryId>) {
     fn from(input: ServerNodeLogAppendResponseMessageInput) -> Self {
-        (input.log_entry_ids, input.missing_log_entry_ids)
+        (input.log_id, input.log_entry_ids, input.missing_log_entry_ids)
     }
 }
 
 impl ServerNodeLogAppendResponseMessageInput {
-    pub fn new(log_entry_ids: Vec<LogEntryId>, missing_log_entry_ids: Vec<LogEntryId>) -> Self {
+    pub fn new(log_id: LogId, log_entry_ids: Vec<LogEntryId>, missing_log_entry_ids: Vec<LogEntryId>) -> Self {
         Self {
+            log_id,
             log_entry_ids,
             missing_log_entry_ids,
         }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 
     pub fn log_entry_ids(&self) -> &Vec<LogEntryId> {

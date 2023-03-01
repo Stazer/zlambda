@@ -139,22 +139,28 @@ impl ServerLogEntriesReplicationMessageInput {
 
 #[derive(Debug)]
 pub struct ServerLogEntriesAcknowledgementMessageInput {
+    log_id: LogId,
     log_entry_ids: Vec<LogEntryId>,
     server_id: ServerId,
 }
 
-impl From<ServerLogEntriesAcknowledgementMessageInput> for (Vec<LogEntryId>, ServerId) {
+impl From<ServerLogEntriesAcknowledgementMessageInput> for (LogId, Vec<LogEntryId>, ServerId) {
     fn from(input: ServerLogEntriesAcknowledgementMessageInput) -> Self {
-        (input.log_entry_ids, input.server_id)
+        (input.log_id, input.log_entry_ids, input.server_id)
     }
 }
 
 impl ServerLogEntriesAcknowledgementMessageInput {
-    pub fn new(log_entry_ids: Vec<LogEntryId>, server_id: ServerId) -> Self {
+    pub fn new(log_id: LogId, log_entry_ids: Vec<LogEntryId>, server_id: ServerId) -> Self {
         Self {
+            log_id,
             log_entry_ids,
             server_id,
         }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 
     pub fn log_entry_ids(&self) -> &Vec<LogEntryId> {
@@ -364,17 +370,19 @@ impl ServerClientResignationMessageInput {
 #[derive(Debug)]
 pub struct ServerLogAppendRequestMessageInput {
     server_id: ServerId,
+    log_id: LogId,
     log_entries: Vec<LogEntry>,
     last_committed_log_entry_id: Option<LogEntryId>,
     log_current_term: LogTerm,
 }
 
 impl From<ServerLogAppendRequestMessageInput>
-    for (ServerId, Vec<LogEntry>, Option<LogEntryId>, LogTerm)
+    for (ServerId, LogId, Vec<LogEntry>, Option<LogEntryId>, LogTerm)
 {
     fn from(input: ServerLogAppendRequestMessageInput) -> Self {
         (
             input.server_id,
+            input.log_id,
             input.log_entries,
             input.last_committed_log_entry_id,
             input.log_current_term,
@@ -385,12 +393,14 @@ impl From<ServerLogAppendRequestMessageInput>
 impl ServerLogAppendRequestMessageInput {
     pub fn new(
         server_id: ServerId,
+        log_id: LogId,
         log_entries: Vec<LogEntry>,
         last_committed_log_entry_id: Option<LogEntryId>,
         log_current_term: LogTerm,
     ) -> Self {
         Self {
             server_id,
+            log_id,
             log_entries,
             last_committed_log_entry_id,
             log_current_term,
@@ -399,6 +409,10 @@ impl ServerLogAppendRequestMessageInput {
 
     pub fn server_id(&self) -> ServerId {
         self.server_id
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 
     pub fn log_entries(&self) -> &Vec<LogEntry> {

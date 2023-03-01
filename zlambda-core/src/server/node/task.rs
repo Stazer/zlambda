@@ -236,7 +236,7 @@ impl ServerNodeTask {
                 self.on_server_node_node_handshake_message(message).await
             }
             ServerNodeMessage::LogAppendResponse(message) => {
-                self.on_server_log_append_response_message(message).await
+                self.on_server_node_log_append_response_message(message).await
             }
             ServerNodeMessage::NotificationImmediate(message) => {
                 self.on_server_node_notification_immediate_message(message)
@@ -385,18 +385,19 @@ impl ServerNodeTask {
         debug!("Handshake with server {} successful", self.server_id);
     }
 
-    async fn on_server_log_append_response_message(
+    async fn on_server_node_log_append_response_message(
         &mut self,
         message: ServerNodeLogAppendResponseMessage,
     ) {
         let (input,) = message.into();
-        let (log_entry_ids, missing_log_entry_ids) = input.into();
+        let (log_id, log_entry_ids, missing_log_entry_ids) = input.into();
 
         if let Some(general_socket) = &mut self.general_socket {
             if let Err(error) = general_socket
                 .0
                 .send(GeneralLogEntriesAppendResponseMessage::new(
                     GeneralLogEntriesAppendResponseMessageInput::new(
+                        log_id,
                         log_entry_ids,
                         missing_log_entry_ids,
                     ),
@@ -551,6 +552,7 @@ impl ServerNodeTask {
         self.server_message_sender
             .do_send_asynchronous(ServerLogAppendRequestMessageInput::new(
                 self.server_id,
+                log_id,
                 log_entries,
                 last_committed_log_entry_id,
                 log_current_term,
@@ -563,10 +565,11 @@ impl ServerNodeTask {
         message: GeneralLogEntriesAppendResponseMessage,
     ) {
         let (input,) = message.into();
-        let (acknowledged_log_entry_ids, missing_log_entry_ids) = input.into();
+        let (log_id, acknowledged_log_entry_ids, missing_log_entry_ids) = input.into();
 
         self.server_message_sender
             .do_send_asynchronous(ServerLogEntriesAcknowledgementMessageInput::new(
+                log_id,
                 acknowledged_log_entry_ids,
                 self.server_id,
             ))
