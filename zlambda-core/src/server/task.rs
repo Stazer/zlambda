@@ -16,12 +16,13 @@ use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTas
 use crate::server::connection::ServerConnectionTask;
 use crate::server::node::ServerNodeLogAppendResponseMessageInput;
 use crate::server::{
-    AddServerLogEntryData, FollowingLog, LeadingLog, LogEntryData, LogEntryId, LogError,
-    NewServerError, Server, ServerClientRegistrationMessage, ServerClientResignationMessage,
-    ServerCommitCommitMessage, ServerCommitCommitMessageInput, ServerCommitMessage,
-    ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerFollowerType,
-    ServerId, ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
-    ServerLeaderType, ServerLogAppendRequestMessage, ServerLogEntriesAcknowledgementMessage,
+    AddServerLogEntryData, FollowingLog, LeadingLog, Log, LogEntryData, LogEntryId, LogError,
+    LogFollowerType, LogId, LogLeaderType, LogManager, NewServerError, Server,
+    ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
+    ServerCommitCommitMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
+    ServerCommitRegistrationMessageInput, ServerFollowerType, ServerId,
+    ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput, ServerLeaderType,
+    ServerLogAppendRequestMessage, ServerLogEntriesAcknowledgementMessage,
     ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
     ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
@@ -63,6 +64,7 @@ pub(crate) struct ServerTask {
     server_socket_addresses: Vec<Option<SocketAddr>>,
     server: Arc<Server>,
     running: bool,
+    log_manager: LogManager,
 }
 
 impl ServerTask {
@@ -102,6 +104,12 @@ impl ServerTask {
                 server_socket_addresses: vec![Some(local_addr)],
                 running: true,
                 server,
+                log_manager: (|| {
+                    let mut log_manager = LogManager::default();
+                    log_manager.insert(Log::new(LogId::from(0), LogLeaderType::default().into()));
+
+                    log_manager
+                })(),
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -209,6 +217,13 @@ impl ServerTask {
                     server_socket_addresses,
                     running: true,
                     server,
+                    log_manager: (|| {
+                        let mut log_manager = LogManager::default();
+                        log_manager
+                            .insert(Log::new(LogId::from(0), LogFollowerType::default().into()));
+
+                        log_manager
+                    })(),
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -312,6 +327,13 @@ impl ServerTask {
                     server_socket_addresses,
                     running: true,
                     server,
+                    log_manager: (|| {
+                        let mut log_manager = LogManager::default();
+                        log_manager
+                            .insert(Log::new(LogId::from(0), LogFollowerType::default().into()));
+
+                        log_manager
+                    })(),
                 })
             }
         }

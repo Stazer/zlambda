@@ -1,6 +1,6 @@
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
-use crate::server::{LogId, LogEntry, LogEntryId, LogTerm, ServerId};
+use crate::server::{LogEntry, LogEntryId, LogId, LogTerm, ServerId};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 

@@ -24,12 +24,11 @@ use crate::server::node::{
     ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeShutdownMessage,
 };
 use crate::server::{
-    SERVER_SYSTEM_LOG_ID,
     Server, ServerId, ServerLeaderServerIdGetMessageInput, ServerLogAppendRequestMessageInput,
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
     ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventInputServerSource, ServerServerIdGetMessageInput,
-    ServerServerSocketAddressGetMessageInput,
+    ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
 };
 use std::collections::HashMap;
 use std::future::pending;

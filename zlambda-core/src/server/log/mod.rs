@@ -4,6 +4,7 @@ mod error;
 mod following;
 mod id;
 mod leading;
+mod manager;
 mod term;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,11 +15,59 @@ pub use error::*;
 pub use following::*;
 pub use id::*;
 pub use leading::*;
+pub use manager::*;
 pub use term::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub const SERVER_SYSTEM_LOG_ID: LogId = LogId::from(0);
+pub type LogLeaderType = LeadingLog;
+pub type LogFollowerType = FollowingLog;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub enum LogType {
+    Leader(LeadingLog),
+    Follower(FollowingLog),
+}
+
+impl From<LogLeaderType> for LogType {
+    fn from(r#type: LogLeaderType) -> Self {
+        Self::Leader(r#type)
+    }
+}
+
+impl From<LogFollowerType> for LogType {
+    fn from(r#type: LogFollowerType) -> Self {
+        Self::Follower(r#type)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct Log {
+    id: LogId,
+    r#type: LogType,
+}
+
+impl Log {
+    pub fn new(id: LogId, r#type: LogType) -> Self {
+        Self { id, r#type }
+    }
+
+    pub fn id(&self) -> LogId {
+        self.id
+    }
+
+    pub fn r#type(&self) -> &LogType {
+        &self.r#type
+    }
+
+    pub fn type_mut(&mut self) -> &mut LogType {
+        &mut self.r#type
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
