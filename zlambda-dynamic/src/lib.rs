@@ -1,14 +1,13 @@
-use zlambda_core::common::module::{ModuleId, Module};
-use zlambda_core::common::future::stream::StreamExt;
-use zlambda_core::server::{
-    self,
-    ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
-    ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
-};
-use zlambda_core::common::async_trait;
-use zlambda_core::common::sync::Mutex;
 use libloading::Library;
 use std::collections::HashMap;
+use zlambda_core::common::async_trait;
+use zlambda_core::common::future::stream::StreamExt;
+use zlambda_core::common::module::{Module, ModuleId};
+use zlambda_core::common::sync::Mutex;
+use zlambda_core::server::{
+    self, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
+    ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,7 +21,10 @@ impl Module for DynamicLibraryManager {}
 
 #[async_trait]
 impl server::ServerModule for DynamicLibraryManager {
-    async fn on_notification(&self, input: ServerModuleNotificationEventInput) -> ServerModuleNotificationEventOutput {
+    async fn on_notification(
+        &self,
+        input: ServerModuleNotificationEventInput,
+    ) -> ServerModuleNotificationEventOutput {
         let (_server, _source, mut notification_body_item_queue_receiver) = input.into();
 
         while let Some(bytes) = notification_body_item_queue_receiver.next().await {
@@ -30,6 +32,9 @@ impl server::ServerModule for DynamicLibraryManager {
         }
     }
 
-    async fn on_commit(&self, input: ServerModuleCommitEventInput) -> ServerModuleCommitEventOutput {
+    async fn on_commit(
+        &self,
+        input: ServerModuleCommitEventInput,
+    ) -> ServerModuleCommitEventOutput {
     }
 }

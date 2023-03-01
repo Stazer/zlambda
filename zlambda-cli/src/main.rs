@@ -12,11 +12,11 @@ use zlambda_core::common::future::stream::{empty, StreamExt};
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::common::utility::Bytes;
-use zlambda_dynamic::DynamicLibraryManager;
 use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
+use zlambda_dynamic::DynamicLibraryManager;
 use zlambda_scheduler::round_robin::{GlobalRoundRobinScheduler, LocalRoundRobinScheduler};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

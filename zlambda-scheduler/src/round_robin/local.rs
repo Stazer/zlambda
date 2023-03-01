@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use zlambda_core::common::async_trait;
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::server::{
     ServerId, ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
 };
-use zlambda_core::common::async_trait;
-use std::sync::atomic::{Ordering, AtomicUsize};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,7 +69,6 @@ impl ServerModule for LocalRoundRobinScheduler {
 
             ServerId::from(next_server_id)
         };
-
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
         let header = deserializer

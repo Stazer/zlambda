@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use zlambda_core::common::async_trait;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::{
@@ -10,10 +12,8 @@ use zlambda_core::common::sync::Mutex;
 use zlambda_core::server::{
     LogEntryData, LogId, ServerId, ServerModule, ServerModuleCommitEventInput,
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventOutput,
+    ServerModuleNotificationEventOutput, ServerSystemLogEntryData,
 };
-use zlambda_core::common::async_trait;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,9 +92,13 @@ impl ServerModule for GlobalRoundRobinScheduler {
 
         server
             .commit(
-                serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(
-                    server.server_id().await,
-                    local_counter,
+                serialize_to_bytes(&ServerSystemLogEntryData::Data(
+                    serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(
+                        server.server_id().await,
+                        local_counter,
+                    ))
+                    .expect("")
+                    .into(),
                 ))
                 .expect("")
                 .into(),
@@ -115,12 +119,12 @@ impl ServerModule for GlobalRoundRobinScheduler {
             .await
             .expect("existing log entry");
 
-        let bytes = match log_entry.data() {
-            LogEntryData::Data(bytes) => bytes,
+        let bytes = match deserialize_from_bytes(log_entry.data()).expect("").0 {
+            ServerSystemLogEntryData::Data(bytes) => bytes,
             _ => return,
         };
 
-        let log_entry_data = deserialize_from_bytes::<GlobalRoundRobinLogEntryData>(bytes)
+        let log_entry_data = deserialize_from_bytes::<GlobalRoundRobinLogEntryData>(&bytes)
             .expect("derialized log entry data")
             .0;
 

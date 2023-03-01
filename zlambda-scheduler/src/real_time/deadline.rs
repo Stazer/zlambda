@@ -1,14 +1,13 @@
-use zlambda_core::common::module::{Module};
+use zlambda_core::common::async_trait;
+use zlambda_core::common::module::Module;
 use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
 };
-use zlambda_core::common::async_trait;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Default, Debug)]
-pub struct DeadlineRealTimeScheduler {
-}
+pub struct DeadlineRealTimeScheduler {}
 
 #[async_trait]
 impl Module for DeadlineRealTimeScheduler {}

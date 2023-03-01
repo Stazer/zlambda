@@ -1,3 +1,4 @@
+use crate::common::deserialize::deserialize_from_bytes;
 use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
@@ -5,6 +6,7 @@ use crate::common::message::{
 use crate::common::module::ModuleManager;
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
+use crate::common::serialize::serialize_to_bytes;
 use crate::general::{
     GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryRequestMessageInput,
     GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessage,
@@ -34,7 +36,8 @@ use crate::server::{
     ServerServerNodeMessageSenderGetMessage, ServerServerNodeMessageSenderGetMessageOutput,
     ServerServerSocketAddressGetMessage, ServerServerSocketAddressGetMessageOutput,
     ServerServerSocketAddressesGetMessage, ServerServerSocketAddressesGetMessageOutput,
-    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerType,
+    ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerSystemLogEntryData,
+    ServerType,
 };
 use async_recursion::async_recursion;
 use std::cmp::max;
@@ -489,11 +492,14 @@ impl ServerTask {
                 }*/
 
                 let log_entry_ids = self
-                    .replicate(vec![AddServerLogEntryData::new(
-                        node_server_id.into(),
-                        input.server_socket_address(),
-                    )
-                    .into()])
+                    .replicate(vec![serialize_to_bytes(&ServerSystemLogEntryData::from(
+                        AddServerLogEntryData::new(
+                            node_server_id.into(),
+                            input.server_socket_address(),
+                        ),
+                    ))
+                    .expect("")
+                    .freeze()])
                     .await;
 
                 self.commit_messages
@@ -1074,16 +1080,19 @@ impl ServerTask {
         };
 
         if let Some(log_entry) = log_entry {
-            match log_entry.data() {
-                LogEntryData::AddServer(data) => {
+            match deserialize_from_bytes(log_entry.data())
+                .expect("deserialized ServerSystemLogEntryData")
+                .0
+            {
+                ServerSystemLogEntryData::AddServer(data) => {
                     self.on_commit_add_server_log_entry_data(data.clone()).await
                 }
-                LogEntryData::RemoveServer(_data) => {
+                ServerSystemLogEntryData::RemoveServer(_data) => {
                     if self.leader_server_id != self.server_id {
                         todo!();
                     }
                 }
-                LogEntryData::Data(_) => {}
+                ServerSystemLogEntryData::Data(_) => {}
             }
         }
 
