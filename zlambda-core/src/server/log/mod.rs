@@ -67,6 +67,46 @@ impl Log {
     pub fn type_mut(&mut self) -> &mut LogType {
         &mut self.r#type
     }
+
+    pub fn current_term(&self) -> LogTerm {
+        match &self.r#type {
+            LogType::Leader(leader) => leader.current_term(),
+            LogType::Follower(follower) => follower.current_term(),
+        }
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> Option<LogEntryId> {
+        match &self.r#type {
+            LogType::Leader(leader) => leader.last_committed_log_entry_id(),
+            LogType::Follower(follower) => follower.last_committed_log_entry_id(),
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct LogEntries<'a> {
+    log: &'a Log,
+}
+
+impl<'a> LogEntries<'a> {
+    pub fn new(
+        log: &'a Log,
+    ) -> Self  {
+        Self {
+            log,
+        }
+    }
+
+    pub fn get(&'a self, id: LogEntryId) -> Option<&'a LogEntry> {
+        match self.log.r#type() {
+            LogType::Leader(leader) => leader.entries().get(usize::from(id)),
+            LogType::Follower(follower) => match follower.entries().get(usize::from(id)) {
+                None | Some(None) => None,
+                Some(Some(log_entry)) => Some(log_entry),
+            },
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

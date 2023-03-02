@@ -1,7 +1,7 @@
 use crate::common::module::ModuleId;
 use crate::common::notification::NotificationBodyItemQueueReceiver;
 use crate::server::client::ServerClientId;
-use crate::server::{LogEntryId, Server, ServerId};
+use crate::server::{LogId, LogEntryId, Server, ServerId};
 use std::sync::Arc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -249,6 +249,7 @@ impl ServerModuleNotificationEventInput {
 #[derive(Clone, Debug)]
 pub struct ServerModuleCommitEventInput {
     server: Arc<Server>,
+    log_id: LogId,
     log_entry_id: LogEntryId,
 }
 
@@ -258,10 +259,17 @@ impl From<ServerModuleCommitEventInput> for (Arc<Server>, LogEntryId) {
     }
 }
 
+impl From<ServerModuleCommitEventInput> for (Arc<Server>, LogId, LogEntryId) {
+    fn from(input: ServerModuleCommitEventInput) -> Self {
+        (input.server, input.log_id, input.log_entry_id)
+    }
+}
+
 impl ServerModuleCommitEventInput {
-    pub fn new(server: Arc<Server>, log_entry_id: LogEntryId) -> Self {
+    pub fn new(server: Arc<Server>, log_id: LogId, log_entry_id: LogEntryId) -> Self {
         Self {
             server,
+            log_id,
             log_entry_id,
         }
     }
@@ -272,6 +280,10 @@ impl ServerModuleCommitEventInput {
 
     pub fn server_mut(&mut self) -> &mut Arc<Server> {
         &mut self.server
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 
     pub fn log_entry_id(&self) -> LogEntryId {
