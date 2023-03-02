@@ -20,8 +20,8 @@ use crate::server::{
     LogFollowerType, LogId, LogLeaderType, LogManager, LogType, NewServerError, Server,
     ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
     ServerCommitCommitMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
-    ServerCommitRegistrationMessageInput, ServerFollowerType, ServerId,
-    ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput, ServerLeaderType,
+    ServerCommitRegistrationMessageInput, ServerId,
+    ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
     ServerLogAppendRequestMessage, ServerLogEntriesAcknowledgementMessage,
     ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
@@ -38,7 +38,7 @@ use crate::server::{
     ServerServerSocketAddressGetMessage, ServerServerSocketAddressGetMessageOutput,
     ServerServerSocketAddressesGetMessage, ServerServerSocketAddressesGetMessageOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerSystemLogEntryData,
-    ServerType, SERVER_SYSTEM_LOG_ID,
+    SERVER_SYSTEM_LOG_ID,
 };
 use async_recursion::async_recursion;
 use std::cmp::max;
