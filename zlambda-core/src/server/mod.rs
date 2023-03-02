@@ -154,11 +154,6 @@ impl Server {
         ServerServers::new(self)
     }
 
-    #[deprecated]
-    pub fn nodes(&self) -> ServerServers<'_> {
-        self.servers()
-    }
-
     pub fn logs(&self) -> ServerLogs<'_> {
         ServerLogs::new(self)
     }
@@ -196,9 +191,10 @@ impl Server {
             .await;
     }
 
+    #[deprecated]
     pub async fn commit(&self, data: Bytes) {
         self.server_message_sender
-            .do_send_synchronized(ServerCommitMessageInput::new(data))
+            .do_send_synchronized(ServerCommitMessageInput::new(SERVER_SYSTEM_LOG_ID, data))
             .await;
     }
 
@@ -403,8 +399,16 @@ impl<'a> ServerLogs<'a> {
         self.server
     }
 
-    pub fn create(&mut self) -> LogId {
-        LogId::from(1)
+    pub async fn create(&mut self) -> LogId {
+        let output = self
+            .server
+            .server_message_sender()
+            .do_send_synchronous(ServerLogCreateMessageInput::new())
+            .await;
+
+        let (log_id,) = output.into();
+
+        log_id
     }
 
     pub fn get(&self, log_id: LogId) -> ServerLogsLog<'_> {
@@ -437,5 +441,12 @@ impl<'a> ServerLogsLog<'a> {
         let (log_entry,) = output.into();
 
         log_entry
+    }
+
+    pub async fn commit(&self, data: Bytes) {
+        self.server
+            .server_message_sender()
+            .do_send_synchronized(ServerCommitMessageInput::new(self.log_id, data))
+            .await;
     }
 }

@@ -16,13 +16,12 @@ use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTas
 use crate::server::connection::ServerConnectionTask;
 use crate::server::node::ServerNodeLogAppendResponseMessageInput;
 use crate::server::{
-    ServerLogCreateMessage,
     AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogError, LogFollowerType, LogId,
     LogLeaderType, LogManager, LogType, NewServerError, Server, ServerClientRegistrationMessage,
     ServerClientResignationMessage, ServerCommitCommitMessage, ServerCommitCommitMessageInput,
     ServerCommitMessage, ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput,
     ServerId, ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
-    ServerLogAppendRequestMessage, ServerLogEntriesAcknowledgementMessage,
+    ServerLogAppendRequestMessage, ServerLogCreateMessage, ServerLogEntriesAcknowledgementMessage,
     ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
     ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
@@ -438,9 +437,7 @@ impl ServerTask {
                 self.on_server_server_socket_addresses_get_message(message)
                     .await
             }
-            ServerMessage::LogCreate(message) => {
-                self.on_server_log_create_message(message).await
-            }
+            ServerMessage::LogCreate(message) => self.on_server_log_create_message(message).await,
         }
     }
 
@@ -911,10 +908,10 @@ impl ServerTask {
 
     async fn on_server_commit_message(&mut self, message: ServerCommitMessage) {
         let (input, output_sender) = message.into();
-        let (data,) = input.into();
+        let (log_id, data) = input.into();
 
         let log_entry_id = match self
-            .replicate(SERVER_SYSTEM_LOG_ID, vec![data.into()])
+            .replicate(log_id, vec![data.into()])
             .await
             .into_iter()
             .next()
@@ -956,11 +953,9 @@ impl ServerTask {
             .await;
     }
 
-    async fn on_server_log_create_message(
-        &mut self,
-        message: ServerLogCreateMessage,
-    ) {
-        let (_, sender) = message.into();
+    async fn on_server_log_create_message(&mut self, message: ServerLogCreateMessage) {
+        let (_input, output_sender) = message.into();
+
     }
 
     async fn replicate(
@@ -1119,16 +1114,14 @@ impl ServerTask {
                     }
                     ServerSystemLogEntryData::Data(_) => {}
                     ServerSystemLogEntryData::CreateLog(_data) => {
-                        self.log_manager.insert(
-                            Log::new(
-                                LogId::from(self.log_manager.len()),
-                                if self.server_id == self.leader_server_id {
-                                    LogLeaderType::default().into()
-                                } else {
-                                    LogFollowerType::default().into()
-                                }
-                            ),
-                        );
+                        self.log_manager.insert(Log::new(
+                            LogId::from(self.log_manager.len()),
+                            if self.server_id == self.leader_server_id {
+                                LogLeaderType::default().into()
+                            } else {
+                                LogFollowerType::default().into()
+                            },
+                        ));
                     }
                 }
             }

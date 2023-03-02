@@ -1,7 +1,7 @@
 use crate::common::message::MessageQueueSender;
 use crate::common::module::{LoadModuleError, ModuleId, UnloadModuleError};
 use crate::server::node::ServerNodeMessage;
-use crate::server::{LogEntry, LogEntryId, LogTerm, ServerId, ServerModule};
+use crate::server::{LogId, LogEntry, LogEntryId, LogTerm, ServerId, ServerModule};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -484,18 +484,19 @@ impl ServerServerSocketAddressesGetMessageOutput {
 
 #[derive(Debug)]
 pub struct ServerLogCreateMessageOutput {
+    log_id: LogId
 }
 
-impl From<ServerLogCreateMessageOutput> for () {
+impl From<ServerLogCreateMessageOutput> for (LogId, ) {
     fn from(output: ServerLogCreateMessageOutput) -> Self {
-
+        (output.log_id,)
     }
 }
 
 impl ServerLogCreateMessageOutput {
-    pub fn new() -> Self {
+    pub fn new(log_id: LogId) -> Self {
         Self {
-
+            log_id,
         }
     }
 }

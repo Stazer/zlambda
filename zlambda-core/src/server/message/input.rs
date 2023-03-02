@@ -508,18 +508,23 @@ impl ServerServerNodeMessageSenderGetMessageInput {
 
 #[derive(Debug)]
 pub struct ServerCommitMessageInput {
+    log_id: LogId,
     data: Bytes,
 }
 
-impl From<ServerCommitMessageInput> for (Bytes,) {
+impl From<ServerCommitMessageInput> for (LogId, Bytes) {
     fn from(input: ServerCommitMessageInput) -> Self {
-        (input.data,)
+        (input.log_id, input.data)
     }
 }
 
 impl ServerCommitMessageInput {
-    pub fn new(data: Bytes) -> Self {
-        Self { data }
+    pub fn new(log_id: LogId, data: Bytes) -> Self {
+        Self { log_id, data }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 
     pub fn data(&self) -> &Bytes {
@@ -570,19 +575,14 @@ impl ServerServerSocketAddressesGetMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerLogCreateMessageInput {
-}
+pub struct ServerLogCreateMessageInput {}
 
 impl From<ServerLogCreateMessageInput> for () {
-    fn from(output: ServerLogCreateMessageInput) -> Self {
-
-    }
+    fn from(output: ServerLogCreateMessageInput) -> Self {}
 }
 
 impl ServerLogCreateMessageInput {
     pub fn new() -> Self {
-        Self {
-
-        }
+        Self {}
     }
 }

@@ -120,10 +120,8 @@ pub type ServerServerSocketAddressesGetMessage = SynchronousMessage<
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub type ServerLogCreateMessage = SynchronousMessage<
-    ServerLogCreateMessageInput,
-    ServerLogCreateMessageOutput,
->;
+pub type ServerLogCreateMessage =
+    SynchronousMessage<ServerLogCreateMessageInput, ServerLogCreateMessageOutput>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
