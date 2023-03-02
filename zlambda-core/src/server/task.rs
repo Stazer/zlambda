@@ -16,7 +16,7 @@ use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTas
 use crate::server::connection::ServerConnectionTask;
 use crate::server::node::ServerNodeLogAppendResponseMessageInput;
 use crate::server::{
-    AddServerLogEntryData, FollowingLog, LeadingLog, Log, LogEntryData, LogEntryId, LogError,
+    AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogError,
     LogFollowerType, LogId, LogLeaderType, LogManager, LogType, NewServerError, Server,
     ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
     ServerCommitCommitMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
