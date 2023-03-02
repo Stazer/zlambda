@@ -403,6 +403,10 @@ impl<'a> ServerLogs<'a> {
         self.server
     }
 
+    pub fn create(&mut self) -> LogId {
+        LogId::from(1)
+    }
+
     pub fn get(&self, log_id: LogId) -> ServerLogsLog<'_> {
         ServerLogsLog::new(log_id, self.server())
     }

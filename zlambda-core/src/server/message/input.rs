@@ -566,3 +566,23 @@ impl ServerServerSocketAddressesGetMessageInput {
         Self {}
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLogCreateMessageInput {
+}
+
+impl From<ServerLogCreateMessageInput> for () {
+    fn from(output: ServerLogCreateMessageInput) -> Self {
+
+    }
+}
+
+impl ServerLogCreateMessageInput {
+    pub fn new() -> Self {
+        Self {
+
+        }
+    }
+}

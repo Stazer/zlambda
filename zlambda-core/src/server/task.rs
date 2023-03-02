@@ -16,12 +16,12 @@ use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTas
 use crate::server::connection::ServerConnectionTask;
 use crate::server::node::ServerNodeLogAppendResponseMessageInput;
 use crate::server::{
-    AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogError,
-    LogFollowerType, LogId, LogLeaderType, LogManager, LogType, NewServerError, Server,
-    ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
-    ServerCommitCommitMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
-    ServerCommitRegistrationMessageInput, ServerId,
-    ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
+    ServerLogCreateMessage,
+    AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogError, LogFollowerType, LogId,
+    LogLeaderType, LogManager, LogType, NewServerError, Server, ServerClientRegistrationMessage,
+    ServerClientResignationMessage, ServerCommitCommitMessage, ServerCommitCommitMessageInput,
+    ServerCommitMessage, ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput,
+    ServerId, ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
     ServerLogAppendRequestMessage, ServerLogEntriesAcknowledgementMessage,
     ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
@@ -438,6 +438,9 @@ impl ServerTask {
                 self.on_server_server_socket_addresses_get_message(message)
                     .await
             }
+            ServerMessage::LogCreate(message) => {
+                self.on_server_log_create_message(message).await
+            }
         }
     }
 
@@ -671,10 +674,7 @@ impl ServerTask {
             .log_entry_ids()
             .iter()
             .filter_map(|log_entry_id| leader_log.entries().get(usize::from(*log_entry_id)))
-            .chain(
-                leader_log
-                    .acknowledgeable_log_entries_for_server(input.server_id()),
-            )
+            .chain(leader_log.acknowledgeable_log_entries_for_server(input.server_id()))
             .cloned()
             .collect::<Vec<_>>();
 
@@ -718,7 +718,12 @@ impl ServerTask {
         &mut self,
         message: ServerLogAppendRequestMessage,
     ) {
-        let follower_log = match self.log_manager.get_mut(SERVER_SYSTEM_LOG_ID).expect("existing server system log").type_mut() {
+        let follower_log = match self
+            .log_manager
+            .get_mut(SERVER_SYSTEM_LOG_ID)
+            .expect("existing server system log")
+            .type_mut()
+        {
             LogType::Leader(_leader) => panic!("Cannot append entries to leader node"),
             LogType::Follower(follower) => follower,
         };
@@ -737,16 +742,14 @@ impl ServerTask {
         let (missing_log_entry_ids, committed_log_entry_id_range) =
             match last_committed_log_entry_id {
                 Some(last_committed_log_entry_id) => {
-                    let from_last_committed_log_entry_id = follower_log
-                        .last_committed_log_entry_id()
-                        .map(usize::from);
+                    let from_last_committed_log_entry_id =
+                        follower_log.last_committed_log_entry_id().map(usize::from);
 
-                    let missing_log_entry_ids = follower_log
-                        .commit(last_committed_log_entry_id, log_current_term);
+                    let missing_log_entry_ids =
+                        follower_log.commit(last_committed_log_entry_id, log_current_term);
 
-                    let to_last_committed_log_entry_id = follower_log
-                        .last_committed_log_entry_id()
-                        .map(usize::from);
+                    let to_last_committed_log_entry_id =
+                        follower_log.last_committed_log_entry_id().map(usize::from);
 
                     let committed_log_entry_id_range = match (
                         from_last_committed_log_entry_id,
@@ -953,6 +956,13 @@ impl ServerTask {
             .await;
     }
 
+    async fn on_server_log_create_message(
+        &mut self,
+        message: ServerLogCreateMessage,
+    ) {
+        let (_, sender) = message.into();
+    }
+
     async fn replicate(
         &mut self,
         log_id: LogId,
@@ -974,9 +984,7 @@ impl ServerTask {
 
                 let log_entries = log_entry_ids
                     .iter()
-                    .filter_map(|log_entry_id| {
-                        leader_log.entries().get(usize::from(*log_entry_id))
-                    })
+                    .filter_map(|log_entry_id| leader_log.entries().get(usize::from(*log_entry_id)))
                     .cloned()
                     .collect::<Vec<_>>();
 
@@ -993,10 +1001,10 @@ impl ServerTask {
                 }
 
                 log_entry_ids
-            },
+            }
             LogType::Follower(_follower) => {
                 unimplemented!()
-            },
+            }
         }
     }
 
@@ -1078,20 +1086,6 @@ impl ServerTask {
     }
 
     async fn on_commit_log_entry(&mut self, log_id: LogId, log_entry_id: LogEntryId) {
-        for module in self.module_manager.iter().cloned() {
-            let server = self.server.clone();
-
-            spawn(async move {
-                module
-                    .on_commit(ServerModuleCommitEventInput::new(
-                        server,
-                        log_id,
-                        log_entry_id,
-                    ))
-                    .await;
-            });
-        }
-
         debug!("Committed log entry {}", log_entry_id,);
 
         if log_id == SERVER_SYSTEM_LOG_ID {
@@ -1124,6 +1118,18 @@ impl ServerTask {
                         }
                     }
                     ServerSystemLogEntryData::Data(_) => {}
+                    ServerSystemLogEntryData::CreateLog(_data) => {
+                        self.log_manager.insert(
+                            Log::new(
+                                LogId::from(self.log_manager.len()),
+                                if self.server_id == self.leader_server_id {
+                                    LogLeaderType::default().into()
+                                } else {
+                                    LogFollowerType::default().into()
+                                }
+                            ),
+                        );
+                    }
                 }
             }
 
@@ -1134,6 +1140,20 @@ impl ServerTask {
             {
                 self.on_server_message(message).await;
             }
+        }
+
+        for module in self.module_manager.iter().cloned() {
+            let server = self.server.clone();
+
+            spawn(async move {
+                module
+                    .on_commit(ServerModuleCommitEventInput::new(
+                        server,
+                        log_id,
+                        log_entry_id,
+                    ))
+                    .await;
+            });
         }
     }
 
@@ -1146,7 +1166,7 @@ impl ServerTask {
         }
 
         if server_id >= self.server_node_message_senders.len() {
-            self.server_node_message_senders
+            self.server_socket_addresses
                 .resize_with(server_id + 1, || None);
         }
 

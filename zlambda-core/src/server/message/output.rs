@@ -479,3 +479,23 @@ impl ServerServerSocketAddressesGetMessageOutput {
         &self.server_socket_addresses
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLogCreateMessageOutput {
+}
+
+impl From<ServerLogCreateMessageOutput> for () {
+    fn from(output: ServerLogCreateMessageOutput) -> Self {
+
+    }
+}
+
+impl ServerLogCreateMessageOutput {
+    pub fn new() -> Self {
+        Self {
+
+        }
+    }
+}

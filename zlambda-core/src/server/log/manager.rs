@@ -31,4 +31,8 @@ impl LogManager {
 
         *self.logs.get_mut(log_id).expect("existing logs") = Some(log);
     }
+
+    pub fn len(&self) -> usize {
+        self.logs.len()
+    }
 }

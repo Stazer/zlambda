@@ -60,9 +60,15 @@ impl RemoveServerLogEntryData {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
+pub struct ServerSystemCreateLogLogEntryData {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub enum ServerSystemLogEntryData {
     AddServer(AddServerLogEntryData),
     RemoveServer(RemoveServerLogEntryData),
+    CreateLog(ServerSystemCreateLogLogEntryData),
     Data(Bytes),
 }
 
@@ -75,6 +81,12 @@ impl From<AddServerLogEntryData> for ServerSystemLogEntryData {
 impl From<RemoveServerLogEntryData> for ServerSystemLogEntryData {
     fn from(data: RemoveServerLogEntryData) -> Self {
         Self::RemoveServer(data)
+    }
+}
+
+impl From<ServerSystemCreateLogLogEntryData> for ServerSystemLogEntryData {
+    fn from(data: ServerSystemCreateLogLogEntryData) -> Self {
+        Self::CreateLog(data)
     }
 }
 
