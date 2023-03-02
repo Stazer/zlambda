@@ -218,7 +218,7 @@ where
     where
         S: Serialize,
     {
-        self.serialize_binary(Bytes::from(to_allocvec(value)?));
+        self.serialize_binary(Bytes::from(to_allocvec(value)?))?;
 
         Ok(())
     }
