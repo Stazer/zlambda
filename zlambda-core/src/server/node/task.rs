@@ -236,7 +236,8 @@ impl ServerNodeTask {
                 self.on_server_node_node_handshake_message(message).await
             }
             ServerNodeMessage::LogAppendResponse(message) => {
-                self.on_server_node_log_append_response_message(message).await
+                self.on_server_node_log_append_response_message(message)
+                    .await
             }
             ServerNodeMessage::NotificationImmediate(message) => {
                 self.on_server_node_notification_immediate_message(message)

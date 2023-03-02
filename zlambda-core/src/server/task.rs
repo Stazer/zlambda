@@ -16,10 +16,8 @@ use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTas
 use crate::server::connection::ServerConnectionTask;
 use crate::server::node::ServerNodeLogAppendResponseMessageInput;
 use crate::server::{
-    LogType,
-    SERVER_SYSTEM_LOG_ID,
     AddServerLogEntryData, FollowingLog, LeadingLog, Log, LogEntryData, LogEntryId, LogError,
-    LogFollowerType, LogId, LogLeaderType, LogManager, NewServerError, Server,
+    LogFollowerType, LogId, LogLeaderType, LogManager, LogType, NewServerError, Server,
     ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
     ServerCommitCommitMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
     ServerCommitRegistrationMessageInput, ServerFollowerType, ServerId,
@@ -40,7 +38,7 @@ use crate::server::{
     ServerServerSocketAddressGetMessage, ServerServerSocketAddressGetMessageOutput,
     ServerServerSocketAddressesGetMessage, ServerServerSocketAddressesGetMessageOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerSystemLogEntryData,
-    ServerType,
+    ServerType, SERVER_SYSTEM_LOG_ID,
 };
 use async_recursion::async_recursion;
 use std::cmp::max;
@@ -55,7 +53,6 @@ use tracing::{debug, error, info};
 pub(crate) struct ServerTask {
     server_id: ServerId,
     leader_server_id: ServerId,
-    r#type: ServerType,
     tcp_listener: TcpListener,
     sender: MessageQueueSender<ServerMessage>,
     receiver: MessageQueueReceiver<ServerMessage>,
@@ -95,7 +92,6 @@ impl ServerTask {
             None => Ok(Self {
                 server_id: ServerId::default(),
                 leader_server_id: ServerId::default(),
-                r#type: ServerLeaderType::new(LeadingLog::default()).into(),
                 tcp_listener,
                 sender: queue_sender.clone(),
                 receiver: queue_receiver,
@@ -204,11 +200,6 @@ impl ServerTask {
                 Ok(Self {
                     server_id,
                     leader_server_id,
-                    r#type: ServerFollowerType::new(
-                        leader_server_id,
-                        FollowingLog::new(term, Vec::default(), LogEntryId::from(0)),
-                    )
-                    .into(),
                     tcp_listener,
                     sender: queue_sender,
                     receiver: queue_receiver,
@@ -314,11 +305,6 @@ impl ServerTask {
                 Ok(Self {
                     server_id,
                     leader_server_id,
-                    r#type: ServerFollowerType::new(
-                        leader_server_id,
-                        FollowingLog::new(term, Vec::default(), LogEntryId::from(0)),
-                    )
-                    .into(),
                     tcp_listener,
                     sender: queue_sender,
                     receiver: queue_receiver,
@@ -489,30 +475,30 @@ impl ServerTask {
             };
 
             /*if node_server_id >= self.server_socket_addresses.len() {
-            self.server_socket_addresses
-            .resize_with(node_server_id + 1, || None);
-        }
+                self.server_socket_addresses
+                .resize_with(node_server_id + 1, || None);
+            }
 
-            if node_server_id >= self.server_node_message_senders.len() {
-            self.server_node_message_senders
-            .resize_with(node_server_id + 1, || None);
-        }
+                if node_server_id >= self.server_node_message_senders.len() {
+                self.server_node_message_senders
+                .resize_with(node_server_id + 1, || None);
+            }
 
-            let task = ServerNodeTask::new(node_server_id.into(), self.sender.clone(), None);
-            let sender = task.sender().clone();
-            task.spawn();
+                let task = ServerNodeTask::new(node_server_id.into(), self.sender.clone(), None);
+                let sender = task.sender().clone();
+                task.spawn();
 
-            if let Some(server_socket_address) =
-            self.server_socket_addresses.get_mut(node_server_id)
-            {
-             *server_socket_address = Some(input.server_socket_address());
-        }
+                if let Some(server_socket_address) =
+                self.server_socket_addresses.get_mut(node_server_id)
+                {
+                 *server_socket_address = Some(input.server_socket_address());
+            }
 
-            if let Some(server_node_message_sender) =
-            self.server_node_message_senders.get_mut(node_server_id)
-            {
-             *server_node_message_sender = Some(sender);
-        }*/
+                if let Some(server_node_message_sender) =
+                self.server_node_message_senders.get_mut(node_server_id)
+                {
+                 *server_node_message_sender = Some(sender);
+            }*/
 
             let log_entry_ids = self
                 .replicate(
@@ -523,8 +509,9 @@ impl ServerTask {
                             input.server_socket_address(),
                         ),
                     ))
-                         .expect("")
-                         .freeze()])
+                    .expect("")
+                    .freeze()],
+                )
                 .await;
 
             self.commit_messages
@@ -535,10 +522,11 @@ impl ServerTask {
                         ServerCommitRegistrationMessageInput::new(node_server_id.into()),
                         output_sender,
                     )
-                        .into(),
+                    .into(),
                 );
 
-            self.acknowledge(SERVER_SYSTEM_LOG_ID, &log_entry_ids, self.server_id).await;
+            self.acknowledge(SERVER_SYSTEM_LOG_ID, &log_entry_ids, self.server_id)
+                .await;
         } else {
             let leader_server_socket_address = match self
                 .server_socket_addresses
@@ -564,7 +552,10 @@ impl ServerTask {
     ) {
         let (input, output_sender) = message.into();
 
-        let log = self.log_manager.get(SERVER_SYSTEM_LOG_ID).expect("valid server system log");
+        let log = self
+            .log_manager
+            .get(SERVER_SYSTEM_LOG_ID)
+            .expect("valid server system log");
 
         let server_node_message_sender = match self
             .server_node_message_senders
@@ -618,7 +609,10 @@ impl ServerTask {
                 return;
             }
             Some(Some(server_node_message_senders)) => {
-                let log = self.log_manager.get(SERVER_SYSTEM_LOG_ID).expect("server system log");
+                let log = self
+                    .log_manager
+                    .get(SERVER_SYSTEM_LOG_ID)
+                    .expect("server system log");
 
                 sender
                     .do_send(ServerRecoveryMessageSuccessOutput::new(
@@ -642,10 +636,7 @@ impl ServerTask {
 
         sender
             .do_send(ServerLogEntriesReplicationMessageOutput::new(
-                self.replicate(
-                    SERVER_SYSTEM_LOG_ID,
-                    log_entries_data,
-                ).await,
+                self.replicate(SERVER_SYSTEM_LOG_ID, log_entries_data).await,
             ))
             .await;
     }
@@ -664,11 +655,14 @@ impl ServerTask {
         &mut self,
         message: ServerLogEntriesRecoveryMessage,
     ) {
-        let leader = match &self.r#type {
-            ServerType::Leader(leader) => leader,
-            ServerType::Follower(_) => {
-                panic!("Server must be leader");
-            }
+        let leader_log = match self
+            .log_manager
+            .get(SERVER_SYSTEM_LOG_ID)
+            .expect("existing server system log")
+            .r#type()
+        {
+            LogType::Leader(leader) => leader,
+            LogType::Follower(_follower) => panic!("Log must be leader"),
         };
 
         let (input,) = message.into();
@@ -676,10 +670,9 @@ impl ServerTask {
         let log_entries = input
             .log_entry_ids()
             .iter()
-            .filter_map(|log_entry_id| leader.log().entries().get(usize::from(*log_entry_id)))
+            .filter_map(|log_entry_id| leader_log.entries().get(usize::from(*log_entry_id)))
             .chain(
-                leader
-                    .log()
+                leader_log
                     .acknowledgeable_log_entries_for_server(input.server_id()),
             )
             .cloned()
@@ -699,8 +692,8 @@ impl ServerTask {
             .do_send(ServerNodeReplicationMessage::new(
                 ServerNodeReplicationMessageInput::new(
                     log_entries,
-                    leader.log().last_committed_log_entry_id(),
-                    leader.log().current_term(),
+                    leader_log.last_committed_log_entry_id(),
+                    leader_log.current_term(),
                 ),
             ))
             .await;
@@ -709,21 +702,12 @@ impl ServerTask {
     async fn on_server_log_entries_get_message(&mut self, message: ServerLogEntriesGetMessage) {
         let (input, output_sender) = message.into();
 
-        let log_entry = match &self.r#type {
-            ServerType::Leader(leader) => leader
-                .log()
-                .entries()
-                .get(usize::from(input.log_entry_id()))
-                .cloned(),
-            ServerType::Follower(follower) => follower
-                .log()
-                .entries()
-                .get(usize::from(input.log_entry_id()))
-                .cloned()
-                .flatten(),
-        };
-
-        let log_entry = self.log_manager.get(input.log_id()).map(|log| log.entries().get(input.log_entry_id()))
+        let log_entry = self
+            .log_manager
+            .get(input.log_id())
+            .map(|log| log.entries().get(input.log_entry_id()))
+            .flatten()
+            .cloned();
 
         output_sender
             .do_send(ServerLogEntriesGetMessageOutput::new(log_entry))
@@ -734,37 +718,33 @@ impl ServerTask {
         &mut self,
         message: ServerLogAppendRequestMessage,
     ) {
-        let follower = match &mut self.r#type {
-            ServerType::Leader(_) => {
-                panic!("Cannot append entries to leader node");
-            }
-            ServerType::Follower(ref mut follower) => follower,
+        let follower_log = match self.log_manager.get_mut(SERVER_SYSTEM_LOG_ID).expect("existing server system log").type_mut() {
+            LogType::Leader(_leader) => panic!("Cannot append entries to leader node"),
+            LogType::Follower(follower) => follower,
         };
 
         let (input,) = message.into();
-        let (server_id, log_id, log_entries, last_committed_log_entry_id, log_current_term) = input.into();
+        let (server_id, log_id, log_entries, last_committed_log_entry_id, log_current_term) =
+            input.into();
 
         let mut log_entry_ids = Vec::with_capacity(log_entries.len());
 
         for log_entry in log_entries.into_iter() {
             log_entry_ids.push(log_entry.id());
-            follower.log_mut().push(log_entry);
+            follower_log.push(log_entry);
         }
 
         let (missing_log_entry_ids, committed_log_entry_id_range) =
             match last_committed_log_entry_id {
                 Some(last_committed_log_entry_id) => {
-                    let from_last_committed_log_entry_id = follower
-                        .log()
+                    let from_last_committed_log_entry_id = follower_log
                         .last_committed_log_entry_id()
                         .map(usize::from);
 
-                    let missing_log_entry_ids = follower
-                        .log_mut()
+                    let missing_log_entry_ids = follower_log
                         .commit(last_committed_log_entry_id, log_current_term);
 
-                    let to_last_committed_log_entry_id = follower
-                        .log()
+                    let to_last_committed_log_entry_id = follower_log
                         .last_committed_log_entry_id()
                         .map(usize::from);
 
@@ -796,8 +776,11 @@ impl ServerTask {
         }
 
         if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
-            self.on_commit_log_entries(SERVER_SYSTEM_LOG_ID, committed_log_entry_id_range.map(LogEntryId::from))
-                .await;
+            self.on_commit_log_entries(
+                SERVER_SYSTEM_LOG_ID,
+                committed_log_entry_id_range.map(LogEntryId::from),
+            )
+            .await;
         }
     }
 
@@ -927,9 +910,12 @@ impl ServerTask {
         let (input, output_sender) = message.into();
         let (data,) = input.into();
 
-        let log_entry_id = match self.replicate(
-            SERVER_SYSTEM_LOG_ID,
-            vec![data.into()]).await.into_iter().next() {
+        let log_entry_id = match self
+            .replicate(SERVER_SYSTEM_LOG_ID, vec![data.into()])
+            .await
+            .into_iter()
+            .next()
+        {
             Some(log_entry_id) => log_entry_id,
             None => return,
         };
@@ -967,10 +953,16 @@ impl ServerTask {
             .await;
     }
 
-    async fn replicate(&mut self, log_id: LogId, log_entries_data: Vec<LogEntryData>) -> Vec<LogEntryId> {
-        match &mut self.r#type {
-            ServerType::Leader(ref mut leader) => {
-                let log_entry_ids = leader.log_mut().append(
+    async fn replicate(
+        &mut self,
+        log_id: LogId,
+        log_entries_data: Vec<LogEntryData>,
+    ) -> Vec<LogEntryId> {
+        let log = self.log_manager.get_mut(log_id).expect("existing log id");
+
+        match log.type_mut() {
+            LogType::Leader(leader_log) => {
+                let log_entry_ids = leader_log.append(
                     log_entries_data,
                     self.server_socket_addresses
                         .iter()
@@ -983,7 +975,7 @@ impl ServerTask {
                 let log_entries = log_entry_ids
                     .iter()
                     .filter_map(|log_entry_id| {
-                        leader.log().entries().get(usize::from(*log_entry_id))
+                        leader_log.entries().get(usize::from(*log_entry_id))
                     })
                     .cloned()
                     .collect::<Vec<_>>();
@@ -993,22 +985,27 @@ impl ServerTask {
                         .do_send(ServerNodeReplicationMessage::new(
                             ServerNodeReplicationMessageInput::new(
                                 log_entries.clone(),
-                                leader.log().last_committed_log_entry_id(),
-                                leader.log().current_term(),
+                                leader_log.last_committed_log_entry_id(),
+                                leader_log.current_term(),
                             ),
                         ))
                         .await;
                 }
 
                 log_entry_ids
-            }
-            ServerType::Follower(_follower) => {
+            },
+            LogType::Follower(_follower) => {
                 unimplemented!()
-            }
+            },
         }
     }
 
-    async fn acknowledge(&mut self, log_id: LogId, log_entry_ids: &Vec<LogEntryId>, server_id: ServerId) {
+    async fn acknowledge(
+        &mut self,
+        log_id: LogId,
+        log_entry_ids: &Vec<LogEntryId>,
+        server_id: ServerId,
+    ) {
         let log = self.log_manager.get_mut(log_id).expect("existing log");
         let leader_log = match log.r#type_mut() {
             LogType::Leader(leader) => leader,
@@ -1069,68 +1066,6 @@ impl ServerTask {
                     .await;
             }
         }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        /*let leader = match &mut self.r#type {
-            ServerType::Leader(leader) => leader,
-            ServerType::Follower(_follower) => {
-                panic!("Cannot acknowledge as follower");
-            }
-        };
-
-        let from_last_committed_log_entry_id =
-            leader.log().last_committed_log_entry_id().map(usize::from);
-
-        for log_entry_id in log_entry_ids {
-            if let Err(error) = leader.log_mut().acknowledge(*log_entry_id, server_id) {
-                match error {
-                    LogError::NotAcknowledgeable | LogError::AlreadyAcknowledged => {}
-                    error => {
-                        error!("{}", error);
-                    }
-                }
-
-                continue;
-            }
-
-            debug!(
-                "Log entry {} acknowledged by server {}",
-                log_entry_id, server_id
-            );
-        }
-
-        let to_last_committed_log_entry_id =
-            leader.log().last_committed_log_entry_id().map(usize::from);
-
-        let committed_log_entry_id_range = match (
-            from_last_committed_log_entry_id,
-            to_last_committed_log_entry_id,
-        ) {
-            (None, Some(to)) => Some(to..(to + 1)),
-            (Some(from), Some(to)) => Some((from + 1)..(to + 1)),
-            _ => None,
-        };
-
-        if let Some(committed_log_entry_id_range) = committed_log_entry_id_range {
-            let last_committed_log_entry_id = leader.log_mut().last_committed_log_entry_id();
-            let current_term = leader.log_mut().current_term();
-
-            self.on_commit_log_entries(SERVER_SYSTEM_LOG_ID, committed_log_entry_id_range.map(LogEntryId::from))
-                .await;
-
-            for server_node_message_sender in self.server_node_message_senders.iter().flatten() {
-                server_node_message_sender
-                    .do_send(ServerNodeReplicationMessage::new(
-                        ServerNodeReplicationMessageInput::new(
-                            Vec::default(),
-                            last_committed_log_entry_id.map(LogEntryId::from),
-                            current_term,
-                        ),
-                    ))
-                    .await;
-            }
-        }*/
     }
 
     async fn on_commit_log_entries<T>(&mut self, log_id: LogId, log_entry_ids: T)
@@ -1148,7 +1083,11 @@ impl ServerTask {
 
             spawn(async move {
                 module
-                    .on_commit(ServerModuleCommitEventInput::new(server, log_id, log_entry_id))
+                    .on_commit(ServerModuleCommitEventInput::new(
+                        server,
+                        log_id,
+                        log_entry_id,
+                    ))
                     .await;
             });
         }
@@ -1156,7 +1095,12 @@ impl ServerTask {
         debug!("Committed log entry {}", log_entry_id,);
 
         if log_id == SERVER_SYSTEM_LOG_ID {
-            let log_entry = match self.log_manager.get(log_id).expect("server system log").r#type() {
+            let log_entry = match self
+                .log_manager
+                .get(log_id)
+                .expect("server system log")
+                .r#type()
+            {
                 LogType::Leader(leader) => leader.entries().get(usize::from(log_entry_id)),
                 LogType::Follower(follower) => {
                     match follower.entries().get(usize::from(log_entry_id)) {

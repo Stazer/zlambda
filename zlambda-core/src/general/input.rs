@@ -372,7 +372,9 @@ pub struct GeneralLogEntriesAppendResponseMessageInput {
     missing_log_entry_ids: Vec<LogEntryId>,
 }
 
-impl From<GeneralLogEntriesAppendResponseMessageInput> for (LogId, Vec<LogEntryId>, Vec<LogEntryId>) {
+impl From<GeneralLogEntriesAppendResponseMessageInput>
+    for (LogId, Vec<LogEntryId>, Vec<LogEntryId>)
+{
     fn from(input: GeneralLogEntriesAppendResponseMessageInput) -> Self {
         (
             input.log_id,

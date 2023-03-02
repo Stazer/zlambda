@@ -81,6 +81,10 @@ impl Log {
             LogType::Follower(follower) => follower.last_committed_log_entry_id(),
         }
     }
+
+    pub fn entries(&self) -> LogEntries<'_> {
+        LogEntries::new(self)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,15 +94,11 @@ pub struct LogEntries<'a> {
 }
 
 impl<'a> LogEntries<'a> {
-    pub fn new(
-        log: &'a Log,
-    ) -> Self  {
-        Self {
-            log,
-        }
+    pub(crate) fn new(log: &'a Log) -> Self {
+        Self { log }
     }
 
-    pub fn get(&'a self, id: LogEntryId) -> Option<&'a LogEntry> {
+    pub fn get(&self, id: LogEntryId) -> Option<&'a LogEntry> {
         match self.log.r#type() {
             LogType::Leader(leader) => leader.entries().get(usize::from(id)),
             LogType::Follower(follower) => match follower.entries().get(usize::from(id)) {

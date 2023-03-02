@@ -2,7 +2,7 @@ use crate::common::message::{MessageSocketReceiver, MessageSocketSender};
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
-use crate::server::{LogId, LogEntry, LogEntryId, LogTerm};
+use crate::server::{LogEntry, LogEntryId, LogId, LogTerm};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -230,12 +230,20 @@ pub struct ServerNodeLogAppendResponseMessageInput {
 
 impl From<ServerNodeLogAppendResponseMessageInput> for (LogId, Vec<LogEntryId>, Vec<LogEntryId>) {
     fn from(input: ServerNodeLogAppendResponseMessageInput) -> Self {
-        (input.log_id, input.log_entry_ids, input.missing_log_entry_ids)
+        (
+            input.log_id,
+            input.log_entry_ids,
+            input.missing_log_entry_ids,
+        )
     }
 }
 
 impl ServerNodeLogAppendResponseMessageInput {
-    pub fn new(log_id: LogId, log_entry_ids: Vec<LogEntryId>, missing_log_entry_ids: Vec<LogEntryId>) -> Self {
+    pub fn new(
+        log_id: LogId,
+        log_entry_ids: Vec<LogEntryId>,
+        missing_log_entry_ids: Vec<LogEntryId>,
+    ) -> Self {
         Self {
             log_id,
             log_entry_ids,
