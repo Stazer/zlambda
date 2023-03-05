@@ -335,11 +335,12 @@ impl ServerTask {
     }
 
     pub async fn run(mut self) {
-        for module in self.module_manager.iter() {
+        for (module_id, module) in self.module_manager.iter() {
             module
-                .on_startup(ServerModuleStartupEventInput::new(Arc::new(Server::from(
-                    self.sender.clone(),
-                ))))
+                .on_startup(ServerModuleStartupEventInput::new(
+                    Arc::new(Server::from(self.sender.clone())),
+                    module_id,
+                ))
                 .await;
         }
 
@@ -366,9 +367,12 @@ impl ServerTask {
             )
         }
 
-        for module in self.module_manager.iter() {
+        for (module_id, module) in self.module_manager.iter() {
             module
-                .on_shutdown(ServerModuleShutdownEventInput::new(self.server.clone()))
+                .on_shutdown(ServerModuleShutdownEventInput::new(
+                    self.server.clone(),
+                    module_id,
+                ))
                 .await;
         }
     }
@@ -931,6 +935,9 @@ impl ServerTask {
                     .into(),
                 );
         }
+
+        self.acknowledge(log_id, &vec!(log_entry_id), self.server_id)
+            .await;
     }
 
     async fn on_server_commit_commit_message(&mut self, message: ServerCommitCommitMessage) {
@@ -955,7 +962,6 @@ impl ServerTask {
 
     async fn on_server_log_create_message(&mut self, message: ServerLogCreateMessage) {
         let (_input, output_sender) = message.into();
-
     }
 
     async fn replicate(
@@ -996,6 +1002,7 @@ impl ServerTask {
                 }
 
                 log_entry_ids
+
             }
             LogType::Follower(_follower) => {
                 unimplemented!()
@@ -1135,13 +1142,15 @@ impl ServerTask {
             }
         }
 
-        for module in self.module_manager.iter().cloned() {
+        for (module_id, module) in self.module_manager.iter() {
             let server = self.server.clone();
+            let module = module.clone();
 
             spawn(async move {
                 module
                     .on_commit(ServerModuleCommitEventInput::new(
                         server,
+                        module_id,
                         log_id,
                         log_entry_id,
                     ))

@@ -281,6 +281,7 @@ impl ServerClientTask {
                     module
                         .on_notification(ServerModuleNotificationEventInput::new(
                             server,
+                            r#type.module_id(),
                             client_source.into(),
                             receiver,
                         ))
@@ -311,6 +312,7 @@ impl ServerClientTask {
                     module
                         .on_notification(ServerModuleNotificationEventInput::new(
                             server,
+                            r#type.module_id(),
                             client_source.into(),
                             receiver,
                         ))

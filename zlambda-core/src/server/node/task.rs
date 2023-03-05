@@ -613,6 +613,7 @@ impl ServerNodeTask {
                     module
                         .on_notification(ServerModuleNotificationEventInput::new(
                             server,
+                            r#type.module_id(),
                             server_source.into(),
                             receiver,
                         ))
@@ -643,6 +644,7 @@ impl ServerNodeTask {
                     module
                         .on_notification(ServerModuleNotificationEventInput::new(
                             server,
+                            r#type.module_id(),
                             server_source.into(),
                             receiver,
                         ))

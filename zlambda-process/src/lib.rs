@@ -54,7 +54,7 @@ impl ModuleEventListener for EventListener {
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use zlambda_core::common::async_trait;
-use zlambda_core::common::module::{Module};
+use zlambda_core::common::module::Module;
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
@@ -75,10 +75,7 @@ impl From<ProcessDispatcherNotificationHeader> for (String, Vec<String>) {
 }
 
 impl ProcessDispatcherNotificationHeader {
-    pub fn new(
-        program: String,
-        arguments: Vec<String>,
-    ) -> Self {
+    pub fn new(program: String, arguments: Vec<String>) -> Self {
         Self { program, arguments }
     }
 
@@ -90,7 +87,6 @@ impl ProcessDispatcherNotificationHeader {
         &self.arguments
     }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

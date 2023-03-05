@@ -185,6 +185,7 @@ impl Server {
         module
             .on_notification(ServerModuleNotificationEventInput::new(
                 Server::new(self.server_message_sender.clone()),
+                module_id,
                 server_source.into(),
                 receiver,
             ))

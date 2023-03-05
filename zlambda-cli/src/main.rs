@@ -12,13 +12,14 @@ use zlambda_core::common::future::stream::{empty, StreamExt};
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::common::utility::Bytes;
-use zlambda_process::ProcessDispatcher;
 use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
 use zlambda_dynamic::DynamicLibraryManager;
+use zlambda_process::ProcessDispatcher;
 use zlambda_router::round_robin::{GlobalRoundRobinRouter, LocalRoundRobinRouter};
+use zlambda_scheduler::real_time::DeadlineRealTimeScheduler;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -131,6 +132,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .add_module(PrintServerModule::default())
                 .add_module(GlobalRoundRobinRouter::default())
                 .add_module(ProcessDispatcher::default())
+                .add_module(DeadlineRealTimeScheduler::default())
                 .build(
                     listener_address,
                     match command {

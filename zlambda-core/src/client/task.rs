@@ -97,8 +97,9 @@ impl ClientTask {
     }
 
     pub async fn run(mut self) {
-        for module in self.module_manager.iter().cloned() {
+        for (_module_id, module) in self.module_manager.iter() {
             let client_handle = self.handle();
+            let module = module.clone();
 
             spawn(async move {
                 module
@@ -111,8 +112,9 @@ impl ClientTask {
             self.select().await
         }
 
-        for module in self.module_manager.iter().cloned() {
+        for (_module_id, module) in self.module_manager.iter() {
             let client_handle = self.handle();
+            let module = module.clone();
 
             spawn(async move {
                 module

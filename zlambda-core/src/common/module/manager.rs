@@ -30,7 +30,7 @@ where
     T: ?Sized + 'static,
 {
     pub fn get_by_module_id(&self, id: ModuleId) -> Option<&Arc<T>> {
-        match self.modules.get(id) {
+        match self.modules.get(usize::from(id)) {
             None | Some(None) => None,
             Some(Some(ref module)) => Some(module),
         }
@@ -40,8 +40,14 @@ where
         self.type_id_lookup.get(&type_id)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Arc<T>> {
-        self.modules.iter().flatten()
+    pub fn iter(&self) -> impl Iterator<Item = (ModuleId, &Arc<T>)> {
+        self.modules
+            .iter()
+            .enumerate()
+            .flat_map(|(module_id, module)| match module {
+                Some(module) => Some((ModuleId::from(module_id), module)),
+                None => None,
+            })
     }
 
     pub fn load(&mut self, module: Arc<T>) -> Result<ModuleId, LoadModuleError> {
@@ -54,11 +60,11 @@ where
 
         self.modules.push(Some(module));
 
-        Ok(module_id)
+        Ok(ModuleId::from(module_id))
     }
 
     pub fn unload(&mut self, module_id: ModuleId) -> Result<(), UnloadModuleError> {
-        match self.modules.get_mut(module_id) {
+        match self.modules.get_mut(usize::from(module_id)) {
             None | Some(None) => Err(UnloadModuleError::ModuleNotFound),
             Some(module) => module
                 .take()
