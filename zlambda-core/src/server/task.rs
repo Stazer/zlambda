@@ -936,7 +936,7 @@ impl ServerTask {
                 );
         }
 
-        self.acknowledge(log_id, &vec!(log_entry_id), self.server_id)
+        self.acknowledge(log_id, &vec![log_entry_id], self.server_id)
             .await;
     }
 
@@ -1002,7 +1002,6 @@ impl ServerTask {
                 }
 
                 log_entry_ids
-
             }
             LogType::Follower(_follower) => {
                 unimplemented!()

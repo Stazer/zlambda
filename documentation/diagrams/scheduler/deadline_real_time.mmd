@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant c
+    participant s0
+    participant s1
+    participant s2
+
+    c->>s1: send notification (deadline=d0)
+    Note over s0, s2: commit register (issuer=s1, id=n0, deadline=d0)
+    c->>s1: send notification (deadline=d1)
+    Note over s0, s2: commit register (issuer=s1, id=n1, deadline=d1)
+    c->>s2: send notification (deadline=d2)
+    Note over s0, s2: commit register (issuer=s2, id=n0, deadline=d2)
