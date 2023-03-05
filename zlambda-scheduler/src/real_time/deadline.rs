@@ -1,8 +1,19 @@
 use zlambda_core::common::async_trait;
+use serde::{Deserialize, Serialize};
 use zlambda_core::common::module::Module;
 use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
+    ServerModuleCommitEventInput,ServerModuleCommitEventOutput,
 };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DeadlineRealTimeSchedulerLogEntryData {
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,5 +29,11 @@ impl ServerModule for DeadlineRealTimeScheduler {
         &self,
         _input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
+    }
+
+    async fn on_commit(
+        &self,
+        _input: ServerModuleCommitEventInput,
+    ) -> ServerModuleCommitEventOutput {
     }
 }

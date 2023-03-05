@@ -18,17 +18,17 @@ use zlambda_core::server::{
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct GlobalRoundRobinSchedulerNotificationHeader {
+pub struct GlobalRoundRobinRouterNotificationHeader {
     module_id: ModuleId,
 }
 
-impl From<GlobalRoundRobinSchedulerNotificationHeader> for (ModuleId,) {
-    fn from(envelope: GlobalRoundRobinSchedulerNotificationHeader) -> Self {
+impl From<GlobalRoundRobinRouterNotificationHeader> for (ModuleId,) {
+    fn from(envelope: GlobalRoundRobinRouterNotificationHeader) -> Self {
         (envelope.module_id,)
     }
 }
 
-impl GlobalRoundRobinSchedulerNotificationHeader {
+impl GlobalRoundRobinRouterNotificationHeader {
     pub fn new(module_id: ModuleId) -> Self {
         Self { module_id }
     }
@@ -66,17 +66,17 @@ impl GlobalRoundRobinLogEntryData {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Default, Debug)]
-pub struct GlobalRoundRobinScheduler {
+pub struct GlobalRoundRobinRouter {
     global_counter: AtomicUsize,
     local_counter: AtomicUsize,
     receivers: Mutex<HashMap<usize, NotificationBodyItemQueueReceiver>>,
 }
 
 #[async_trait]
-impl Module for GlobalRoundRobinScheduler {}
+impl Module for GlobalRoundRobinRouter {}
 
 #[async_trait]
-impl ServerModule for GlobalRoundRobinScheduler {
+impl ServerModule for GlobalRoundRobinRouter {
     async fn on_notification(
         &self,
         input: ServerModuleNotificationEventInput,
@@ -161,7 +161,7 @@ impl ServerModule for GlobalRoundRobinScheduler {
 
         let mut deserializer = receiver.expect("existing receiver").deserializer();
         let header = deserializer
-            .deserialize::<GlobalRoundRobinSchedulerNotificationHeader>()
+            .deserialize::<GlobalRoundRobinRouterNotificationHeader>()
             .await
             .unwrap();
 

@@ -10,17 +10,17 @@ use zlambda_core::server::{
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct LocalRoundRobinSchedulerNotificationHeader {
+pub struct LocalRoundRobinRouterNotificationHeader {
     module_id: ModuleId,
 }
 
-impl From<LocalRoundRobinSchedulerNotificationHeader> for (ModuleId,) {
-    fn from(envelope: LocalRoundRobinSchedulerNotificationHeader) -> Self {
+impl From<LocalRoundRobinRouterNotificationHeader> for (ModuleId,) {
+    fn from(envelope: LocalRoundRobinRouterNotificationHeader) -> Self {
         (envelope.module_id,)
     }
 }
 
-impl LocalRoundRobinSchedulerNotificationHeader {
+impl LocalRoundRobinRouterNotificationHeader {
     pub fn new(module_id: ModuleId) -> Self {
         Self { module_id }
     }
@@ -33,15 +33,15 @@ impl LocalRoundRobinSchedulerNotificationHeader {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Default, Debug)]
-pub struct LocalRoundRobinScheduler {
+pub struct LocalRoundRobinRouter {
     counter: AtomicUsize,
 }
 
 #[async_trait]
-impl Module for LocalRoundRobinScheduler {}
+impl Module for LocalRoundRobinRouter {}
 
 #[async_trait]
-impl ServerModule for LocalRoundRobinScheduler {
+impl ServerModule for LocalRoundRobinRouter {
     async fn on_notification(
         &self,
         input: ServerModuleNotificationEventInput,
@@ -72,7 +72,7 @@ impl ServerModule for LocalRoundRobinScheduler {
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
         let header = deserializer
-            .deserialize::<LocalRoundRobinSchedulerNotificationHeader>()
+            .deserialize::<LocalRoundRobinRouterNotificationHeader>()
             .await
             .unwrap();
 

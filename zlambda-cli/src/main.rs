@@ -12,12 +12,13 @@ use zlambda_core::common::future::stream::{empty, StreamExt};
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::common::utility::Bytes;
+use zlambda_process::ProcessDispatcher;
 use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
 use zlambda_dynamic::DynamicLibraryManager;
-use zlambda_scheduler::round_robin::{GlobalRoundRobinScheduler, LocalRoundRobinScheduler};
+use zlambda_router::round_robin::{GlobalRoundRobinRouter, LocalRoundRobinRouter};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -109,12 +110,6 @@ impl PrintServerModule {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-async fn increase(data: &mut i32) {
-    *data = *data;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = MainArguments::parse();
@@ -132,9 +127,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             ServerBuilder::default()
                 .add_module(DynamicLibraryManager::default())
-                .add_module(LocalRoundRobinScheduler::default())
+                .add_module(LocalRoundRobinRouter::default())
                 .add_module(PrintServerModule::default())
-                .add_module(GlobalRoundRobinScheduler::default())
+                .add_module(GlobalRoundRobinRouter::default())
+                .add_module(ProcessDispatcher::default())
                 .build(
                     listener_address,
                     match command {

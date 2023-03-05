@@ -3,6 +3,7 @@ members = [
     "zlambda-cli",
     "zlambda-core",
     "zlambda-dynamic",
+    "zlambda-process",
     "zlambda-router",
     "zlambda-scheduler",
     "zlambda-wasm",
