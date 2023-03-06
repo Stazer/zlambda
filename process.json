@@ -1,0 +1,8 @@
+{
+    "program": "echo",
+    "arguments": [
+        "Hello",
+        "World"
+    ],
+    "module_id": 0
+}

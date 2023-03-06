@@ -24,30 +24,30 @@ use zlambda_core::server::{
 
 #[derive(Debug)]
 pub struct DeadlineRealTimeScheduleEntryData {
-    server_id: ServerId,
-    notification_id: NotificationId,
+    source_server_id: ServerId,
+    source_notification_id: NotificationId,
     deadline: DateTime<Utc>,
 }
 
 impl DeadlineRealTimeScheduleEntryData {
     pub fn new(
-        server_id: ServerId,
-        notification_id: NotificationId,
+        source_server_id: ServerId,
+        source_notification_id: NotificationId,
         deadline: DateTime<Utc>,
     ) -> Self {
         Self {
-            server_id,
-            notification_id,
+            source_server_id,
+            source_notification_id,
             deadline,
         }
     }
 
-    pub fn server_id(&self) -> ServerId {
-        self.server_id
+    pub fn source_server_id(&self) -> ServerId {
+        self.source_server_id
     }
 
-    pub fn notification_id(&self) -> NotificationId {
-        self.notification_id
+    pub fn source_notification_id(&self) -> NotificationId {
+        self.source_notification_id
     }
 
     pub fn deadline(&self) -> &DateTime<Utc> {

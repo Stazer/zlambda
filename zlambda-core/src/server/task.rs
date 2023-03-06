@@ -1195,7 +1195,6 @@ impl ServerTask {
                             todo!();
                         }
                     }
-                    ServerSystemLogEntryData::Data(_) => {}
                     ServerSystemLogEntryData::CreateLog(data) => {
                         self.log_manager.insert(Log::new(
                             data.log_id(),

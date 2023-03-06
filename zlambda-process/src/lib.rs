@@ -1,64 +1,19 @@
-/*use serde::{Deserialize, Serialize};
-use serde_json::from_slice;
-use tokio::process::Command;
-use zlambda_common::async_trait::async_trait;
-use zlambda_common::module::{
-    DispatchModuleEventError, DispatchModuleEventInput, DispatchModuleEventOutput,
-    InitializeModuleEventError, InitializeModuleEventInput, InitializeModuleEventOutput,
-    ModuleEventListener,
-};
-use zlambda_common::module_event_listener;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug, Deserialize, Serialize)]
-struct DispatchPayload {
-    program: String,
-    arguments: Vec<String>,
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct EventListener {}
-
-#[async_trait]
-impl ModuleEventListener for EventListener {
-    async fn initialize(
-        _input: InitializeModuleEventInput,
-    ) -> Result<InitializeModuleEventOutput, InitializeModuleEventError> {
-        Ok(InitializeModuleEventOutput::new(Box::new(Self {})))
-    }
-
-    async fn dispatch(
-        &self,
-        event: DispatchModuleEventInput,
-    ) -> Result<DispatchModuleEventOutput, DispatchModuleEventError> {
-        let (payload,) = event.into();
-
-        let payload = from_slice::<DispatchPayload>(&payload)
-            .map_err(|e| DispatchModuleEventError::from(Box::from(e)))
-            .unwrap();
-
-        let stdout = Command::new(payload.program)
-            .args(payload.arguments)
-            .output()
-            .await
-            .map_err(|e| DispatchModuleEventError::from(Box::from(e)))
-            .unwrap()
-            .stdout;
-
-        Ok(DispatchModuleEventOutput::new(stdout.into()))
-    }
-}*/
-
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use zlambda_core::common::async_trait;
-use zlambda_core::common::module::Module;
-use zlambda_core::common::notification::NotificationBodyItemStreamExt;
+use zlambda_core::common::module::{ModuleId, Module};
+use zlambda_core::common::notification::{
+    NotificationBodyItemStreamExt,
+    notification_body_item_queue,
+};
+use zlambda_core::common::future::stream::StreamExt;
+use zlambda_core::common::runtime::spawn;
+use zlambda_core::common::bytes::Bytes;
 use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
 };
+use std::process::Stdio;
+use zlambda_core::common::io::{AsyncReadExt, AsyncWriteExt};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,17 +21,22 @@ use zlambda_core::server::{
 pub struct ProcessDispatcherNotificationHeader {
     program: String,
     arguments: Vec<String>,
+    module_id: ModuleId,
 }
 
-impl From<ProcessDispatcherNotificationHeader> for (String, Vec<String>) {
+impl From<ProcessDispatcherNotificationHeader> for (String, Vec<String>, ModuleId) {
     fn from(header: ProcessDispatcherNotificationHeader) -> Self {
-        (header.program, header.arguments)
+        (header.program, header.arguments, header.module_id)
     }
 }
 
 impl ProcessDispatcherNotificationHeader {
-    pub fn new(program: String, arguments: Vec<String>) -> Self {
-        Self { program, arguments }
+    pub fn new(program: String, arguments: Vec<String>, module_id: ModuleId) -> Self {
+        Self {
+            program,
+            arguments,
+            module_id,
+        }
     }
 
     pub fn program(&self) -> &String {
@@ -85,6 +45,10 @@ impl ProcessDispatcherNotificationHeader {
 
     pub fn arguments(&self) -> &Vec<String> {
         &self.arguments
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        self.module_id
     }
 }
 
@@ -102,7 +66,7 @@ impl ServerModule for ProcessDispatcher {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let (_server, _source, notification_body_item_queue_receiver) = input.into();
+        let (server, _source, notification_body_item_queue_receiver) = input.into();
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
         let header = deserializer
@@ -110,13 +74,40 @@ impl ServerModule for ProcessDispatcher {
             .await
             .unwrap();
 
-        let stdout = Command::new(header.program)
-            .args(header.arguments)
-            .output()
-            .await
-            .unwrap()
-            .stdout;
+        let module_id = header.module_id();
 
-        println!("{:?}", std::str::from_utf8(&stdout));
+        let mut child = Command::new(header.program)
+            .args(header.arguments)
+            .stdout(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()
+            .expect("running process");
+
+        let (sender, receiver) = notification_body_item_queue();
+
+        let mut stdout = child.stdout.take().expect("stdout handle");
+        let mut stdin = child.stdin.take().expect("stdin handle");
+
+        spawn(async move {
+            loop {
+                let mut buffer = Vec::with_capacity(4096);
+
+                let result = stdout.read_buf(&mut buffer).await;
+
+                if matches!(result, Ok(0)) || matches!(result, Err(_)){
+                    break;
+                }
+
+                sender.do_send(Bytes::from(buffer)).await;
+            }
+        });
+
+        spawn(async move {
+            server.notify(module_id, receiver).await;
+        });
+
+        while let Some(item) = deserializer.next().await {
+            stdin.write(&item).await.expect("successful write");
+        }
     }
 }
