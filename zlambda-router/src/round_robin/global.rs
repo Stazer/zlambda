@@ -97,32 +97,17 @@ impl ServerModule for GlobalRoundRobinRouter {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let server_id = input.server().server_id().await;
+        let (server, _source, notification_body_item_queue_receiver) = input.into();
+
+        let server_id = server.server_id().await;
+
         let log_id = {
             let log_ids = self.log_ids.read().await;
-            *log_ids.get(&server_id).expect("valid log id for server")
+            match log_ids.get(&server_id) {
+                Some(log_id) => *log_id,
+                None => return,
+            }
         };
-
-        let local_counter = self.local_counter.fetch_add(1, Ordering::Relaxed);
-
-        input
-            .server()
-            .logs()
-            .get(log_id)
-            .commit(
-                serialize_to_bytes(&ServerSystemLogEntryData::Data(
-                    serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(
-                        server_id,
-                        local_counter,
-                    ))
-                    .expect("")
-                    .into(),
-                ))
-                .expect("")
-                .into(),
-            )
-            .await;
-        /*let (server, _source, notification_body_item_queue_receiver) = input.into();
 
         let local_counter = self.local_counter.fetch_add(1, Ordering::Relaxed);
 
@@ -132,56 +117,51 @@ impl ServerModule for GlobalRoundRobinRouter {
         }
 
         server
+            .logs()
+            .get(log_id)
             .commit(
-                serialize_to_bytes(&ServerSystemLogEntryData::Data(
-                    serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(
-                        server.server_id().await,
-                        local_counter,
-                    ))
+                serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(
+                    server_id,
+                    local_counter,
+                ))
                     .expect("")
                     .into(),
-                ))
-                .expect("")
-                .into(),
             )
-            .await;*/
+            .await;
     }
 
     async fn on_commit(
         &self,
         input: ServerModuleCommitEventInput,
     ) -> ServerModuleCommitEventOutput {
-        /*let (server, log_entry_id) = input.into();
+        let server_id = input.server().server_id().await;
 
-        let log_entry = server
-            .logs()
-            .get(LogId::from(0))
-            .get(log_entry_id)
-            .await
-            .expect("existing log entry");
-
-        let bytes = match deserialize_from_bytes(log_entry.data()).expect("").0 {
-            ServerSystemLogEntryData::Data(bytes) => bytes,
-            _ => return,
+        let log_id = {
+            let log_ids = self.log_ids.read().await;
+            match log_ids.get(&server_id) {
+                Some(log_id) => *log_id,
+                None => return,
+            }
         };
 
-        let log_entry_data = deserialize_from_bytes::<GlobalRoundRobinLogEntryData>(&bytes)
-            .expect("derialized log entry data")
-            .0;
-
-        let global_counter = self.global_counter.fetch_add(1, Ordering::Relaxed);
-
-        if log_entry_data.issuer_server_id() != server.server_id().await {
+        if input.log_id() != log_id {
             return;
         }
 
-        let receiver = {
-            let mut receivers = self.receivers.lock().await;
-            receivers.remove(&log_entry_data.local_counter())
-        };
+        let log_entry = input
+            .server()
+            .logs()
+            .get(log_id)
+            .get(input.log_entry_id())
+            .await
+            .expect("existing log entry");
+
+        let log_entry_data = deserialize_from_bytes::<GlobalRoundRobinLogEntryData>(log_entry.data()).expect("valid log entry data").0;
+
+        let global_counter = self.global_counter.fetch_add(1, Ordering::Relaxed);
 
         let next_server_id = {
-            let socket_addresses = server.servers().socket_addresses().await;
+            let socket_addresses = input.server().servers().socket_addresses().await;
 
             let mut next_server_id = global_counter % socket_addresses.len();
 
@@ -200,14 +180,22 @@ impl ServerModule for GlobalRoundRobinRouter {
             ServerId::from(next_server_id)
         };
 
-        let mut deserializer = receiver.expect("existing receiver").deserializer();
+        let receiver = {
+            let mut receivers = self.receivers.lock().await;
+            match receivers.remove(&log_entry_data.local_counter()) {
+                Some(receiver) => receiver,
+                None => return,
+            }
+        };
+
+        let mut deserializer = receiver.deserializer();
         let header = deserializer
             .deserialize::<GlobalRoundRobinRouterNotificationHeader>()
             .await
             .unwrap();
 
-        if let Some(server) = server.servers().get(next_server_id).await {
+        if let Some(server) = input.server().servers().get(next_server_id).await {
             server.notify(header.module_id(), deserializer).await;
-        }*/
+        }
     }
 }
