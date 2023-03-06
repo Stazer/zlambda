@@ -12,12 +12,12 @@ use zlambda_core::common::notification::{
     NotificationBodyStreamDeserializer, NotificationId,
 };
 use zlambda_core::common::serialize::serialize_to_bytes;
-use zlambda_core::common::sync::Mutex;
+use zlambda_core::common::sync::{Mutex, RwLock};
 use zlambda_core::common::utility::TaggedType;
 use zlambda_core::server::{
     LogId, ServerId, ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
-    ServerSystemLogEntryData,
+    ServerModuleStartupEventInput, ServerModuleStartupEventOutput, ServerSystemLogEntryData,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -190,6 +190,7 @@ pub enum DeadlineRealTimeSchedulerLogEntryData {
 #[derive(Debug, Default)]
 pub struct DeadlineRealTimeScheduler {
     local_counter: AtomicUsize,
+    log_ids: RwLock<HashMap<ServerId, LogId>>,
     receivers: Mutex<
         HashMap<
             NotificationId,
@@ -204,13 +205,24 @@ impl Module for DeadlineRealTimeScheduler {}
 
 #[async_trait]
 impl ServerModule for DeadlineRealTimeScheduler {
+    async fn on_startup(
+        &self,
+        input: ServerModuleStartupEventInput,
+    ) -> ServerModuleStartupEventOutput {
+        let server_id = input.server().server_id().await;
+
+        if server_id == input.server().leader_server_id().await {
+            let log_id = input.server().logs().create().await;
+            let mut log_ids = self.log_ids.write().await;
+            log_ids.insert(server_id, log_id);
+        }
+    }
+
     async fn on_notification(
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
         let (server, _source, notification_body_item_queue_receiver) = input.into();
-
-        let local_counter = self.local_counter.fetch_add(1, atomic::Ordering::Relaxed);
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
 
@@ -219,22 +231,32 @@ impl ServerModule for DeadlineRealTimeScheduler {
             .await
             .expect("deserialized header");
 
+        let server_id = server.server_id().await;
+
+        let log_id = {
+            let log_ids = self.log_ids.read().await;
+            match log_ids.get(&server_id) {
+                None => return,
+                Some(log_id) => *log_id,
+            }
+        };
+
+        let local_counter = self.local_counter.fetch_add(1, atomic::Ordering::Relaxed);
+
         {
             let mut receivers = self.receivers.lock().await;
             receivers.insert(NotificationId::from(local_counter), deserializer);
         }
 
         server
+            .logs()
+            .get(log_id)
             .commit(
-                serialize_to_bytes(&ServerSystemLogEntryData::Data(
-                    serialize_to_bytes(&DeadlineRealTimeSchedulerLogEntryData::Register {
-                        notification_id: NotificationId::from(local_counter),
-                        server_id: server.server_id().await,
-                        deadline: header.deadline,
-                    })
-                    .expect("")
-                    .into(),
-                ))
+                serialize_to_bytes(&DeadlineRealTimeSchedulerLogEntryData::Register {
+                    notification_id: NotificationId::from(local_counter),
+                    server_id,
+                    deadline: header.deadline,
+                })
                 .expect("")
                 .into(),
             )
@@ -245,22 +267,30 @@ impl ServerModule for DeadlineRealTimeScheduler {
         &self,
         input: ServerModuleCommitEventInput,
     ) -> ServerModuleCommitEventOutput {
-        let (server, log_entry_id) = input.into();
+        let server_id = input.server().server_id().await;
 
-        let log_entry = server
+        let log_id = {
+            let log_ids = self.log_ids.read().await;
+            match log_ids.get(&server_id) {
+                None => return,
+                Some(log_id) => *log_id,
+            }
+        };
+
+        if log_id != input.log_id() {
+            return;
+        }
+
+        let log_entry = input
+            .server()
             .logs()
-            .get(LogId::from(0))
-            .get(log_entry_id)
+            .get(log_id)
+            .get(input.log_entry_id())
             .await
             .expect("existing log entry");
 
-        let bytes = match deserialize_from_bytes(log_entry.data()).expect("").0 {
-            ServerSystemLogEntryData::Data(bytes) => bytes,
-            _ => return,
-        };
-
         let log_entry_data =
-            deserialize_from_bytes::<DeadlineRealTimeSchedulerLogEntryData>(&bytes)
+            deserialize_from_bytes::<DeadlineRealTimeSchedulerLogEntryData>(log_entry.data())
                 .expect("derialized log entry data")
                 .0;
 
@@ -277,11 +307,9 @@ impl ServerModule for DeadlineRealTimeScheduler {
                     notification_id,
                     deadline,
                 ));
-
-                println!("{:?}", schedule);
             }
         }
 
-        if server.server_id().await == server.leader_server_id().await {}
+        if server_id == input.server().leader_server_id().await {}
     }
 }

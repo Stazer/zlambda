@@ -6,7 +6,7 @@ use zlambda_core::common::bytes::Bytes;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::{
-    NotificationBodyItemQueueReceiver, NotificationBodyItemStreamExt,
+    NotificationBodyItemQueueReceiver, NotificationBodyItemStreamExt, NotificationId,
 };
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::{Mutex, RwLock};
@@ -70,7 +70,7 @@ impl GlobalRoundRobinLogEntryData {
 pub struct GlobalRoundRobinRouter {
     global_counter: AtomicUsize,
     local_counter: AtomicUsize,
-    receivers: Mutex<HashMap<usize, NotificationBodyItemQueueReceiver>>,
+    receivers: Mutex<HashMap<NotificationId, NotificationBodyItemQueueReceiver>>,
     log_ids: RwLock<HashMap<ServerId, LogId>>,
 }
 
@@ -113,17 +113,17 @@ impl ServerModule for GlobalRoundRobinRouter {
 
         {
             let mut receivers = self.receivers.lock().await;
-            receivers.insert(local_counter, notification_body_item_queue_receiver);
+            receivers.insert(
+                NotificationId::from(local_counter),
+                notification_body_item_queue_receiver,
+            );
         }
 
         server
             .logs()
             .get(log_id)
             .commit(
-                serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(
-                    server_id,
-                    local_counter,
-                ))
+                serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(server_id, local_counter))
                     .expect("")
                     .into(),
             )
@@ -156,7 +156,10 @@ impl ServerModule for GlobalRoundRobinRouter {
             .await
             .expect("existing log entry");
 
-        let log_entry_data = deserialize_from_bytes::<GlobalRoundRobinLogEntryData>(log_entry.data()).expect("valid log entry data").0;
+        let log_entry_data =
+            deserialize_from_bytes::<GlobalRoundRobinLogEntryData>(log_entry.data())
+                .expect("valid log entry data")
+                .0;
 
         let global_counter = self.global_counter.fetch_add(1, Ordering::Relaxed);
 
@@ -182,7 +185,7 @@ impl ServerModule for GlobalRoundRobinRouter {
 
         let receiver = {
             let mut receivers = self.receivers.lock().await;
-            match receivers.remove(&log_entry_data.local_counter()) {
+            match receivers.remove(&NotificationId::from(log_entry_data.local_counter())) {
                 Some(receiver) => receiver,
                 None => return,
             }

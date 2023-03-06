@@ -192,13 +192,6 @@ impl Server {
             .await;
     }
 
-    #[deprecated]
-    pub async fn commit(&self, data: Bytes) {
-        self.server_message_sender
-            .do_send_synchronized(ServerCommitMessageInput::new(SERVER_SYSTEM_LOG_ID, data))
-            .await;
-    }
-
     pub async fn wait(&self) {
         pending::<()>().await;
         todo!()
