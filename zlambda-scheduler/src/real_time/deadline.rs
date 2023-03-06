@@ -1,6 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use std::cmp::{self, Reverse, Eq, Ord, PartialEq, PartialOrd};
+use std::cmp::{self, Eq, Ord, PartialEq, PartialOrd, Reverse};
 use std::collections::{BinaryHeap, HashMap};
 use std::sync::atomic::{self, AtomicUsize};
 use std::sync::Arc;
@@ -161,8 +161,9 @@ impl DeadlineRealTimeSchedule {
             data,
         ));
         self.entries.push(entry.clone());
-        self.deadline_sorted_entries
-            .push(Reverse(DeadlineRealTimeScheduleDeadlineSortedEntry::new(entry)));
+        self.deadline_sorted_entries.push(Reverse(
+            DeadlineRealTimeScheduleDeadlineSortedEntry::new(entry),
+        ));
     }
 }
 
@@ -277,11 +278,10 @@ impl ServerModule for DeadlineRealTimeScheduler {
                     deadline,
                 ));
 
-               println!("{:?}", schedule);
+                println!("{:?}", schedule);
             }
         }
 
-        if server.server_id().await == server.leader_server_id().await {
-        }
+        if server.server_id().await == server.leader_server_id().await {}
     }
 }

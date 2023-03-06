@@ -270,6 +270,51 @@ impl ServerLogEntriesReplicationMessageOutput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ServerLogAppendInitiateMessageOutput {
+    last_committed_log_entry_id: Option<LogEntryId>,
+    current_log_term: LogTerm,
+    log_entries: Vec<LogEntry>,
+}
+
+impl From<ServerLogAppendInitiateMessageOutput> for (Option<LogEntryId>, LogTerm, Vec<LogEntry>) {
+    fn from(output: ServerLogAppendInitiateMessageOutput) -> Self {
+        (
+            output.last_committed_log_entry_id,
+            output.current_log_term,
+            output.log_entries,
+        )
+    }
+}
+
+impl ServerLogAppendInitiateMessageOutput {
+    pub fn new(
+        last_committed_log_entry_id: Option<LogEntryId>,
+        current_log_term: LogTerm,
+        log_entries: Vec<LogEntry>,
+    ) -> Self {
+        Self {
+            last_committed_log_entry_id,
+            current_log_term,
+            log_entries,
+        }
+    }
+
+    pub fn last_committed_log_entry_id(&self) -> &Option<LogEntryId> {
+        &self.last_committed_log_entry_id
+    }
+
+    pub fn current_term(&self) -> LogTerm {
+        self.current_log_term
+    }
+
+    pub fn log_entries(&self) -> &Vec<LogEntry> {
+        &self.log_entries
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ServerLogEntriesGetMessageOutput {
     log_entry: Option<LogEntry>,
 }

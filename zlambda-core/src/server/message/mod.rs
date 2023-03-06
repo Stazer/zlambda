@@ -81,6 +81,11 @@ pub type ServerLogAppendRequestMessage = AsynchronousMessage<ServerLogAppendRequ
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerLogAppendInitiateMessage =
+    SynchronousMessage<ServerLogAppendInitiateMessageInput, ServerLogAppendInitiateMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub type ServerServerSocketAddressGetMessage = SynchronousMessage<
     ServerServerSocketAddressGetMessageInput,
     ServerServerSocketAddressGetMessageOutput,
@@ -122,6 +127,11 @@ pub type ServerServerSocketAddressesGetMessage = SynchronousMessage<
 
 pub type ServerLogCreateMessage =
     SynchronousMessage<ServerLogCreateMessageInput, ServerLogCreateMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerCommitLogCreateMessage = AsynchronousMessage<ServerCommitLogCreateMessageInput>;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
@@ -136,6 +146,7 @@ pub enum ServerMessage {
     LogEntriesRecovery(ServerLogEntriesRecoveryMessage),
     LogEntriesGet(ServerLogEntriesGetMessage),
     LogAppendRequest(ServerLogAppendRequestMessage),
+    LogAppendInitiate(ServerLogAppendInitiateMessage),
     ModuleGet(ServerModuleGetMessage),
     ModuleLoad(ServerModuleLoadMessage),
     ModuleUnload(ServerModuleUnloadMessage),
@@ -149,6 +160,7 @@ pub enum ServerMessage {
     CommitCommit(ServerCommitCommitMessage),
     ServerSocketAddressesGet(ServerServerSocketAddressesGetMessage),
     LogCreate(ServerLogCreateMessage),
+    CommitLogCreate(ServerCommitLogCreateMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -235,6 +247,12 @@ impl From<ServerLogAppendRequestMessage> for ServerMessage {
     }
 }
 
+impl From<ServerLogAppendInitiateMessage> for ServerMessage {
+    fn from(message: ServerLogAppendInitiateMessage) -> Self {
+        Self::LogAppendInitiate(message)
+    }
+}
+
 impl From<ServerServerSocketAddressGetMessage> for ServerMessage {
     fn from(message: ServerServerSocketAddressGetMessage) -> Self {
         Self::ServerSocketAddressGet(message)
@@ -280,5 +298,11 @@ impl From<ServerServerSocketAddressesGetMessage> for ServerMessage {
 impl From<ServerLogCreateMessage> for ServerMessage {
     fn from(message: ServerLogCreateMessage) -> Self {
         Self::LogCreate(message)
+    }
+}
+
+impl From<ServerCommitLogCreateMessage> for ServerMessage {
+    fn from(message: ServerCommitLogCreateMessage) -> Self {
+        Self::CommitLogCreate(message)
     }
 }

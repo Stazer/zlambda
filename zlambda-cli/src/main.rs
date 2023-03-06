@@ -127,12 +127,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             ServerBuilder::default()
-                .add_module(DynamicLibraryManager::default())
-                //.add_module(LocalRoundRobinRouter::default())
+                //.add_module(DynamicLibraryManager::default())
                 .add_module(PrintServerModule::default())
-                //.add_module(GlobalRoundRobinRouter::default())
-                .add_module(ProcessDispatcher::default())
-                .add_module(DeadlineRealTimeScheduler::default())
+                //.add_module(ProcessDispatcher::default())
+                //.add_module(DeadlineRealTimeScheduler::default())
+                .add_module(GlobalRoundRobinRouter::default())
+                //.add_module(LocalRoundRobinRouter::default())
                 .build(
                     listener_address,
                     match command {

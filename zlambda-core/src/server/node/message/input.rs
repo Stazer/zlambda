@@ -19,14 +19,18 @@ impl ServerNodeShutdownMessageInput {
 
 #[derive(Debug)]
 pub struct ServerNodeReplicationMessageInput {
+    log_id: LogId,
     log_entries: Vec<LogEntry>,
     last_committed_log_entry_id: Option<LogEntryId>,
     log_current_term: LogTerm,
 }
 
-impl From<ServerNodeReplicationMessageInput> for (Vec<LogEntry>, Option<LogEntryId>, LogTerm) {
+impl From<ServerNodeReplicationMessageInput>
+    for (LogId, Vec<LogEntry>, Option<LogEntryId>, LogTerm)
+{
     fn from(input: ServerNodeReplicationMessageInput) -> Self {
         (
+            input.log_id,
             input.log_entries,
             input.last_committed_log_entry_id,
             input.log_current_term,
@@ -36,15 +40,21 @@ impl From<ServerNodeReplicationMessageInput> for (Vec<LogEntry>, Option<LogEntry
 
 impl ServerNodeReplicationMessageInput {
     pub fn new(
+        log_id: LogId,
         log_entries: Vec<LogEntry>,
         last_committed_log_entry_id: Option<LogEntryId>,
         log_current_term: LogTerm,
     ) -> Self {
         Self {
+            log_id,
             log_entries,
             last_committed_log_entry_id,
             log_current_term,
         }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 
     pub fn log_entries(&self) -> &Vec<LogEntry> {
@@ -261,6 +271,29 @@ impl ServerNodeLogAppendResponseMessageInput {
 
     pub fn missing_log_entry_ids(&self) -> &Vec<LogEntryId> {
         &self.missing_log_entry_ids
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerNodeLogAppendInitiateMessageInput {
+    log_id: LogId,
+}
+
+impl From<ServerNodeLogAppendInitiateMessageInput> for (LogId,) {
+    fn from(input: ServerNodeLogAppendInitiateMessageInput) -> Self {
+        (input.log_id,)
+    }
+}
+
+impl ServerNodeLogAppendInitiateMessageInput {
+    pub fn new(log_id: LogId) -> Self {
+        Self { log_id }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 }
 

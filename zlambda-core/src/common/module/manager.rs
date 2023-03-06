@@ -89,7 +89,7 @@ impl ModuleManager<dyn Module> {
 
 #[cfg(test)]
 mod test {
-    use crate::common::module::{Module, ModuleManager, UnloadModuleError};
+    use crate::common::module::{Module, ModuleId, ModuleManager, UnloadModuleError};
     use std::sync::Arc;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,7 +122,9 @@ mod test {
         let mut manager = ModuleManager::default();
         let module_id = manager.load(Arc::from(EmptyModule {})).unwrap();
 
-        assert!(manager.get_by_module_id(module_id + 1).is_none())
+        assert!(manager
+            .get_by_module_id(ModuleId::from(usize::from(module_id) + 1))
+            .is_none())
     }
 
     #[test]
@@ -154,7 +156,10 @@ mod test {
         let mut manager = ModuleManager::default();
         let module_id = manager.load(Arc::from(TestModule {})).unwrap();
 
-        assert!(manager.unload(module_id + 1) == Err(UnloadModuleError::ModuleNotFound))
+        assert!(
+            manager.unload(ModuleId::from(usize::from(module_id) + 1))
+                == Err(UnloadModuleError::ModuleNotFound)
+        )
     }
 
     #[test]

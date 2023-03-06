@@ -64,10 +64,10 @@ pub mod bytes {
 
 /*pub mod experimental {
     use crate::common::runtime::{select, spawn};
-    use std::mem::take;
-    use futures::FutureExt;
     use futures::future::BoxFuture;
+    use futures::FutureExt;
     use std::future::Future;
+    use std::mem::take;
     use tokio::sync::{mpsc, oneshot};
 
     enum ActorMessage<T>
@@ -76,9 +76,6 @@ pub mod bytes {
     {
         Handle {
             function: Box<dyn FnOnce(&mut T) -> BoxFuture<'static, ()> + Send + Sync>,
-        },
-        Wait {
-            sender: oneshot::Sender<()>,
         },
     }
 
@@ -98,31 +95,31 @@ pub mod bytes {
             Self { sender }
         }
 
-        pub async fn handle<'a, H, F, R>(&self, function: H) -> R
+        pub async fn handle<'a, H, F, R>(&'a self, function: H) -> R
         where
-            H: FnOnce(&mut T) -> F + Send + Sync + 'static,
-            F: Future<Output = R> + Send + Sync + 'static,
+            H: FnOnce(&'a mut T) -> F + Send + Sync + 'a,
+            F: Future<Output = R> + Send + Sync,
             R: Sync + Send + 'static,
         {
+            //let func = &function as *const dyn FnOnce(&'a mut T) -> F + Send + Sync;
+
             let (sender, receiver) = oneshot::channel::<R>();
 
-            self.sender.send(ActorMessage::Handle { function: Box::new(move |data| {
-                let future = function(data);
+            self.sender
+                .send(ActorMessage::Handle {
+                    function: Box::new(move |data| {
+                        //let future = function(data);
+                        //let future = unsafe { *func  }(data);
 
-                async move {
-                    sender.send(future.await);
-                }.boxed()
-            })}).await;
+                        async move {
+                            //sender.send(future.await);
+                        }
+                        .boxed()
+                    }),
+                })
+                .await;
 
             receiver.await.expect("")
-        }
-
-        pub async fn wait(&self) {
-            let (sender, receiver) = oneshot::channel::<()>();
-
-            self.sender.send(ActorMessage::Wait { sender }).await;
-
-            receiver.await;
         }
     }
 
@@ -134,7 +131,6 @@ pub mod bytes {
         receiver: mpsc::Receiver<ActorMessage<T>>,
         data: T,
         running: bool,
-        exit: Vec<oneshot::Sender<()>>,
     }
 
     impl<T> Default for ActorTask<T>
@@ -158,7 +154,6 @@ pub mod bytes {
                 receiver,
                 data,
                 running: true,
-                exit: Vec::default(),
             }
         }
 
@@ -174,10 +169,6 @@ pub mod bytes {
             while self.running {
                 self.select().await
             }
-
-            for exit in take(&mut self.exit).into_iter() {
-                exit.send(());
-            }
         }
 
         async fn select(&mut self) {
@@ -187,12 +178,27 @@ pub mod bytes {
                         ActorMessage::Handle { function } => {
                             function(&mut self.data).await
                         },
-                        ActorMessage::Wait { sender } => {
-                            self.exit.push(sender);
-                        }
                     }
                 }
             )
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[tokio::test]
+        async fn test1() {
+            let actor = ActorTask::new(32);
+            let address = actor.address();
+            actor.spawn();
+
+            address
+                .handle(async move |data| {
+                    println!("{}", *data);
+                })
+                .await;
         }
     }
 }*/

@@ -1,11 +1,11 @@
 use crate::common::message::AsynchronousMessage;
 use crate::general::{
     GeneralClientRegistrationRequestMessageInput, GeneralClientRegistrationResponseMessageInput,
-    GeneralLogEntriesAppendRequestMessageInput, GeneralLogEntriesAppendResponseMessageInput,
-    GeneralNodeHandshakeRequestMessageInput, GeneralNodeHandshakeResponseMessageInput,
-    GeneralNotificationMessageInput, GeneralRecoveryRequestMessageInput,
-    GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessageInput,
-    GeneralRegistrationResponseMessageInput,
+    GeneralLogEntriesAppendInitiateMessageInput, GeneralLogEntriesAppendRequestMessageInput,
+    GeneralLogEntriesAppendResponseMessageInput, GeneralNodeHandshakeRequestMessageInput,
+    GeneralNodeHandshakeResponseMessageInput, GeneralNotificationMessageInput,
+    GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
+    GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
 };
 use serde::{Deserialize, Serialize};
 
@@ -49,6 +49,11 @@ pub type GeneralLogEntriesAppendResponseMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type GeneralLogEntriesAppendInitiateMessage =
+    AsynchronousMessage<GeneralLogEntriesAppendInitiateMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub type GeneralClientRegistrationRequestMessage =
     AsynchronousMessage<GeneralClientRegistrationRequestMessageInput>;
 
@@ -73,6 +78,7 @@ pub enum GeneralMessage {
     NodeHandshakeResponse(GeneralNodeHandshakeResponseMessage),
     LogEntriesAppendRequest(GeneralLogEntriesAppendRequestMessage),
     LogEntriesAppendResponse(GeneralLogEntriesAppendResponseMessage),
+    LogEntriesAppendInitiate(GeneralLogEntriesAppendInitiateMessage),
     ClientRegistrationRequest(GeneralClientRegistrationRequestMessage),
     ClientRegistrationResponse(GeneralClientRegistrationResponseMessage),
     Notification(GeneralNotificationMessage),
@@ -123,6 +129,12 @@ impl From<GeneralLogEntriesAppendRequestMessage> for GeneralMessage {
 impl From<GeneralLogEntriesAppendResponseMessage> for GeneralMessage {
     fn from(message: GeneralLogEntriesAppendResponseMessage) -> Self {
         Self::LogEntriesAppendResponse(message)
+    }
+}
+
+impl From<GeneralLogEntriesAppendInitiateMessage> for GeneralMessage {
+    fn from(message: GeneralLogEntriesAppendInitiateMessage) -> Self {
+        Self::LogEntriesAppendInitiate(message)
     }
 }
 

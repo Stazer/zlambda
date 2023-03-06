@@ -7,6 +7,7 @@ use crate::common::notification::notification_body_item_queue;
 use crate::common::runtime::{select, spawn};
 use crate::common::utility::Bytes;
 use crate::general::{
+    GeneralLogEntriesAppendInitiateMessage, GeneralLogEntriesAppendInitiateMessageInput,
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
     GeneralLogEntriesAppendResponseMessage, GeneralLogEntriesAppendResponseMessageInput,
     GeneralMessage, GeneralNodeHandshakeRequestMessage, GeneralNodeHandshakeRequestMessageInput,
@@ -17,18 +18,19 @@ use crate::general::{
     GeneralNotificationMessageInputStartType, GeneralNotificationMessageInputType,
 };
 use crate::server::node::{
-    ServerNodeLogAppendResponseMessage, ServerNodeMessage, ServerNodeNodeHandshakeMessage,
-    ServerNodeNotificationEndMessage, ServerNodeNotificationImmediateMessage,
-    ServerNodeNotificationNextMessage, ServerNodeNotificationStartMessage,
-    ServerNodeNotificationStartMessageOutput, ServerNodeRecoveryMessage,
-    ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeShutdownMessage,
+    ServerNodeLogAppendInitiateMessage, ServerNodeLogAppendResponseMessage, ServerNodeMessage,
+    ServerNodeNodeHandshakeMessage, ServerNodeNotificationEndMessage,
+    ServerNodeNotificationImmediateMessage, ServerNodeNotificationNextMessage,
+    ServerNodeNotificationStartMessage, ServerNodeNotificationStartMessageOutput,
+    ServerNodeRecoveryMessage, ServerNodeRegistrationMessage, ServerNodeReplicationMessage,
+    ServerNodeShutdownMessage,
 };
 use crate::server::{
-    Server, ServerId, ServerLeaderServerIdGetMessageInput, ServerLogAppendRequestMessageInput,
-    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesRecoveryMessageInput,
-    ServerMessage, ServerModuleGetMessageInput, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventInputServerSource, ServerServerIdGetMessageInput,
-    ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
+    Server, ServerId, ServerLeaderServerIdGetMessageInput, ServerLogAppendInitiateMessageInput,
+    ServerLogAppendRequestMessageInput, ServerLogEntriesAcknowledgementMessageInput,
+    ServerLogEntriesRecoveryMessageInput, ServerMessage, ServerModuleGetMessageInput,
+    ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
+    ServerServerIdGetMessageInput, ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
 };
 use std::collections::HashMap;
 use std::future::pending;
@@ -239,6 +241,10 @@ impl ServerNodeTask {
                 self.on_server_node_log_append_response_message(message)
                     .await
             }
+            ServerNodeMessage::LogAppendInitiate(message) => {
+                self.on_server_node_log_append_initiate_message(message)
+                    .await
+            }
             ServerNodeMessage::NotificationImmediate(message) => {
                 self.on_server_node_notification_immediate_message(message)
                     .await
@@ -264,13 +270,14 @@ impl ServerNodeTask {
         match &mut self.general_socket {
             Some(ref mut general_socket) => {
                 let (input,) = message.into();
-                let (log_entries, last_committed_log_entry_id, log_current_term) = input.into();
+                let (log_id, log_entries, last_committed_log_entry_id, log_current_term) =
+                    input.into();
 
                 if let Err(error) = general_socket
                     .0
                     .send(GeneralLogEntriesAppendRequestMessage::new(
                         GeneralLogEntriesAppendRequestMessageInput::new(
-                            SERVER_SYSTEM_LOG_ID,
+                            log_id,
                             log_entries,
                             last_committed_log_entry_id,
                             log_current_term,
@@ -411,6 +418,24 @@ impl ServerNodeTask {
         }
     }
 
+    async fn on_server_node_log_append_initiate_message(
+        &mut self,
+        message: ServerNodeLogAppendInitiateMessage,
+    ) {
+        if let Some(general_socket) = &mut self.general_socket {
+            if let Err(error) = general_socket
+                .0
+                .send(GeneralLogEntriesAppendInitiateMessage::new(
+                    GeneralLogEntriesAppendInitiateMessageInput::new(message.input().log_id()),
+                ))
+                .await
+            {
+                error!("{}", error);
+                return;
+            }
+        }
+    }
+
     async fn on_server_node_notification_immediate_message(
         &mut self,
         message: ServerNodeNotificationImmediateMessage,
@@ -531,6 +556,10 @@ impl ServerNodeTask {
                 self.on_general_log_entries_append_response_message(message)
                     .await
             }
+            GeneralMessage::LogEntriesAppendInitiate(message) => {
+                self.on_general_log_entries_append_initiate_message(message)
+                    .await
+            }
             GeneralMessage::Notification(message) => {
                 self.on_general_notification_message(message).await
             }
@@ -583,6 +612,42 @@ impl ServerNodeTask {
                     missing_log_entry_ids,
                 ))
                 .await;
+        }
+    }
+
+    async fn on_general_log_entries_append_initiate_message(
+        &mut self,
+        message: GeneralLogEntriesAppendInitiateMessage,
+    ) {
+        let (input,) = message.into();
+
+        let output = self
+            .server_message_sender
+            .do_send_synchronous(ServerLogAppendInitiateMessageInput::new(input.log_id()))
+            .await;
+
+        let (last_committed_log_entry_id, log_current_term, log_entries) = output.into();
+
+        let general_socket = match &mut self.general_socket {
+            None => return,
+            Some(ref mut general_socket) => general_socket,
+        };
+
+        if let Err(error) = general_socket
+            .0
+            .send(GeneralLogEntriesAppendRequestMessage::new(
+                GeneralLogEntriesAppendRequestMessageInput::new(
+                    input.log_id(),
+                    log_entries,
+                    last_committed_log_entry_id,
+                    log_current_term,
+                ),
+            ))
+            .await
+        {
+            error!("{}", error);
+            let _ = general_socket;
+            self.general_socket = None;
         }
     }
 

@@ -1,12 +1,16 @@
 use crate::common::message::{
     MessageSocketReceiver, MessageSocketSender, SynchronizableMessageOutputSender,
+    SynchronousMessageOutputSender,
 };
 use crate::common::module::ModuleId;
 use crate::common::net::TcpStream;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::client::ServerClientId;
-use crate::server::{LogEntry, LogEntryData, LogEntryId, LogId, LogTerm, ServerId, ServerModule};
+use crate::server::{
+    LogEntry, LogEntryData, LogEntryId, LogId, LogTerm, ServerId, ServerLogCreateMessageOutput,
+    ServerModule,
+};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -431,6 +435,29 @@ impl ServerLogAppendRequestMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ServerLogAppendInitiateMessageInput {
+    log_id: LogId,
+}
+
+impl From<ServerLogAppendInitiateMessageInput> for (LogId,) {
+    fn from(input: ServerLogAppendInitiateMessageInput) -> Self {
+        (input.log_id,)
+    }
+}
+
+impl ServerLogAppendInitiateMessageInput {
+    pub fn new(log_id: LogId) -> Self {
+        Self { log_id }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ServerServerSocketAddressGetMessageInput {
     server_id: ServerId,
 }
@@ -578,11 +605,50 @@ impl ServerServerSocketAddressesGetMessageInput {
 pub struct ServerLogCreateMessageInput {}
 
 impl From<ServerLogCreateMessageInput> for () {
-    fn from(output: ServerLogCreateMessageInput) -> Self {}
+    fn from(input: ServerLogCreateMessageInput) -> Self {}
 }
 
 impl ServerLogCreateMessageInput {
     pub fn new() -> Self {
         Self {}
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerCommitLogCreateMessageInput {
+    output_sender: SynchronousMessageOutputSender<ServerLogCreateMessageOutput>,
+    log_id: LogId,
+}
+
+impl From<ServerCommitLogCreateMessageInput>
+    for (
+        SynchronousMessageOutputSender<ServerLogCreateMessageOutput>,
+        LogId,
+    )
+{
+    fn from(input: ServerCommitLogCreateMessageInput) -> Self {
+        (input.output_sender, input.log_id)
+    }
+}
+
+impl ServerCommitLogCreateMessageInput {
+    pub fn new(
+        output_sender: SynchronousMessageOutputSender<ServerLogCreateMessageOutput>,
+        log_id: LogId,
+    ) -> Self {
+        Self {
+            output_sender,
+            log_id,
+        }
+    }
+
+    pub fn output_sender(&self) -> &SynchronousMessageOutputSender<ServerLogCreateMessageOutput> {
+        &self.output_sender
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 }

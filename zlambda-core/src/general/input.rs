@@ -413,6 +413,29 @@ impl GeneralLogEntriesAppendResponseMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralLogEntriesAppendInitiateMessageInput {
+    log_id: LogId,
+}
+
+impl From<GeneralLogEntriesAppendInitiateMessageInput> for (LogId,) {
+    fn from(input: GeneralLogEntriesAppendInitiateMessageInput) -> Self {
+        (input.log_id,)
+    }
+}
+
+impl GeneralLogEntriesAppendInitiateMessageInput {
+    pub fn new(log_id: LogId) -> Self {
+        Self { log_id }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralClientRegistrationRequestMessageInput;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

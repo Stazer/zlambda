@@ -1,5 +1,5 @@
 use crate::common::utility::Bytes;
-use crate::server::ServerId;
+use crate::server::{LogId, ServerId};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -60,7 +60,25 @@ impl RemoveServerLogEntryData {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
-pub struct ServerSystemCreateLogLogEntryData {}
+pub struct ServerSystemCreateLogLogEntryData {
+    log_id: LogId,
+}
+
+impl From<ServerSystemCreateLogLogEntryData> for (LogId,) {
+    fn from(data: ServerSystemCreateLogLogEntryData) -> Self {
+        (data.log_id,)
+    }
+}
+
+impl ServerSystemCreateLogLogEntryData {
+    pub fn new(log_id: LogId) -> Self {
+        Self { log_id }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

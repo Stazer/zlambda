@@ -35,4 +35,8 @@ impl LogManager {
     pub fn len(&self) -> usize {
         self.logs.len()
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Log> {
+        self.logs.iter().flatten()
+    }
 }

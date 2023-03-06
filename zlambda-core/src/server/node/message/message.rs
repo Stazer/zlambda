@@ -1,11 +1,11 @@
 use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::node::{
-    ServerNodeLogAppendResponseMessageInput, ServerNodeNodeHandshakeMessageInput,
-    ServerNodeNotificationEndMessageInput, ServerNodeNotificationImmediateMessageInput,
-    ServerNodeNotificationNextMessageInput, ServerNodeNotificationStartMessageInput,
-    ServerNodeNotificationStartMessageOutput, ServerNodeRecoveryMessageInput,
-    ServerNodeRegistrationMessageInput, ServerNodeReplicationMessageInput,
-    ServerNodeShutdownMessageInput,
+    ServerNodeLogAppendInitiateMessageInput, ServerNodeLogAppendResponseMessageInput,
+    ServerNodeNodeHandshakeMessageInput, ServerNodeNotificationEndMessageInput,
+    ServerNodeNotificationImmediateMessageInput, ServerNodeNotificationNextMessageInput,
+    ServerNodeNotificationStartMessageInput, ServerNodeNotificationStartMessageOutput,
+    ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput,
+    ServerNodeReplicationMessageInput, ServerNodeShutdownMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,6 +32,11 @@ pub type ServerNodeNodeHandshakeMessage = AsynchronousMessage<ServerNodeNodeHand
 
 pub type ServerNodeLogAppendResponseMessage =
     AsynchronousMessage<ServerNodeLogAppendResponseMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerNodeLogAppendInitiateMessage =
+    AsynchronousMessage<ServerNodeLogAppendInitiateMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,6 +70,7 @@ pub enum ServerNodeMessage {
     Recovery(ServerNodeRecoveryMessage),
     NodeHandshake(ServerNodeNodeHandshakeMessage),
     LogAppendResponse(ServerNodeLogAppendResponseMessage),
+    LogAppendInitiate(ServerNodeLogAppendInitiateMessage),
     NotificationImmediate(ServerNodeNotificationImmediateMessage),
     NotificationStart(ServerNodeNotificationStartMessage),
     NotificationNext(ServerNodeNotificationNextMessage),
@@ -104,6 +110,12 @@ impl From<ServerNodeNodeHandshakeMessage> for ServerNodeMessage {
 impl From<ServerNodeLogAppendResponseMessage> for ServerNodeMessage {
     fn from(message: ServerNodeLogAppendResponseMessage) -> Self {
         Self::LogAppendResponse(message)
+    }
+}
+
+impl From<ServerNodeLogAppendInitiateMessage> for ServerNodeMessage {
+    fn from(message: ServerNodeLogAppendInitiateMessage) -> Self {
+        Self::LogAppendInitiate(message)
     }
 }
 
