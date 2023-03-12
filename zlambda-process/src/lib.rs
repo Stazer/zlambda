@@ -1,19 +1,18 @@
 use serde::{Deserialize, Serialize};
+use std::process::Stdio;
 use tokio::process::Command;
 use zlambda_core::common::async_trait;
-use zlambda_core::common::module::{ModuleId, Module};
-use zlambda_core::common::notification::{
-    NotificationBodyItemStreamExt,
-    notification_body_item_queue,
-};
-use zlambda_core::common::future::stream::StreamExt;
-use zlambda_core::common::runtime::spawn;
 use zlambda_core::common::bytes::Bytes;
+use zlambda_core::common::future::stream::StreamExt;
+use zlambda_core::common::io::{AsyncReadExt, AsyncWriteExt};
+use zlambda_core::common::module::{Module, ModuleId};
+use zlambda_core::common::notification::{
+    notification_body_item_queue, NotificationBodyItemStreamExt,
+};
+use zlambda_core::common::runtime::{select, spawn};
 use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
 };
-use std::process::Stdio;
-use zlambda_core::common::io::{AsyncReadExt, AsyncWriteExt};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -88,26 +87,28 @@ impl ServerModule for ProcessDispatcher {
         let mut stdout = child.stdout.take().expect("stdout handle");
         let mut stdin = child.stdin.take().expect("stdin handle");
 
-        spawn(async move {
-            loop {
-                let mut buffer = Vec::with_capacity(4096);
+        spawn(async move { server.notify(module_id, receiver).await });
 
-                let result = stdout.read_buf(&mut buffer).await;
+        loop {
+            let mut buffer = Vec::with_capacity(4096);
 
-                if matches!(result, Ok(0)) || matches!(result, Err(_)){
-                    break;
+            select!(
+                output = stdout.read_buf(&mut buffer) => {
+                    if buffer.len() == 0 {
+                        break
+                    }
+
+                    sender.do_send(Bytes::from(buffer)).await
+                },
+                item = deserializer.next() => {
+                    match item {
+                        None => break,
+                        Some(item) => stdin.write(&item).await.expect("successful write"),
+                    };
                 }
-
-                sender.do_send(Bytes::from(buffer)).await;
-            }
-        });
-
-        spawn(async move {
-            server.notify(module_id, receiver).await;
-        });
-
-        while let Some(item) = deserializer.next().await {
-            stdin.write(&item).await.expect("successful write");
+            )
         }
+
+        child.wait().await;
     }
 }

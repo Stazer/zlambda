@@ -12,4 +12,4 @@ zlambda-core = { path = "../zlambda-core" }
 zlambda-dynamic = { path = "../zlambda-dynamic" }
 zlambda-process = { path = "../zlambda-process" }
 zlambda-router = { path = "../zlambda-router" }
-zlambda-scheduler = { path = "../zlambda-scheduler" }
+zlambda-realtime-task = { path = "../zlambda-realtime-task" }

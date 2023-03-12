@@ -5,6 +5,6 @@ members = [
     "zlambda-dynamic",
     "zlambda-process",
     "zlambda-router",
-    "zlambda-scheduler",
+    "zlambda-realtime-task",
     "zlambda-wasm",
 ]

@@ -18,8 +18,8 @@ use zlambda_core::server::{
 };
 use zlambda_dynamic::DynamicLibraryManager;
 use zlambda_process::ProcessDispatcher;
+use zlambda_realtime_task::RealTimeTaskManager;
 use zlambda_router::round_robin::{GlobalRoundRobinRouter, LocalRoundRobinRouter};
-use zlambda_scheduler::real_time::DeadlineRealTimeScheduler;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -130,7 +130,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 //.add_module(DynamicLibraryManager::default())
                 .add_module(PrintServerModule::default())
                 .add_module(ProcessDispatcher::default())
-                //.add_module(DeadlineRealTimeScheduler::default())
+                .add_module(RealTimeTaskManager::default())
                 .add_module(GlobalRoundRobinRouter::default())
                 //.add_module(LocalRoundRobinRouter::default())
                 .build(
