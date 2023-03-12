@@ -16,7 +16,7 @@ pub use state::*;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::cmp::{self, Eq, Ord, PartialEq, PartialOrd};
+use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::sync::Arc;
 use std::time::Duration;
 use zlambda_core::common::module::ModuleId;
@@ -94,57 +94,81 @@ impl RealTimeTask {
     }
 }
 
-/*/////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug)]
-pub struct SortableRealTimeTask<T> {
-    comparator:
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct DeadlineSortableRealTimeTask {
+pub struct DeadlineDispatchedSortableRealTimeTask {
     task: Arc<RealTimeTask>,
 }
 
-impl Eq for DeadlineSortableRealTimeTask {}
+impl Eq for DeadlineDispatchedSortableRealTimeTask {}
 
-impl Ord for DeadlineSortableRealTimeTask {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        <Option<DateTime<Utc>> as Ord>::cmp(self.task.deadline(), other.task.deadline())
+impl Ord for DeadlineDispatchedSortableRealTimeTask {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match <RealTimeTaskState as Ord>::cmp(self.task.state(), other.task.state()) {
+            Ordering::Equal => {
+                <Option<DateTime<Utc>> as Ord>::cmp(self.task.deadline(), other.task.deadline())
+            }
+            ordering => ordering,
+        }
     }
 }
 
-impl PartialEq for DeadlineSortableRealTimeTask {
+impl PartialEq for DeadlineDispatchedSortableRealTimeTask {
     fn eq(&self, left: &Self) -> bool {
-        <Option<DateTime<Utc>> as PartialEq>::eq(self.task.deadline(), left.task.deadline())
+        <RealTimeTaskState as PartialEq>::eq(self.task.state(), left.task.state())
+            && <Option<DateTime<Utc>> as PartialEq>::eq(self.task.deadline(), left.task.deadline())
     }
 }
 
-impl PartialOrd for DeadlineSortableRealTimeTask {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        <Option<DateTime<Utc>> as PartialOrd>::partial_cmp(self.task.deadline(), other.task.deadline())
+impl PartialOrd for DeadlineDispatchedSortableRealTimeTask {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match <RealTimeTaskState as PartialOrd>::partial_cmp(self.task.state(), other.task.state())
+        {
+            Some(Ordering::Equal) => {}
+            ordering => return ordering,
+        };
+
+        <Option<DateTime<Utc>> as PartialOrd>::partial_cmp(
+            self.task.deadline(),
+            other.task.deadline(),
+        )
     }
 
     fn lt(&self, other: &Self) -> bool {
-        <Option<DateTime<Utc>> as PartialOrd>::lt(self.task.deadline(), other.task.deadline())
+        <RealTimeTaskState as PartialOrd>::lt(self.task.state(), other.task.state())
+            && <Option<DateTime<Utc>> as PartialOrd>::lt(
+                self.task.deadline(),
+                other.task.deadline(),
+            )
     }
 
     fn le(&self, other: &Self) -> bool {
-        <Option<DateTime<Utc>> as PartialOrd>::le(self.task.deadline(), other.task.deadline())
+        <RealTimeTaskState as PartialOrd>::le(self.task.state(), other.task.state())
+            && <Option<DateTime<Utc>> as PartialOrd>::le(
+                self.task.deadline(),
+                other.task.deadline(),
+            )
     }
 
     fn gt(&self, other: &Self) -> bool {
-        <Option<DateTime<Utc>> as PartialOrd>::gt(self.task.deadline(), other.task.deadline())
+        <RealTimeTaskState as PartialOrd>::gt(self.task.state(), other.task.state())
+            && <Option<DateTime<Utc>> as PartialOrd>::gt(
+                self.task.deadline(),
+                other.task.deadline(),
+            )
     }
 
     fn ge(&self, other: &Self) -> bool {
-        <Option<DateTime<Utc>> as PartialOrd>::ge(self.task.deadline(), other.task.deadline())
+        <RealTimeTaskState as PartialOrd>::ge(self.task.state(), other.task.state())
+            && <Option<DateTime<Utc>> as PartialOrd>::ge(
+                self.task.deadline(),
+                other.task.deadline(),
+            )
     }
 }
 
-impl DeadlineSortableRealTimeTask {
+impl DeadlineDispatchedSortableRealTimeTask {
     pub fn new(task: Arc<RealTimeTask>) -> Self {
         Self { task }
     }
@@ -152,4 +176,4 @@ impl DeadlineSortableRealTimeTask {
     pub fn task(&self) -> &Arc<RealTimeTask> {
         &self.task
     }
-}*/
+}

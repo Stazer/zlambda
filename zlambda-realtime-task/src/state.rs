@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct RealTimeTaskDispatchedState {}
 
 impl From<RealTimeTaskDispatchedState> for () {
@@ -17,7 +17,7 @@ impl RealTimeTaskDispatchedState {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct RealTimeTaskScheduledState {}
 
 impl From<RealTimeTaskScheduledState> for () {
@@ -32,7 +32,7 @@ impl RealTimeTaskScheduledState {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct RealTimeTaskRunningState {}
 
 impl From<RealTimeTaskRunningState> for () {
@@ -47,7 +47,7 @@ impl RealTimeTaskRunningState {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct RealTimeTaskFinishedState {}
 
 impl From<RealTimeTaskFinishedState> for () {
@@ -62,7 +62,7 @@ impl RealTimeTaskFinishedState {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub enum RealTimeTaskState {
     Dispatched(RealTimeTaskDispatchedState),
     Scheduled(RealTimeTaskScheduledState),

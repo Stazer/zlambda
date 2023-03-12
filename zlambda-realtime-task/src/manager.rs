@@ -1,7 +1,7 @@
 use crate::{
-    RealTimeTask, RealTimeTaskDispatchedState, RealTimeTaskId, RealTimeTaskManagerLogEntryData,
-    RealTimeTaskManagerLogEntryDispatchData, RealTimeTaskManagerNotificationHeader,
-    RealTimeTaskState,
+    DeadlineDispatchedSortableRealTimeTask, RealTimeTask, RealTimeTaskDispatchedState,
+    RealTimeTaskId, RealTimeTaskManagerLogEntryData, RealTimeTaskManagerLogEntryDispatchData,
+    RealTimeTaskManagerNotificationHeader, RealTimeTaskState,
 };
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
@@ -14,9 +14,12 @@ use zlambda_core::common::notification::{
     NotificationBodyItemQueueReceiver, NotificationBodyItemStreamExt,
     NotificationBodyStreamDeserializer, NotificationId,
 };
+use zlambda_core::common::runtime::spawn;
 use zlambda_core::common::serialize::serialize_to_bytes;
-use zlambda_core::common::sync::RwLock;
+use zlambda_core::common::sync::{Mutex, RwLock};
+use zlambda_core::common::task::JoinHandle;
 use zlambda_core::server::{
+    Server,
     LogId, ServerId, ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
     ServerModuleStartupEventInput, ServerModuleStartupEventOutput,
@@ -35,6 +38,9 @@ pub struct RealTimeTaskManager {
         >,
     >,
     tasks: RwLock<Vec<Arc<RealTimeTask>>>,
+    scheduling_handle: Mutex<Option<JoinHandle<()>>>,
+    deadline_dispatched_sorted_tasks:
+        Arc<RwLock<BinaryHeap<Reverse<DeadlineDispatchedSortableRealTimeTask>>>>,
 }
 
 #[async_trait]
@@ -89,24 +95,33 @@ impl ServerModule for RealTimeTaskManager {
 
         match data {
             RealTimeTaskManagerLogEntryData::Dispatch(data) => {
-                let mut tasks = self.tasks.write().await;
-                let id = RealTimeTaskId::from(tasks.len());
+                let task = {
+                    let mut tasks = self.tasks.write().await;
 
-                let task = Arc::new(RealTimeTask::new(
-                    id,
-                    RealTimeTaskState::Dispatched(RealTimeTaskDispatchedState::new()),
-                    data.target_module_id(),
-                    data.source_server_id(),
-                    data.source_notification_id(),
-                    *data.deadline(),
-                    *data.duration(),
-                ));
+                    let task = Arc::new(RealTimeTask::new(
+                        RealTimeTaskId::from(tasks.len()),
+                        RealTimeTaskState::Dispatched(RealTimeTaskDispatchedState::new()),
+                        data.target_module_id(),
+                        data.source_server_id(),
+                        data.source_notification_id(),
+                        *data.deadline(),
+                        *data.duration(),
+                    ));
 
-                tasks.push(task);
+                    tasks.push(task.clone());
 
-                /*if input.server().server_id().await == input.server().leader_server_id().await {
-                    input.server().logs().get(input.log_id()).commit();
-                }*/
+                    task
+                };
+
+                {
+                    let mut deadline_dispatched_sorted_tasks =
+                        self.deadline_dispatched_sorted_tasks.write().await;
+
+                    deadline_dispatched_sorted_tasks
+                        .push(Reverse(DeadlineDispatchedSortableRealTimeTask::new(task)));
+                }
+
+                self.spawn_scheduling_task(input.server()).await;
             }
             RealTimeTaskManagerLogEntryData::Schedule(data) => {}
             RealTimeTaskManagerLogEntryData::Run(data) => {}
@@ -156,5 +171,15 @@ impl ServerModule for RealTimeTaskManager {
                 .freeze(),
             )
             .await;
+    }
+}
+
+impl RealTimeTaskManager {
+    async fn spawn_scheduling_task(&self, server: &Arc<Server>) {
+        let mut handle = self.scheduling_handle.lock().await;
+
+        if handle.is_none() {
+            *handle = Some(spawn(async move {}));
+        }
     }
 }
