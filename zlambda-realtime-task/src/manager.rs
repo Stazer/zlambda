@@ -121,7 +121,7 @@ impl ServerModule for RealTimeTaskManager {
                         .push(Reverse(DeadlineDispatchedSortableRealTimeTask::new(task)));
                 }
 
-                self.spawn_scheduling_task(input.server()).await;
+                self.respawn_scheduling_task(input.server()).await;
             }
             RealTimeTaskManagerLogEntryData::Schedule(data) => {}
             RealTimeTaskManagerLogEntryData::Run(data) => {}
@@ -175,11 +175,18 @@ impl ServerModule for RealTimeTaskManager {
 }
 
 impl RealTimeTaskManager {
-    async fn spawn_scheduling_task(&self, server: &Arc<Server>) {
+    async fn respawn_scheduling_task(&self, server: &Arc<Server>) {
         let mut handle = self.scheduling_handle.lock().await;
+        let deadline_dispatched_sorted_tasks = self.deadline_dispatched_sorted_tasks.clone();
 
         if handle.is_none() {
-            *handle = Some(spawn(async move {}));
+            *handle = Some(spawn(async move {
+                loop {
+                    let task = {
+                        deadline_dispatched_sorted_tasks.read().await.peek()
+                    };
+                }
+            }));
         }
     }
 }
