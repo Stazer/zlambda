@@ -1,7 +1,9 @@
 mod id;
 mod log_entry_data;
 mod manager;
+mod message;
 mod notification_header;
+mod scheduling_task;
 mod state;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -9,7 +11,9 @@ mod state;
 pub use id::*;
 pub use log_entry_data::*;
 pub use manager::*;
+pub use message::*;
 pub use notification_header::*;
+pub use scheduling_task::*;
 pub use state::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,6 +95,10 @@ impl RealTimeTask {
 
     pub fn duration(&self) -> &Option<Duration> {
         &self.duration
+    }
+
+    pub fn target_server_id(&self) -> &Option<ServerId> {
+        &None
     }
 }
 

@@ -1,7 +1,8 @@
 use crate::{
     DeadlineDispatchedSortableRealTimeTask, RealTimeTask, RealTimeTaskDispatchedState,
     RealTimeTaskId, RealTimeTaskManagerLogEntryData, RealTimeTaskManagerLogEntryDispatchData,
-    RealTimeTaskManagerNotificationHeader, RealTimeTaskState,
+    RealTimeTaskManagerNotificationHeader, RealTimeTaskSchedulingTask,
+    RealTimeTaskSchedulingTaskMessage, RealTimeTaskSchedulingTaskState, RealTimeTaskState,
 };
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
@@ -9,17 +10,15 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
+use zlambda_core::common::message::MessageQueueSender;
 use zlambda_core::common::module::Module;
 use zlambda_core::common::notification::{
     NotificationBodyItemQueueReceiver, NotificationBodyItemStreamExt,
     NotificationBodyStreamDeserializer, NotificationId,
 };
-use zlambda_core::common::runtime::spawn;
 use zlambda_core::common::serialize::serialize_to_bytes;
-use zlambda_core::common::sync::{Mutex, RwLock};
-use zlambda_core::common::task::JoinHandle;
+use zlambda_core::common::sync::RwLock;
 use zlambda_core::server::{
-    Server,
     LogId, ServerId, ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
     ServerModuleStartupEventInput, ServerModuleStartupEventOutput,
@@ -27,7 +26,7 @@ use zlambda_core::server::{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RealTimeTaskManager {
     local_counter: AtomicUsize,
     log_ids: RwLock<HashMap<ServerId, LogId>>,
@@ -38,9 +37,26 @@ pub struct RealTimeTaskManager {
         >,
     >,
     tasks: RwLock<Vec<Arc<RealTimeTask>>>,
-    scheduling_handle: Mutex<Option<JoinHandle<()>>>,
     deadline_dispatched_sorted_tasks:
         Arc<RwLock<BinaryHeap<Reverse<DeadlineDispatchedSortableRealTimeTask>>>>,
+    sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
+}
+
+impl Default for RealTimeTaskManager {
+    fn default() -> Self {
+        let task = RealTimeTaskSchedulingTask::new(RealTimeTaskSchedulingTaskState::Paused);
+        let sender = task.sender().clone();
+        task.spawn();
+
+        Self {
+            local_counter: AtomicUsize::default(),
+            log_ids: RwLock::new(HashMap::default()),
+            receivers: RwLock::new(HashMap::default()),
+            tasks: RwLock::new(Vec::default()),
+            deadline_dispatched_sorted_tasks: Arc::new(RwLock::new(BinaryHeap::default())),
+            sender,
+        }
+    }
 }
 
 #[async_trait]
@@ -54,7 +70,7 @@ impl ServerModule for RealTimeTaskManager {
     ) -> ServerModuleStartupEventOutput {
         let server_id = input.server().server_id().await;
 
-        if server_id == input.server().server_id().await {
+        if server_id == input.server().leader_server_id().await {
             let log_id = input.server().logs().create().await;
 
             {
@@ -120,8 +136,6 @@ impl ServerModule for RealTimeTaskManager {
                     deadline_dispatched_sorted_tasks
                         .push(Reverse(DeadlineDispatchedSortableRealTimeTask::new(task)));
                 }
-
-                self.respawn_scheduling_task(input.server()).await;
             }
             RealTimeTaskManagerLogEntryData::Schedule(data) => {}
             RealTimeTaskManagerLogEntryData::Run(data) => {}
@@ -174,19 +188,4 @@ impl ServerModule for RealTimeTaskManager {
     }
 }
 
-impl RealTimeTaskManager {
-    async fn respawn_scheduling_task(&self, server: &Arc<Server>) {
-        let mut handle = self.scheduling_handle.lock().await;
-        let deadline_dispatched_sorted_tasks = self.deadline_dispatched_sorted_tasks.clone();
-
-        if handle.is_none() {
-            *handle = Some(spawn(async move {
-                loop {
-                    let task = {
-                        deadline_dispatched_sorted_tasks.read().await.peek()
-                    };
-                }
-            }));
-        }
-    }
-}
+impl RealTimeTaskManager {}

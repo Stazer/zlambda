@@ -45,4 +45,10 @@ pub trait ServerModule: Module {
         _event: ServerModuleCommitEventInput,
     ) -> ServerModuleCommitEventOutput {
     }
+
+    async fn on_promotion(
+        &self,
+        _event: ServerModulePromotionEventInput,
+    ) -> ServerModulePromotionEventOutput {
+    }
 }

@@ -80,21 +80,29 @@ impl RealTimeTaskManagerLogEntryDispatchData {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RealTimeTaskManagerLogEntryScheduleData {
     task_id: RealTimeTaskId,
+    target_server_id: ServerId,
 }
 
-impl From<RealTimeTaskManagerLogEntryScheduleData> for (RealTimeTaskId,) {
+impl From<RealTimeTaskManagerLogEntryScheduleData> for (RealTimeTaskId, ServerId) {
     fn from(data: RealTimeTaskManagerLogEntryScheduleData) -> Self {
-        (data.task_id,)
+        (data.task_id, data.target_server_id)
     }
 }
 
 impl RealTimeTaskManagerLogEntryScheduleData {
-    pub fn new(task_id: RealTimeTaskId) -> Self {
-        Self { task_id }
+    pub fn new(task_id: RealTimeTaskId, target_server_id: ServerId) -> Self {
+        Self {
+            task_id,
+            target_server_id,
+        }
     }
 
     pub fn task_id(&self) -> RealTimeTaskId {
         self.task_id
+    }
+
+    pub fn target_server_id(&self) -> ServerId {
+        self.target_server_id
     }
 }
 

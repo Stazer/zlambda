@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use zlambda_core::common::async_trait;
-use zlambda_core::common::bytes::Bytes;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::{
@@ -13,7 +12,7 @@ use zlambda_core::common::sync::{Mutex, RwLock};
 use zlambda_core::server::{
     LogId, ServerId, ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
-    ServerModuleStartupEventInput, ServerModuleStartupEventOutput, ServerSystemLogEntryData,
+    ServerModuleStartupEventInput, ServerModuleStartupEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct RealTimeTaskDispatchedState {}
 
 impl From<RealTimeTaskDispatchedState> for () {
-    fn from(state: RealTimeTaskDispatchedState) -> Self {}
+    fn from(_state: RealTimeTaskDispatchedState) -> Self {}
 }
 
 impl RealTimeTaskDispatchedState {
@@ -21,7 +21,7 @@ impl RealTimeTaskDispatchedState {
 pub struct RealTimeTaskScheduledState {}
 
 impl From<RealTimeTaskScheduledState> for () {
-    fn from(state: RealTimeTaskScheduledState) -> Self {}
+    fn from(_state: RealTimeTaskScheduledState) -> Self {}
 }
 
 impl RealTimeTaskScheduledState {
@@ -36,7 +36,7 @@ impl RealTimeTaskScheduledState {
 pub struct RealTimeTaskRunningState {}
 
 impl From<RealTimeTaskRunningState> for () {
-    fn from(state: RealTimeTaskRunningState) -> Self {}
+    fn from(_state: RealTimeTaskRunningState) -> Self {}
 }
 
 impl RealTimeTaskRunningState {
@@ -51,7 +51,7 @@ impl RealTimeTaskRunningState {
 pub struct RealTimeTaskFinishedState {}
 
 impl From<RealTimeTaskFinishedState> for () {
-    fn from(state: RealTimeTaskFinishedState) -> Self {}
+    fn from(_state: RealTimeTaskFinishedState) -> Self {}
 }
 
 impl RealTimeTaskFinishedState {

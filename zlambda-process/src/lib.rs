@@ -94,9 +94,11 @@ impl ServerModule for ProcessDispatcher {
 
             select!(
                 output = stdout.read_buf(&mut buffer) => {
-                    if buffer.len() == 0 {
+                    if buffer.is_empty() {
                         break
                     }
+
+                    output.expect("");
 
                     sender.do_send(Bytes::from(buffer)).await
                 },
@@ -109,6 +111,6 @@ impl ServerModule for ProcessDispatcher {
             )
         }
 
-        child.wait().await;
+        child.wait().await.expect("ok");
     }
 }

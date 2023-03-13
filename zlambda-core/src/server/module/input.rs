@@ -352,3 +352,48 @@ impl ServerModuleCommitEventInput {
         self.log_entry_id
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub struct ServerModulePromotionEventInput {
+    concerning_log_id: LogId,
+    promoted_server_id: ServerId,
+    server: Arc<Server>,
+}
+
+impl From<ServerModulePromotionEventInput> for (LogId, ServerId, Arc<Server>) {
+    fn from(input: ServerModulePromotionEventInput) -> Self {
+        (
+            input.concerning_log_id,
+            input.promoted_server_id,
+            input.server,
+        )
+    }
+}
+
+impl ServerModulePromotionEventInput {
+    pub fn new(
+        concerning_log_id: LogId,
+        promoted_server_id: ServerId,
+        server: Arc<Server>,
+    ) -> Self {
+        Self {
+            concerning_log_id,
+            promoted_server_id,
+            server,
+        }
+    }
+
+    pub fn concerning_log_id(&self) -> LogId {
+        self.concerning_log_id
+    }
+
+    pub fn promoted_server_id(&self) -> ServerId {
+        self.promoted_server_id
+    }
+
+    pub fn server(&self) -> &Arc<Server> {
+        &self.server
+    }
+}

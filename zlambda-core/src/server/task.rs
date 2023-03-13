@@ -818,7 +818,7 @@ impl ServerTask {
                 log.current_term(),
                 match log.r#type() {
                     LogType::Leader(leader) => leader.entries().iter().cloned().collect(),
-                    LogType::Follower(follower) => panic!("Node must be leader"),
+                    LogType::Follower(_follower) => panic!("Node must be leader"),
                 },
             ))
             .await;

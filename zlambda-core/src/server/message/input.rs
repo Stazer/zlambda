@@ -605,7 +605,7 @@ impl ServerServerSocketAddressesGetMessageInput {
 pub struct ServerLogCreateMessageInput {}
 
 impl From<ServerLogCreateMessageInput> for () {
-    fn from(input: ServerLogCreateMessageInput) -> Self {}
+    fn from(_input: ServerLogCreateMessageInput) -> Self {}
 }
 
 impl ServerLogCreateMessageInput {
