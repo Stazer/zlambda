@@ -1,9 +1,12 @@
 use crate::{
-    RealTimeTaskSchedulingTaskMessage, RealTimeTaskSchedulingTaskPauseMessage,
-    RealTimeTaskSchedulingTaskResumeMessage, RealTimeTaskSchedulingTaskRescheduleMessage
+    RealTimeSharedData, RealTimeTaskId, RealTimeTaskSchedulingTaskMessage,
+    RealTimeTaskSchedulingTaskPauseMessage, RealTimeTaskSchedulingTaskRescheduleMessage,
+    RealTimeTaskSchedulingTaskResumeMessage,
 };
+use std::sync::Arc;
 use zlambda_core::common::message::{message_queue, MessageQueueReceiver, MessageQueueSender};
 use zlambda_core::common::runtime::{select, spawn};
+use zlambda_core::common::time::sleep;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,16 +23,21 @@ pub struct RealTimeTaskSchedulingTask {
     sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
     receiver: MessageQueueReceiver<RealTimeTaskSchedulingTaskMessage>,
     state: RealTimeTaskSchedulingTaskState,
+    shared_data: Arc<RealTimeSharedData>,
 }
 
 impl RealTimeTaskSchedulingTask {
-    pub fn new(state: RealTimeTaskSchedulingTaskState) -> Self {
+    pub fn new(
+        state: RealTimeTaskSchedulingTaskState,
+        shared_data: Arc<RealTimeSharedData>,
+    ) -> Self {
         let (sender, receiver) = message_queue();
 
         Self {
             sender,
             receiver,
             state,
+            shared_data,
         }
     }
 
@@ -59,11 +67,39 @@ impl RealTimeTaskSchedulingTask {
                 )
             }
             RealTimeTaskSchedulingTaskState::Running => {
-                select!(
-                    message = self.receiver.do_receive() => {
-                        self.on_real_time_task_scheduling_task_message(message).await
+                let entry = {
+                    let mut deadline_dispatched_sorted_tasks = self
+                        .shared_data
+                        .deadline_dispatched_sorted_tasks()
+                        .write()
+                        .await;
+
+                    match deadline_dispatched_sorted_tasks.pop() {
+                        None => None,
+                        Some(entry) => Some((entry.0.task().id(), *entry.0.task().deadline())),
                     }
-                )
+                };
+
+                match entry {
+                    Some((task_id, Some(deadline))) => {
+                        select!(
+                            notify = sleep(deadline) => {
+                                self.schedule(task_id).await
+                            },
+                            message = self.receiver.do_receive() => {
+                                self.on_real_time_task_scheduling_task_message(message).await
+                            }
+                        )
+                    }
+                    Some((task_id, None)) => self.schedule(task_id).await,
+                    None => {
+                        select!(
+                            message = self.receiver.do_receive() => {
+                                self.on_real_time_task_scheduling_task_message(message).await
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -106,5 +142,9 @@ impl RealTimeTaskSchedulingTask {
         &mut self,
         _message: RealTimeTaskSchedulingTaskRescheduleMessage,
     ) {
+    }
+
+    async fn schedule(&self, task_id: RealTimeTaskId) {
+        println!("{}", task_id);
     }
 }

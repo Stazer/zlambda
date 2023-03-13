@@ -4,9 +4,7 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-chrono = { version = "*", features = ["std", "clock", "serde"] }
 serde = { version = "1", features = ["derive"] }
-serde_with = { version = "2", features = ["chrono_0_4", "chrono"] }
 zlambda-core = { path = "../zlambda-core" }
 
 [lib]

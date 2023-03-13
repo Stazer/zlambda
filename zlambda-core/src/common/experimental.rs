@@ -5,10 +5,10 @@ use futures::future::BoxFuture;
 use futures::FutureExt;
 use std::future::Future;
 use std::mem::*;
-use tokio::sync::{mpsc, oneshot};
 use std::pin::{pin, Pin};
-use std::sync::atomic::AtomicPtr;
 use std::ptr::*;
+use std::sync::atomic::AtomicPtr;
+use tokio::sync::{mpsc, oneshot};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,11 +65,9 @@ where
         H: FnOnce(T) -> T + Send + Sync + 'static,
     {
         self.sender
-            .send(ActorMessage::SynchronousTransition (
-                Box::new(move |data| {
-                    function(data)
-                }),
-            ))
+            .send(ActorMessage::SynchronousTransition(Box::new(move |data| {
+                function(data)
+            })))
             .await;
     }
 
@@ -79,13 +77,9 @@ where
         F: Future<Output = T> + Send,
     {
         self.sender
-          .send(ActorMessage::AsynchronousTransition(
-              Box::new(move |data| {
-                  async move {
-                      function(data).await
-                  }.boxed()
-                }),
-            ))
+            .send(ActorMessage::AsynchronousTransition(Box::new(
+                move |data| async move { function(data).await }.boxed(),
+            )))
             .await;
     }
 
@@ -104,25 +98,26 @@ where
         });*/
 
         self.sender
-          .send(ActorMessage::AsynchronousTransition(
-              Box::new(move |mut data| {
-                  async move {
-                      /*let inner = unsafe {
-                          function.get_mut().read()
-                      };*/
+            .send(ActorMessage::AsynchronousTransition(Box::new(
+                move |mut data| {
+                    async move {
+                        /*let inner = unsafe {
+                            function.get_mut().read()
+                        };*/
 
-                      //inner(&mut data).await;
+                        //inner(&mut data).await;
 
-                      /*let future = unsafe {
-                          (*(function.into_inner()))(&mut data)
-                      };
+                        /*let future = unsafe {
+                            (*(function.into_inner()))(&mut data)
+                        };
 
-                      future.await;*/
+                        future.await;*/
 
-                      data
-                  }.boxed()
-                }),
-            ))
+                        data
+                    }
+                    .boxed()
+                },
+            )))
             .await;
     }
 }
@@ -198,17 +193,23 @@ async fn hello() {
     let address = actor.address();
     actor.spawn();
 
-    address.do_asynchronous(async move |x| {
-        println!("########################################## {}", &x);
-    }).await;
+    address
+        .do_asynchronous(async move |x| {
+            println!("########################################## {}", &x);
+        })
+        .await;
 
-    address.do_asynchronous(async move |x| {
-        *x = 1337;
-    }).await;
+    address
+        .do_asynchronous(async move |x| {
+            *x = 1337;
+        })
+        .await;
 
-    address.do_asynchronous(async move |x| {
-        println!("########################################## {}", &x);
-    }).await;
+    address
+        .do_asynchronous(async move |x| {
+            println!("########################################## {}", &x);
+        })
+        .await;
 
     futures::future::pending().await
 }

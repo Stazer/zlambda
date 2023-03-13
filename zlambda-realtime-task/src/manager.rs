@@ -1,62 +1,29 @@
 use crate::{
-    DeadlineDispatchedSortableRealTimeTask, RealTimeTask, RealTimeTaskDispatchedState,
-    RealTimeTaskId, RealTimeTaskManagerLogEntryData, RealTimeTaskManagerLogEntryDispatchData,
-    RealTimeTaskManagerNotificationHeader, RealTimeTaskSchedulingTask,
-    RealTimeTaskSchedulingTaskMessage, RealTimeTaskSchedulingTaskState, RealTimeTaskState,
+    DeadlineDispatchedSortableRealTimeTask, RealTimeSharedData, RealTimeTask,
+    RealTimeTaskDispatchedState, RealTimeTaskId, RealTimeTaskManagerLogEntryData,
+    RealTimeTaskManagerLogEntryDispatchData, RealTimeTaskManagerNotificationHeader,
+    RealTimeTaskSchedulingTask, RealTimeTaskSchedulingTaskRescheduleMessageInput, RealTimeTaskSchedulingTaskState,
+    RealTimeTaskState,
 };
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
-use zlambda_core::common::message::MessageQueueSender;
 use zlambda_core::common::module::Module;
-use zlambda_core::common::notification::{
-    NotificationBodyItemQueueReceiver, NotificationBodyItemStreamExt,
-    NotificationBodyStreamDeserializer, NotificationId,
-};
+use zlambda_core::common::notification::{NotificationBodyItemStreamExt, NotificationId};
 use zlambda_core::common::serialize::serialize_to_bytes;
-use zlambda_core::common::sync::RwLock;
 use zlambda_core::server::{
-    LogId, ServerId, ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
+    ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
     ServerModuleStartupEventInput, ServerModuleStartupEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct RealTimeTaskManager {
-    local_counter: AtomicUsize,
-    log_ids: RwLock<HashMap<ServerId, LogId>>,
-    receivers: RwLock<
-        HashMap<
-            NotificationId,
-            NotificationBodyStreamDeserializer<NotificationBodyItemQueueReceiver>,
-        >,
-    >,
-    tasks: RwLock<Vec<Arc<RealTimeTask>>>,
-    deadline_dispatched_sorted_tasks:
-        Arc<RwLock<BinaryHeap<Reverse<DeadlineDispatchedSortableRealTimeTask>>>>,
-    sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
-}
-
-impl Default for RealTimeTaskManager {
-    fn default() -> Self {
-        let task = RealTimeTaskSchedulingTask::new(RealTimeTaskSchedulingTaskState::Paused);
-        let sender = task.sender().clone();
-        task.spawn();
-
-        Self {
-            local_counter: AtomicUsize::default(),
-            log_ids: RwLock::new(HashMap::default()),
-            receivers: RwLock::new(HashMap::default()),
-            tasks: RwLock::new(Vec::default()),
-            deadline_dispatched_sorted_tasks: Arc::new(RwLock::new(BinaryHeap::default())),
-            sender,
-        }
-    }
+    shared_data: Arc<RealTimeSharedData>,
 }
 
 #[async_trait]
@@ -69,14 +36,36 @@ impl ServerModule for RealTimeTaskManager {
         input: ServerModuleStartupEventInput,
     ) -> ServerModuleStartupEventOutput {
         let server_id = input.server().server_id().await;
+        let leader_server_id = input.server().leader_server_id().await;
 
-        if server_id == input.server().leader_server_id().await {
+        if server_id == leader_server_id {
             let log_id = input.server().logs().create().await;
 
             {
-                let mut log_ids = self.log_ids.write().await;
+                let mut log_ids = self.shared_data.log_ids().write().await;
                 log_ids.insert(server_id, log_id);
             }
+        }
+
+        {
+            let task = RealTimeTaskSchedulingTask::new(
+                if server_id == leader_server_id {
+                    RealTimeTaskSchedulingTaskState::Running
+                } else {
+                    RealTimeTaskSchedulingTaskState::Paused
+                },
+                self.shared_data.clone(),
+            );
+
+            let mut senders = self.shared_data.senders().write().await;
+            senders.insert(server_id, task.sender().clone());
+
+            task.spawn();
+        }
+
+        {
+            let mut servers = self.shared_data.servers().write().await;
+            servers.insert(server_id, input.server().clone());
         }
     }
 
@@ -84,13 +73,20 @@ impl ServerModule for RealTimeTaskManager {
         &self,
         input: ServerModuleCommitEventInput,
     ) -> ServerModuleCommitEventOutput {
+        let server_id = input.server().server_id().await;
+
         let log_id = {
-            *self
-                .log_ids
+            let log_ids = self
+                .shared_data
+                .log_ids()
                 .read()
-                .await
-                .get(&input.server().server_id().await)
-                .expect("")
+                .await;
+
+            match log_ids
+                .get(&server_id) {
+                Some(log_id) => *log_id,
+                None => return,
+            }
         };
 
         if log_id != input.log_id() {
@@ -112,7 +108,7 @@ impl ServerModule for RealTimeTaskManager {
         match data {
             RealTimeTaskManagerLogEntryData::Dispatch(data) => {
                 let task = {
-                    let mut tasks = self.tasks.write().await;
+                    let mut tasks = self.shared_data.tasks().write().await;
 
                     let task = Arc::new(RealTimeTask::new(
                         RealTimeTaskId::from(tasks.len()),
@@ -121,7 +117,6 @@ impl ServerModule for RealTimeTaskManager {
                         data.source_server_id(),
                         data.source_notification_id(),
                         *data.deadline(),
-                        *data.duration(),
                     ));
 
                     tasks.push(task.clone());
@@ -130,12 +125,22 @@ impl ServerModule for RealTimeTaskManager {
                 };
 
                 {
-                    let mut deadline_dispatched_sorted_tasks =
-                        self.deadline_dispatched_sorted_tasks.write().await;
+                    let mut deadline_dispatched_sorted_tasks = self
+                        .shared_data
+                        .deadline_dispatched_sorted_tasks()
+                        .write()
+                        .await;
 
                     deadline_dispatched_sorted_tasks
                         .push(Reverse(DeadlineDispatchedSortableRealTimeTask::new(task)));
                 }
+
+                let sender = {
+                    let senders = self.shared_data.senders().read().await;
+                    senders.get(&server_id).expect("").clone()
+                };
+
+                sender.do_send_asynchronous(RealTimeTaskSchedulingTaskRescheduleMessageInput::new()).await;
             }
             RealTimeTaskManagerLogEntryData::Schedule(data) => {}
             RealTimeTaskManagerLogEntryData::Run(data) => {}
@@ -156,15 +161,18 @@ impl ServerModule for RealTimeTaskManager {
             .unwrap();
 
         let log_id = {
-            let log_ids = self.log_ids.read().await;
+            let log_ids = self.shared_data.log_ids().read().await;
             *log_ids.get(&server.server_id().await).expect("")
         };
 
-        let notification_id =
-            NotificationId::from(self.local_counter.fetch_add(1, Ordering::Relaxed));
+        let notification_id = NotificationId::from(
+            self.shared_data
+                .local_counter()
+                .fetch_add(1, Ordering::Relaxed),
+        );
 
         {
-            let mut receivers = self.receivers.write().await;
+            let mut receivers = self.shared_data.receivers().write().await;
             receivers.insert(notification_id, deserializer);
         }
 
@@ -178,7 +186,6 @@ impl ServerModule for RealTimeTaskManager {
                         server.server_id().await,
                         notification_id,
                         *header.deadline(),
-                        *header.duration(),
                     ),
                 ))
                 .expect("")

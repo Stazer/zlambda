@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .add_module(PrintServerModule::default())
                 .add_module(ProcessDispatcher::default())
                 .add_module(RealTimeTaskManager::default())
-                .add_module(GlobalRoundRobinRouter::default())
+                //.add_module(GlobalRoundRobinRouter::default())
                 //.add_module(LocalRoundRobinRouter::default())
                 .build(
                     listener_address,

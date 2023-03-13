@@ -1,5 +1,4 @@
 use crate::RealTimeTaskId;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use zlambda_core::common::module::ModuleId;
@@ -13,8 +12,7 @@ pub struct RealTimeTaskManagerLogEntryDispatchData {
     target_module_id: ModuleId,
     source_server_id: ServerId,
     source_notification_id: NotificationId,
-    deadline: Option<DateTime<Utc>>,
-    duration: Option<Duration>,
+    deadline: Option<Duration>,
 }
 
 impl From<RealTimeTaskManagerLogEntryDispatchData>
@@ -22,7 +20,6 @@ impl From<RealTimeTaskManagerLogEntryDispatchData>
         ModuleId,
         ServerId,
         NotificationId,
-        Option<DateTime<Utc>>,
         Option<Duration>,
     )
 {
@@ -32,7 +29,6 @@ impl From<RealTimeTaskManagerLogEntryDispatchData>
             data.source_server_id,
             data.source_notification_id,
             data.deadline,
-            data.duration,
         )
     }
 }
@@ -42,15 +38,13 @@ impl RealTimeTaskManagerLogEntryDispatchData {
         target_module_id: ModuleId,
         source_server_id: ServerId,
         source_notification_id: NotificationId,
-        deadline: Option<DateTime<Utc>>,
-        duration: Option<Duration>,
+        deadline: Option<Duration>,
     ) -> Self {
         Self {
             target_module_id,
             source_server_id,
             source_notification_id,
             deadline,
-            duration,
         }
     }
 
@@ -66,12 +60,8 @@ impl RealTimeTaskManagerLogEntryDispatchData {
         self.source_notification_id
     }
 
-    pub fn deadline(&self) -> &Option<DateTime<Utc>> {
+    pub fn deadline(&self) -> &Option<Duration> {
         &self.deadline
-    }
-
-    pub fn duration(&self) -> &Option<Duration> {
-        &self.duration
     }
 }
 

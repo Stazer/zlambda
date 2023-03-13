@@ -4,6 +4,7 @@ mod manager;
 mod message;
 mod notification_header;
 mod scheduling_task;
+mod shared;
 mod state;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,11 +15,11 @@ pub use manager::*;
 pub use message::*;
 pub use notification_header::*;
 pub use scheduling_task::*;
+pub use shared::*;
 pub use state::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::sync::Arc;
@@ -36,8 +37,7 @@ pub struct RealTimeTask {
     target_module_id: ModuleId,
     source_server_id: ServerId,
     source_notification_id: NotificationId,
-    deadline: Option<DateTime<Utc>>,
-    duration: Option<Duration>,
+    deadline: Option<Duration>,
 }
 
 impl RealTimeTask {
@@ -47,8 +47,7 @@ impl RealTimeTask {
         target_module_id: ModuleId,
         source_server_id: ServerId,
         source_notification_id: NotificationId,
-        deadline: Option<DateTime<Utc>>,
-        duration: Option<Duration>,
+        deadline: Option<Duration>,
     ) -> Self {
         Self {
             id,
@@ -57,7 +56,6 @@ impl RealTimeTask {
             source_server_id,
             source_notification_id,
             deadline,
-            duration,
         }
     }
 
@@ -89,12 +87,8 @@ impl RealTimeTask {
         self.source_notification_id
     }
 
-    pub fn deadline(&self) -> &Option<DateTime<Utc>> {
+    pub fn deadline(&self) -> &Option<Duration> {
         &self.deadline
-    }
-
-    pub fn duration(&self) -> &Option<Duration> {
-        &self.duration
     }
 
     pub fn target_server_id(&self) -> &Option<ServerId> {
@@ -115,7 +109,7 @@ impl Ord for DeadlineDispatchedSortableRealTimeTask {
     fn cmp(&self, other: &Self) -> Ordering {
         match <RealTimeTaskState as Ord>::cmp(self.task.state(), other.task.state()) {
             Ordering::Equal => {
-                <Option<DateTime<Utc>> as Ord>::cmp(self.task.deadline(), other.task.deadline())
+                <Option<Duration> as Ord>::cmp(self.task.deadline(), other.task.deadline())
             }
             ordering => ordering,
         }
@@ -125,7 +119,7 @@ impl Ord for DeadlineDispatchedSortableRealTimeTask {
 impl PartialEq for DeadlineDispatchedSortableRealTimeTask {
     fn eq(&self, left: &Self) -> bool {
         <RealTimeTaskState as PartialEq>::eq(self.task.state(), left.task.state())
-            && <Option<DateTime<Utc>> as PartialEq>::eq(self.task.deadline(), left.task.deadline())
+            && <Option<Duration> as PartialEq>::eq(self.task.deadline(), left.task.deadline())
     }
 }
 
@@ -137,42 +131,27 @@ impl PartialOrd for DeadlineDispatchedSortableRealTimeTask {
             ordering => return ordering,
         };
 
-        <Option<DateTime<Utc>> as PartialOrd>::partial_cmp(
-            self.task.deadline(),
-            other.task.deadline(),
-        )
+        <Option<Duration> as PartialOrd>::partial_cmp(self.task.deadline(), other.task.deadline())
     }
 
     fn lt(&self, other: &Self) -> bool {
         <RealTimeTaskState as PartialOrd>::lt(self.task.state(), other.task.state())
-            && <Option<DateTime<Utc>> as PartialOrd>::lt(
-                self.task.deadline(),
-                other.task.deadline(),
-            )
+            && <Option<Duration> as PartialOrd>::lt(self.task.deadline(), other.task.deadline())
     }
 
     fn le(&self, other: &Self) -> bool {
         <RealTimeTaskState as PartialOrd>::le(self.task.state(), other.task.state())
-            && <Option<DateTime<Utc>> as PartialOrd>::le(
-                self.task.deadline(),
-                other.task.deadline(),
-            )
+            && <Option<Duration> as PartialOrd>::le(self.task.deadline(), other.task.deadline())
     }
 
     fn gt(&self, other: &Self) -> bool {
         <RealTimeTaskState as PartialOrd>::gt(self.task.state(), other.task.state())
-            && <Option<DateTime<Utc>> as PartialOrd>::gt(
-                self.task.deadline(),
-                other.task.deadline(),
-            )
+            && <Option<Duration> as PartialOrd>::gt(self.task.deadline(), other.task.deadline())
     }
 
     fn ge(&self, other: &Self) -> bool {
         <RealTimeTaskState as PartialOrd>::ge(self.task.state(), other.task.state())
-            && <Option<DateTime<Utc>> as PartialOrd>::ge(
-                self.task.deadline(),
-                other.task.deadline(),
-            )
+            && <Option<Duration> as PartialOrd>::ge(self.task.deadline(), other.task.deadline())
     }
 }
 
