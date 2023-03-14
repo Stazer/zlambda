@@ -1,17 +1,17 @@
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use zlambda_core::common::module::ModuleId;
+use chrono::{DateTime, Utc};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RealTimeTaskManagerNotificationHeader {
     target_module_id: ModuleId,
-    deadline: Option<Duration>,
+    deadline: Option<DateTime<Utc>>,
 }
 
 impl From<RealTimeTaskManagerNotificationHeader>
-    for (ModuleId, Option<Duration>)
+    for (ModuleId, Option<DateTime<Utc>>)
 {
     fn from(header: RealTimeTaskManagerNotificationHeader) -> Self {
         (header.target_module_id, header.deadline)
@@ -21,7 +21,7 @@ impl From<RealTimeTaskManagerNotificationHeader>
 impl RealTimeTaskManagerNotificationHeader {
     pub fn new(
         target_module_id: ModuleId,
-        deadline: Option<Duration>,
+        deadline: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
             target_module_id,
@@ -33,7 +33,7 @@ impl RealTimeTaskManagerNotificationHeader {
         self.target_module_id
     }
 
-    pub fn deadline(&self) -> &Option<Duration> {
+    pub fn deadline(&self) -> &Option<DateTime<Utc>> {
         &self.deadline
     }
 }

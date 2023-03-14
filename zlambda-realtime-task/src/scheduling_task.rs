@@ -1,12 +1,14 @@
 use crate::{
     RealTimeSharedData, RealTimeTaskId, RealTimeTaskSchedulingTaskMessage,
     RealTimeTaskSchedulingTaskPauseMessage, RealTimeTaskSchedulingTaskRescheduleMessage,
-    RealTimeTaskSchedulingTaskResumeMessage,
+    RealTimeTaskSchedulingTaskResumeMessage, DeadlineDispatchedSortableRealTimeTask,
 };
 use std::sync::Arc;
 use zlambda_core::common::message::{message_queue, MessageQueueReceiver, MessageQueueSender};
 use zlambda_core::common::runtime::{select, spawn};
 use zlambda_core::common::time::sleep;
+use std::cmp::Reverse;
+use chrono::Utc;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -60,11 +62,7 @@ impl RealTimeTaskSchedulingTask {
     async fn select(&mut self) {
         match self.state {
             RealTimeTaskSchedulingTaskState::Paused => {
-                select!(
-                    message = self.receiver.do_receive() => {
-                        self.on_real_time_task_scheduling_task_message(message).await
-                    }
-                )
+                self.select_receiver().await
             }
             RealTimeTaskSchedulingTaskState::Running => {
                 let entry = {
@@ -74,34 +72,70 @@ impl RealTimeTaskSchedulingTask {
                         .write()
                         .await;
 
-                    match deadline_dispatched_sorted_tasks.pop() {
-                        None => None,
-                        Some(entry) => Some((entry.0.task().id(), *entry.0.task().deadline())),
-                    }
+                    deadline_dispatched_sorted_tasks.pop().map(|Reverse(entry)| entry)
                 };
 
+                let duration = (|| {
+                    let entry = match &entry {
+                        None => return None,
+                        Some(entry) => entry,
+                    };
+
+                    let deadline = match *entry.task().deadline() {
+                        None => return None,
+                        Some(deadline) => deadline,
+                    };
+
+                    let duration = deadline - Utc::now();
+
+                    if duration.is_zero() {
+                        return None
+                    }
+
+                    match duration.to_std() {
+                        Err(_error) => None,
+                        Ok(duration) => Some(duration),
+                    }
+                })();
+
                 match entry {
-                    Some((task_id, Some(deadline))) => {
+                    Some(entry) if let Some(duration) = duration => {
                         select!(
-                            notify = sleep(deadline) => {
-                                self.schedule(task_id).await
+                            _ = sleep(duration) => {
+                                self.schedule(entry.task().id()).await
                             },
                             message = self.receiver.do_receive() => {
-                                self.on_real_time_task_scheduling_task_message(message).await
+                                {
+                                    let mut deadline_dispatched_sorted_tasks = self
+                                        .shared_data
+                                        .deadline_dispatched_sorted_tasks()
+                                        .write()
+                                        .await;
+
+                                    deadline_dispatched_sorted_tasks.push(Reverse(entry));
+                                }
+
+                                self.on_real_time_task_scheduling_task_message(message).await;
                             }
                         )
                     }
-                    Some((task_id, None)) => self.schedule(task_id).await,
+                    Some(entry) => {
+                        self.schedule(entry.task().id()).await
+                    }
                     None => {
-                        select!(
-                            message = self.receiver.do_receive() => {
-                                self.on_real_time_task_scheduling_task_message(message).await
-                            }
-                        )
+                        self.select_receiver().await
                     }
                 }
             }
         }
+    }
+
+    async fn select_receiver(&mut self) {
+        select!(
+            message = self.receiver.do_receive() => {
+                self.on_real_time_task_scheduling_task_message(message).await
+            }
+        )
     }
 
     async fn on_real_time_task_scheduling_task_message(
@@ -142,6 +176,10 @@ impl RealTimeTaskSchedulingTask {
         &mut self,
         _message: RealTimeTaskSchedulingTaskRescheduleMessage,
     ) {
+    }
+
+    async fn reattach_task(&self, task: DeadlineDispatchedSortableRealTimeTask) {
+
     }
 
     async fn schedule(&self, task_id: RealTimeTaskId) {
