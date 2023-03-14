@@ -16,9 +16,9 @@ use zlambda_core::server::{LogId, ServerId};
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Default, Debug)]
-pub struct RealTimeSharedData {
+pub struct RealTimeTaskManagerInstance {
     local_counter: AtomicUsize,
-    log_ids: RwLock<HashMap<ServerId, LogId>>,
+    log_id: LogId,
     receivers: RwLock<
         HashMap<
             NotificationId,
@@ -32,7 +32,7 @@ pub struct RealTimeSharedData {
     servers: RwLock<HashMap<ServerId, Arc<Server>>>,
 }
 
-impl RealTimeSharedData {
+impl RealTimeTaskManagerInstance {
     pub fn local_counter(&self) -> &AtomicUsize {
         &self.local_counter
     }

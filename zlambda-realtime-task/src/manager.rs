@@ -14,15 +14,19 @@ use zlambda_core::common::module::Module;
 use zlambda_core::common::notification::{NotificationBodyItemStreamExt, NotificationId};
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::server::{
+    ServerId,
     ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
     ServerModuleStartupEventInput, ServerModuleStartupEventOutput,
 };
+use std::collections::HashMap;
+use zlambda_core::common::sync::RwLock;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Default, Debug)]
 pub struct RealTimeTaskManager {
+    instances: RwLock<HashMap<ServerId, Arc<RealTimeTaskManagerInstance>>>,
     shared_data: Arc<RealTimeSharedData>,
 }
 

@@ -178,10 +178,6 @@ impl RealTimeTaskSchedulingTask {
     ) {
     }
 
-    async fn reattach_task(&self, task: DeadlineDispatchedSortableRealTimeTask) {
-
-    }
-
     async fn schedule(&self, task_id: RealTimeTaskId) {
         println!("{}", task_id);
     }
