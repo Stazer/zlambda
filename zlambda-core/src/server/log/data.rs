@@ -1,4 +1,5 @@
-use crate::server::{LogId, ServerId};
+use crate::common::module::ModuleId;
+use crate::server::{LogId, LogIssuer, ServerId};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -61,21 +62,26 @@ impl RemoveServerLogEntryData {
 #[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct ServerSystemCreateLogLogEntryData {
     log_id: LogId,
+    log_issuer: Option<LogIssuer>,
 }
 
-impl From<ServerSystemCreateLogLogEntryData> for (LogId,) {
+impl From<ServerSystemCreateLogLogEntryData> for (LogId, Option<LogIssuer>) {
     fn from(data: ServerSystemCreateLogLogEntryData) -> Self {
-        (data.log_id,)
+        (data.log_id, data.log_issuer)
     }
 }
 
 impl ServerSystemCreateLogLogEntryData {
-    pub fn new(log_id: LogId) -> Self {
-        Self { log_id }
+    pub fn new(log_id: LogId, log_issuer: Option<LogIssuer>) -> Self {
+        Self { log_id, log_issuer }
     }
 
     pub fn log_id(&self) -> LogId {
         self.log_id
+    }
+
+    pub fn log_issuer(&self) -> &Option<LogIssuer> {
+        &self.log_issuer
     }
 }
 

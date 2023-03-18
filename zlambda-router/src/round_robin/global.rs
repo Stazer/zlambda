@@ -85,7 +85,7 @@ impl ServerModule for GlobalRoundRobinRouter {
         let server_id = input.server().server_id().await;
 
         if server_id == input.server().leader_server_id().await {
-            let log_id = input.server().logs().create().await;
+            let log_id = input.server().logs().create(None).await;
 
             let mut log_ids = self.log_ids.write().await;
             log_ids.insert(server_id, log_id);

@@ -1,9 +1,9 @@
 use crate::RealTimeTaskId;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use zlambda_core::common::module::ModuleId;
 use zlambda_core::common::notification::NotificationId;
 use zlambda_core::server::ServerId;
-use chrono::{DateTime, Utc};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,12 +16,7 @@ pub struct RealTimeTaskManagerLogEntryDispatchData {
 }
 
 impl From<RealTimeTaskManagerLogEntryDispatchData>
-    for (
-        ModuleId,
-        ServerId,
-        NotificationId,
-        Option<DateTime<Utc>>,
-    )
+    for (ModuleId, ServerId, NotificationId, Option<DateTime<Utc>>)
 {
     fn from(data: RealTimeTaskManagerLogEntryDispatchData) -> Self {
         (

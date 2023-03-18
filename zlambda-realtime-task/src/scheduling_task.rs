@@ -1,14 +1,20 @@
 use crate::{
-    RealTimeSharedData, RealTimeTaskId, RealTimeTaskSchedulingTaskMessage,
-    RealTimeTaskSchedulingTaskPauseMessage, RealTimeTaskSchedulingTaskRescheduleMessage,
-    RealTimeTaskSchedulingTaskResumeMessage, DeadlineDispatchedSortableRealTimeTask,
+    DeadlineSortableRealTimeTask, RealTimeTaskId, RealTimeTaskManagerInstance,
+    RealTimeTaskManagerLogEntryData, RealTimeTaskManagerLogEntryScheduleData,
+    RealTimeTaskSchedulingTaskMessage, RealTimeTaskSchedulingTaskPauseMessage,
+    RealTimeTaskSchedulingTaskRescheduleMessage, RealTimeTaskSchedulingTaskResumeMessage,
 };
+use chrono::Utc;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use zlambda_core::common::message::{message_queue, MessageQueueReceiver, MessageQueueSender};
 use zlambda_core::common::runtime::{select, spawn};
+use zlambda_core::common::serialize::serialize_to_bytes;
+use zlambda_core::common::sync::RwLock;
 use zlambda_core::common::time::sleep;
-use std::cmp::Reverse;
-use chrono::Utc;
+use zlambda_core::server::{LogId, Server};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,26 +31,36 @@ pub struct RealTimeTaskSchedulingTask {
     sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
     receiver: MessageQueueReceiver<RealTimeTaskSchedulingTaskMessage>,
     state: RealTimeTaskSchedulingTaskState,
-    shared_data: Arc<RealTimeSharedData>,
+    instance: Arc<RealTimeTaskManagerInstance>,
 }
 
 impl RealTimeTaskSchedulingTask {
-    pub fn new(
-        state: RealTimeTaskSchedulingTaskState,
-        shared_data: Arc<RealTimeSharedData>,
-    ) -> Self {
+    pub fn new(state: RealTimeTaskSchedulingTaskState, log_id: LogId, server: Arc<Server>) -> Self {
         let (sender, receiver) = message_queue();
 
         Self {
-            sender,
+            sender: sender.clone(),
             receiver,
             state,
-            shared_data,
+            instance: Arc::new(RealTimeTaskManagerInstance::new(
+                AtomicUsize::default(),
+                log_id,
+                RwLock::new(HashMap::default()),
+                RwLock::new(Vec::default()),
+                RwLock::new(BinaryHeap::default()),
+                RwLock::new(HashMap::default()),
+                sender,
+                server,
+            )),
         }
     }
 
     pub fn sender(&self) -> &MessageQueueSender<RealTimeTaskSchedulingTaskMessage> {
         &self.sender
+    }
+
+    pub fn instance(&self) -> &Arc<RealTimeTaskManagerInstance> {
+        &self.instance
     }
 
     pub fn spawn(self) {
@@ -61,18 +77,15 @@ impl RealTimeTaskSchedulingTask {
 
     async fn select(&mut self) {
         match self.state {
-            RealTimeTaskSchedulingTaskState::Paused => {
-                self.select_receiver().await
-            }
+            RealTimeTaskSchedulingTaskState::Paused => self.select_receiver().await,
             RealTimeTaskSchedulingTaskState::Running => {
                 let entry = {
-                    let mut deadline_dispatched_sorted_tasks = self
-                        .shared_data
-                        .deadline_dispatched_sorted_tasks()
-                        .write()
-                        .await;
+                    let mut deadline_dispatched_sorted_tasks =
+                        self.instance.deadline_sorted_tasks().write().await;
 
-                    deadline_dispatched_sorted_tasks.pop().map(|Reverse(entry)| entry)
+                    deadline_dispatched_sorted_tasks
+                        .pop()
+                        .map(|Reverse(entry)| entry)
                 };
 
                 let duration = (|| {
@@ -81,7 +94,7 @@ impl RealTimeTaskSchedulingTask {
                         Some(entry) => entry,
                     };
 
-                    let deadline = match *entry.task().deadline() {
+                    let deadline = match *entry.deadline() {
                         None => return None,
                         Some(deadline) => deadline,
                     };
@@ -89,7 +102,7 @@ impl RealTimeTaskSchedulingTask {
                     let duration = deadline - Utc::now();
 
                     if duration.is_zero() {
-                        return None
+                        return None;
                     }
 
                     match duration.to_std() {
@@ -102,13 +115,13 @@ impl RealTimeTaskSchedulingTask {
                     Some(entry) if let Some(duration) = duration => {
                         select!(
                             _ = sleep(duration) => {
-                                self.schedule(entry.task().id()).await
+                                self.schedule(entry.task_id()).await
                             },
                             message = self.receiver.do_receive() => {
                                 {
                                     let mut deadline_dispatched_sorted_tasks = self
-                                        .shared_data
-                                        .deadline_dispatched_sorted_tasks()
+                                        .instance
+                                        .deadline_sorted_tasks()
                                         .write()
                                         .await;
 
@@ -120,7 +133,7 @@ impl RealTimeTaskSchedulingTask {
                         )
                     }
                     Some(entry) => {
-                        self.schedule(entry.task().id()).await
+                        self.schedule(entry.task_id()).await
                     }
                     None => {
                         self.select_receiver().await
@@ -179,6 +192,37 @@ impl RealTimeTaskSchedulingTask {
     }
 
     async fn schedule(&self, task_id: RealTimeTaskId) {
-        println!("{}", task_id);
+        let occupations = self.instance.occupations().read().await;
+
+        let mut minimum = None;
+
+        for (server_id, tasks) in occupations.iter() {
+            minimum = match minimum {
+                None => Some((server_id, tasks.len())),
+                Some((_server_id, tasks_length)) if tasks.len() < tasks_length => {
+                    Some((server_id, tasks.len()))
+                }
+                minimum => minimum,
+            }
+        }
+
+        let server_id = match minimum {
+            Some((server_id, _tasks_length)) => server_id,
+            None => panic!(),
+        };
+
+        let data = serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Schedule(
+            RealTimeTaskManagerLogEntryScheduleData::new(task_id, *server_id),
+        ))
+        .expect("")
+        .freeze();
+
+        self.instance
+            .server()
+            .logs()
+            .get(self.instance.log_id())
+            .entries()
+            .commit(data)
+            .await;
     }
 }

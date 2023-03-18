@@ -8,8 +8,8 @@ use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::client::ServerClientId;
 use crate::server::{
-    LogEntry, LogEntryData, LogEntryId, LogId, LogTerm, ServerId, ServerLogCreateMessageOutput,
-    ServerModule,
+    LogEntry, LogEntryData, LogEntryId, LogId, LogIssuer, LogTerm, ServerId,
+    ServerLogCreateMessageOutput, ServerModule,
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -602,15 +602,23 @@ impl ServerServerSocketAddressesGetMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerLogCreateMessageInput {}
+pub struct ServerLogCreateMessageInput {
+    log_issuer: Option<LogIssuer>,
+}
 
-impl From<ServerLogCreateMessageInput> for () {
-    fn from(_input: ServerLogCreateMessageInput) -> Self {}
+impl From<ServerLogCreateMessageInput> for (Option<LogIssuer>,) {
+    fn from(input: ServerLogCreateMessageInput) -> Self {
+        (input.log_issuer,)
+    }
 }
 
 impl ServerLogCreateMessageInput {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(log_issuer: Option<LogIssuer>) -> Self {
+        Self { log_issuer }
+    }
+
+    pub fn log_issuer(&self) -> &Option<LogIssuer> {
+        &self.log_issuer
     }
 }
 

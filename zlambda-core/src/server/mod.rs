@@ -393,11 +393,11 @@ impl<'a> ServerLogs<'a> {
         self.server
     }
 
-    pub async fn create(&mut self) -> LogId {
+    pub async fn create(&mut self, log_issuer: Option<LogIssuer>) -> LogId {
         let output = self
             .server
             .server_message_sender()
-            .do_send_synchronous(ServerLogCreateMessageInput::new())
+            .do_send_synchronous(ServerLogCreateMessageInput::new(log_issuer))
             .await;
 
         let (log_id,) = output.into();
@@ -418,6 +418,45 @@ pub struct ServerLogsLog<'a> {
 }
 
 impl<'a> ServerLogsLog<'a> {
+    pub(crate) fn new(log_id: LogId, server: &'a Server) -> Self {
+        Self { log_id, server }
+    }
+
+    pub async fn get(&self, log_entry_id: LogEntryId) -> Option<LogEntry> {
+        let output = self
+            .server
+            .server_message_sender()
+            .do_send_synchronous(ServerLogEntriesGetMessageInput::new(
+                self.log_id,
+                log_entry_id,
+            ))
+            .await;
+
+        let (log_entry,) = output.into();
+
+        log_entry
+    }
+
+    pub async fn commit(&self, data: Bytes) {
+        self.server
+            .server_message_sender()
+            .do_send_synchronized(ServerCommitMessageInput::new(self.log_id, data))
+            .await;
+    }
+
+    pub fn entries(&self) -> ServerLogsLogEntries<'_> {
+        ServerLogsLogEntries::new(self.log_id, self.server)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct ServerLogsLogEntries<'a> {
+    log_id: LogId,
+    server: &'a Server,
+}
+
+impl<'a> ServerLogsLogEntries<'a> {
     pub(crate) fn new(log_id: LogId, server: &'a Server) -> Self {
         Self { log_id, server }
     }

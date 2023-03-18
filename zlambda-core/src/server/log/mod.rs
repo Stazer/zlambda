@@ -3,6 +3,7 @@ mod entry;
 mod error;
 mod following;
 mod id;
+mod issuer;
 mod leading;
 mod manager;
 mod term;
@@ -14,6 +15,7 @@ pub use entry::*;
 pub use error::*;
 pub use following::*;
 pub use id::*;
+pub use issuer::*;
 pub use leading::*;
 pub use manager::*;
 pub use term::*;
@@ -49,11 +51,12 @@ impl From<LogFollowerType> for LogType {
 pub struct Log {
     id: LogId,
     r#type: LogType,
+    issuer: Option<LogIssuer>,
 }
 
 impl Log {
-    pub fn new(id: LogId, r#type: LogType) -> Self {
-        Self { id, r#type }
+    pub fn new(id: LogId, r#type: LogType, issuer: Option<LogIssuer>) -> Self {
+        Self { id, r#type, issuer }
     }
 
     pub fn id(&self) -> LogId {
@@ -66,6 +69,10 @@ impl Log {
 
     pub fn type_mut(&mut self) -> &mut LogType {
         &mut self.r#type
+    }
+
+    pub fn issuer(&self) -> &Option<LogIssuer> {
+        &self.issuer
     }
 
     pub fn current_term(&self) -> LogTerm {

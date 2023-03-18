@@ -3,7 +3,7 @@ use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };
-use crate::common::module::ModuleManager;
+use crate::common::module::{ModuleId, ModuleManager};
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
 use crate::common::serialize::serialize_to_bytes;
@@ -19,15 +19,15 @@ use crate::server::node::{
 };
 use crate::server::{
     AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogError, LogFollowerType, LogId,
-    LogLeaderType, LogManager, LogType, NewServerError, Server, ServerClientRegistrationMessage,
-    ServerClientResignationMessage, ServerCommitCommitMessage, ServerCommitCommitMessageInput,
-    ServerCommitLogCreateMessage, ServerCommitLogCreateMessageInput, ServerCommitMessage,
-    ServerCommitRegistrationMessage, ServerCommitRegistrationMessageInput, ServerId,
-    ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
-    ServerLogAppendInitiateMessage, ServerLogAppendInitiateMessageOutput,
-    ServerLogAppendRequestMessage, ServerLogCreateMessage, ServerLogCreateMessageOutput,
-    ServerLogEntriesAcknowledgementMessage, ServerLogEntriesGetMessage,
-    ServerLogEntriesGetMessageOutput, ServerLogEntriesRecoveryMessage,
+    LogLeaderType, LogManager, LogModuleIssuer, LogSystemIssuer, LogType, NewServerError, Server,
+    ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
+    ServerCommitCommitMessageInput, ServerCommitLogCreateMessage,
+    ServerCommitLogCreateMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
+    ServerCommitRegistrationMessageInput, ServerId, ServerLeaderServerIdGetMessage,
+    ServerLeaderServerIdGetMessageOutput, ServerLogAppendInitiateMessage,
+    ServerLogAppendInitiateMessageOutput, ServerLogAppendRequestMessage, ServerLogCreateMessage,
+    ServerLogCreateMessageOutput, ServerLogEntriesAcknowledgementMessage,
+    ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput, ServerLogEntriesRecoveryMessage,
     ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
     ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
     ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
@@ -108,7 +108,11 @@ impl ServerTask {
                 server,
                 log_manager: (|| {
                     let mut log_manager = LogManager::default();
-                    log_manager.insert(Log::new(LogId::from(0), LogLeaderType::default().into()));
+                    log_manager.insert(Log::new(
+                        LogId::from(0),
+                        LogLeaderType::default().into(),
+                        Some(LogSystemIssuer::new().into()),
+                    ));
 
                     log_manager
                 })(),
@@ -216,8 +220,11 @@ impl ServerTask {
                     server,
                     log_manager: (|| {
                         let mut log_manager = LogManager::default();
-                        log_manager
-                            .insert(Log::new(LogId::from(0), LogFollowerType::default().into()));
+                        log_manager.insert(Log::new(
+                            LogId::from(0),
+                            LogFollowerType::default().into(),
+                            Some(LogSystemIssuer::new().into()),
+                        ));
 
                         log_manager
                     })(),
@@ -321,8 +328,11 @@ impl ServerTask {
                     server,
                     log_manager: (|| {
                         let mut log_manager = LogManager::default();
-                        log_manager
-                            .insert(Log::new(LogId::from(0), LogFollowerType::default().into()));
+                        log_manager.insert(Log::new(
+                            LogId::from(0),
+                            LogFollowerType::default().into(),
+                            Some(LogSystemIssuer::new().into()),
+                        ));
 
                         log_manager
                     })(),
@@ -997,7 +1007,8 @@ impl ServerTask {
     }
 
     async fn on_server_log_create_message(&mut self, message: ServerLogCreateMessage) {
-        let (_input, output_sender) = message.into();
+        let (input, output_sender) = message.into();
+        let (log_issuer,) = input.into();
 
         if self.server_id == self.leader_server_id {
             let log_id = LogId::from(self.log_manager.len());
@@ -1005,7 +1016,7 @@ impl ServerTask {
                 .replicate(
                     SERVER_SYSTEM_LOG_ID,
                     vec![serialize_to_bytes(&ServerSystemLogEntryData::from(
-                        ServerSystemCreateLogLogEntryData::new(log_id),
+                        ServerSystemCreateLogLogEntryData::new(log_id, log_issuer),
                     ))
                     .expect("")
                     .freeze()],
@@ -1196,16 +1207,19 @@ impl ServerTask {
                         }
                     }
                     ServerSystemLogEntryData::CreateLog(data) => {
+                        let (log_id, log_issuer) = data.into();
+
                         self.log_manager.insert(Log::new(
-                            data.log_id(),
+                            log_id,
                             if self.server_id == self.leader_server_id {
                                 LogLeaderType::default().into()
                             } else {
                                 LogFollowerType::default().into()
                             },
+                            log_issuer,
                         ));
 
-                        self.on_commit_create_log_data(data).await;
+                        self.on_commit_create_log_data(log_id).await;
                     }
                 }
             }
@@ -1261,10 +1275,10 @@ impl ServerTask {
         }
     }
 
-    async fn on_commit_create_log_data(&mut self, data: ServerSystemCreateLogLogEntryData) {
+    async fn on_commit_create_log_data(&mut self, log_id: LogId) {
         if let Some(Some(server_node_message_sender)) = self.server_node_message_senders.get_mut(usize::from(self.leader_server_id)) && self.leader_server_id != self.server_id {
             server_node_message_sender.do_send_asynchronous(
-                ServerNodeLogAppendInitiateMessageInput::new(data.log_id()),
+                ServerNodeLogAppendInitiateMessageInput::new(log_id),
             ).await;
         }
     }

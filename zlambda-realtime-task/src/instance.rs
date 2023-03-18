@@ -1,8 +1,6 @@
-use crate::{
-    DeadlineDispatchedSortableRealTimeTask, RealTimeTask, RealTimeTaskSchedulingTaskMessage,
-};
+use crate::{DeadlineSortableRealTimeTask, RealTimeTask, RealTimeTaskSchedulingTaskMessage};
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use zlambda_core::common::message::MessageQueueSender;
@@ -10,12 +8,12 @@ use zlambda_core::common::notification::{
     NotificationBodyItemQueueReceiver, NotificationBodyStreamDeserializer, NotificationId,
 };
 use zlambda_core::common::sync::RwLock;
-use zlambda_core::server::Server;
-use zlambda_core::server::{LogId, ServerId};
+use zlambda_core::server::LogId;
+use zlambda_core::server::{Server, ServerId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct RealTimeTaskManagerInstance {
     local_counter: AtomicUsize,
     log_id: LogId,
@@ -25,20 +23,47 @@ pub struct RealTimeTaskManagerInstance {
             NotificationBodyStreamDeserializer<NotificationBodyItemQueueReceiver>,
         >,
     >,
-    tasks: RwLock<Vec<Arc<RealTimeTask>>>,
-    deadline_dispatched_sorted_tasks:
-        RwLock<BinaryHeap<Reverse<DeadlineDispatchedSortableRealTimeTask>>>,
-    senders: RwLock<HashMap<ServerId, MessageQueueSender<RealTimeTaskSchedulingTaskMessage>>>,
-    servers: RwLock<HashMap<ServerId, Arc<Server>>>,
+    tasks: RwLock<Vec<RealTimeTask>>,
+    deadline_sorted_tasks: RwLock<BinaryHeap<Reverse<DeadlineSortableRealTimeTask>>>,
+    occupations: RwLock<HashMap<ServerId, HashSet<RealTimeTask>>>,
+    sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
+    server: Arc<Server>,
 }
 
 impl RealTimeTaskManagerInstance {
+    pub fn new(
+        local_counter: AtomicUsize,
+        log_id: LogId,
+        receivers: RwLock<
+            HashMap<
+                NotificationId,
+                NotificationBodyStreamDeserializer<NotificationBodyItemQueueReceiver>,
+            >,
+        >,
+        tasks: RwLock<Vec<RealTimeTask>>,
+        deadline_sorted_tasks: RwLock<BinaryHeap<Reverse<DeadlineSortableRealTimeTask>>>,
+        occupations: RwLock<HashMap<ServerId, HashSet<RealTimeTask>>>,
+        sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
+        server: Arc<Server>,
+    ) -> Self {
+        Self {
+            local_counter,
+            log_id,
+            receivers,
+            tasks,
+            deadline_sorted_tasks,
+            occupations,
+            sender,
+            server,
+        }
+    }
+
     pub fn local_counter(&self) -> &AtomicUsize {
         &self.local_counter
     }
 
-    pub fn log_ids(&self) -> &RwLock<HashMap<ServerId, LogId>> {
-        &self.log_ids
+    pub fn log_id(&self) -> LogId {
+        self.log_id
     }
 
     pub fn receivers(
@@ -52,23 +77,25 @@ impl RealTimeTaskManagerInstance {
         &self.receivers
     }
 
-    pub fn tasks(&self) -> &RwLock<Vec<Arc<RealTimeTask>>> {
+    pub fn tasks(&self) -> &RwLock<Vec<RealTimeTask>> {
         &self.tasks
     }
 
-    pub fn deadline_dispatched_sorted_tasks(
+    pub fn deadline_sorted_tasks(
         &self,
-    ) -> &RwLock<BinaryHeap<Reverse<DeadlineDispatchedSortableRealTimeTask>>> {
-        &self.deadline_dispatched_sorted_tasks
+    ) -> &RwLock<BinaryHeap<Reverse<DeadlineSortableRealTimeTask>>> {
+        &self.deadline_sorted_tasks
     }
 
-    pub fn senders(
-        &self,
-    ) -> &RwLock<HashMap<ServerId, MessageQueueSender<RealTimeTaskSchedulingTaskMessage>>> {
-        &self.senders
+    pub fn occupations(&self) -> &RwLock<HashMap<ServerId, HashSet<RealTimeTask>>> {
+        &self.occupations
     }
 
-    pub fn servers(&self) -> &RwLock<HashMap<ServerId, Arc<Server>>> {
-        &self.servers
+    pub fn sender(&self) -> &MessageQueueSender<RealTimeTaskSchedulingTaskMessage> {
+        &self.sender
+    }
+
+    pub fn server(&self) -> &Arc<Server> {
+        &self.server
     }
 }

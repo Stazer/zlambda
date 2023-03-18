@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use zlambda_core::server::ServerId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,15 +19,23 @@ impl RealTimeTaskDispatchedState {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
-pub struct RealTimeTaskScheduledState {}
+pub struct RealTimeTaskScheduledState {
+    target_server_id: ServerId,
+}
 
-impl From<RealTimeTaskScheduledState> for () {
-    fn from(_state: RealTimeTaskScheduledState) -> Self {}
+impl From<RealTimeTaskScheduledState> for (ServerId,) {
+    fn from(state: RealTimeTaskScheduledState) -> Self {
+        (state.target_server_id,)
+    }
 }
 
 impl RealTimeTaskScheduledState {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(target_server_id: ServerId) -> Self {
+        Self { target_server_id }
+    }
+
+    pub fn target_server_id(&self) -> ServerId {
+        self.target_server_id
     }
 }
 
