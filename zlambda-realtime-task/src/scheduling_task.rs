@@ -192,27 +192,38 @@ impl RealTimeTaskSchedulingTask {
     }
 
     async fn schedule(&self, task_id: RealTimeTaskId) {
-        let occupations = self.instance.occupations().read().await;
+        let minimum = {
+            let occupations = self.instance.occupations().read().await;
 
-        let mut minimum = None;
+            let mut minimum = None;
 
-        for (server_id, tasks) in occupations.iter() {
-            minimum = match minimum {
-                None => Some((server_id, tasks.len())),
-                Some((_server_id, tasks_length)) if tasks.len() < tasks_length => {
-                    Some((server_id, tasks.len()))
+            for (server_id, tasks) in occupations.iter() {
+                minimum = match minimum {
+                    None => Some((*server_id, tasks.len())),
+                    Some((_server_id, tasks_length)) if tasks.len() < tasks_length => {
+                        Some((*server_id, tasks.len()))
+                    }
+                    minimum => minimum,
                 }
-                minimum => minimum,
             }
-        }
+
+            minimum
+        };
 
         let server_id = match minimum {
             Some((server_id, _tasks_length)) => server_id,
-            None => panic!(),
+            None => {
+                let source_server_id = {
+                    let tasks = self.instance.tasks().read().await;
+                    tasks.get(usize::from(task_id)).expect("").source_server_id()
+                };
+
+                source_server_id
+            }
         };
 
         let data = serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Schedule(
-            RealTimeTaskManagerLogEntryScheduleData::new(task_id, *server_id),
+            RealTimeTaskManagerLogEntryScheduleData::new(task_id, server_id),
         ))
         .expect("")
         .freeze();

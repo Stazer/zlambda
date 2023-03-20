@@ -67,6 +67,8 @@ impl ServerModule for ProcessDispatcher {
     ) -> ServerModuleNotificationEventOutput {
         let (server, _source, notification_body_item_queue_receiver) = input.into();
 
+        println!("hello world");
+
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
         let header = deserializer
             .deserialize::<ProcessDispatcherNotificationHeader>()

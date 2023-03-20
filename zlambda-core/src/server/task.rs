@@ -1231,6 +1231,14 @@ impl ServerTask {
             {
                 self.on_server_message(message).await;
             }
+        } else {
+            for message in self
+                .commit_messages
+                .remove(&log_entry_id)
+                .unwrap_or_default()
+            {
+                self.on_server_message(message).await;
+            }
         }
 
         for (module_id, module) in self.module_manager.iter() {

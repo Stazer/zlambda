@@ -1,4 +1,6 @@
-use crate::{DeadlineSortableRealTimeTask, RealTimeTask, RealTimeTaskSchedulingTaskMessage};
+use crate::{
+    DeadlineSortableRealTimeTask, RealTimeTask, RealTimeTaskId, RealTimeTaskSchedulingTaskMessage,
+};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::sync::atomic::AtomicUsize;
@@ -25,7 +27,7 @@ pub struct RealTimeTaskManagerInstance {
     >,
     tasks: RwLock<Vec<RealTimeTask>>,
     deadline_sorted_tasks: RwLock<BinaryHeap<Reverse<DeadlineSortableRealTimeTask>>>,
-    occupations: RwLock<HashMap<ServerId, HashSet<RealTimeTask>>>,
+    occupations: RwLock<HashMap<ServerId, HashSet<RealTimeTaskId>>>,
     sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
     server: Arc<Server>,
 }
@@ -42,7 +44,7 @@ impl RealTimeTaskManagerInstance {
         >,
         tasks: RwLock<Vec<RealTimeTask>>,
         deadline_sorted_tasks: RwLock<BinaryHeap<Reverse<DeadlineSortableRealTimeTask>>>,
-        occupations: RwLock<HashMap<ServerId, HashSet<RealTimeTask>>>,
+        occupations: RwLock<HashMap<ServerId, HashSet<RealTimeTaskId>>>,
         sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
         server: Arc<Server>,
     ) -> Self {
@@ -87,7 +89,7 @@ impl RealTimeTaskManagerInstance {
         &self.deadline_sorted_tasks
     }
 
-    pub fn occupations(&self) -> &RwLock<HashMap<ServerId, HashSet<RealTimeTask>>> {
+    pub fn occupations(&self) -> &RwLock<HashMap<ServerId, HashSet<RealTimeTaskId>>> {
         &self.occupations
     }
 

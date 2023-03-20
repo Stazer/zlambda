@@ -422,6 +422,7 @@ impl<'a> ServerLogsLog<'a> {
         Self { log_id, server }
     }
 
+    #[deprecated]
     pub async fn get(&self, log_entry_id: LogEntryId) -> Option<LogEntry> {
         let output = self
             .server
@@ -437,6 +438,7 @@ impl<'a> ServerLogsLog<'a> {
         log_entry
     }
 
+    #[deprecated]
     pub async fn commit(&self, data: Bytes) {
         self.server
             .server_message_sender()

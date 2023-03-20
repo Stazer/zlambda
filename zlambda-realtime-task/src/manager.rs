@@ -1,19 +1,26 @@
 use crate::{
-    DeadlineSortableRealTimeTask, RealTimeTask, RealTimeTaskDispatchedState, RealTimeTaskId,
+    DeadlineSortableRealTimeTask, RealTimeTask, RealTimeTaskDispatchedState,
+    RealTimeTaskFinishedState, RealTimeTaskId,
     RealTimeTaskManagerInstance, RealTimeTaskManagerLogEntryData,
-    RealTimeTaskManagerLogEntryDispatchData, RealTimeTaskManagerNotificationHeader,
+    RealTimeTaskManagerLogEntryDispatchData,
     RealTimeTaskRunningState, RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
     RealTimeTaskSchedulingTaskRescheduleMessageInput, RealTimeTaskSchedulingTaskState,
-    RealTimeTaskState,
+    RealTimeTaskState, RealTimeTaskManagerLogEntryRunData, RealTimeTaskManagerLogEntryFinishData,RealTimeTaskManagerDispatchNotificationHeader,RealTimeTaskManagerExecuteNotificationHeader,
+    RealTimeTaskManagerNotificationHeader,
 };
 use std::cmp::Reverse;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
+use zlambda_core::common::future::stream::{StreamExt};
 use zlambda_core::common::module::Module;
-use zlambda_core::common::notification::{NotificationBodyItemStreamExt, NotificationId};
+use zlambda_core::common::notification::{
+    notification_body_item_queue, NotificationBodyItemStreamExt, NotificationId,
+    NotificationBodyItemType,
+};
+use zlambda_core::common::runtime::spawn;
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::RwLock;
 use zlambda_core::server::{
@@ -21,6 +28,7 @@ use zlambda_core::server::{
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput, ServerModuleStartupEventInput,
     ServerModuleStartupEventOutput, ServerSystemLogEntryData, SERVER_SYSTEM_LOG_ID,
+    ServerModuleNotificationEventInputServerSource,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,9 +91,11 @@ impl ServerModule for RealTimeTaskManager {
                 .0;
 
             if let ServerSystemLogEntryData::CreateLog(data) = data {
-                let issuer = LogIssuer::Module(LogModuleIssuer::new(input.module_id()));
+                let _issuer = LogIssuer::Module(LogModuleIssuer::new(input.module_id()));
+                let server_id = input.server().server_id().await;
+                let leader_server_id = input.server().leader_server_id().await;
 
-                if matches!(data.log_issuer(), Some(issuer)) {
+                if matches!(data.log_issuer(), Some(_issuer)) && server_id != leader_server_id {
                     let task = RealTimeTaskSchedulingTask::new(
                         RealTimeTaskSchedulingTaskState::Paused,
                         data.log_id(),
@@ -162,21 +172,93 @@ impl ServerModule for RealTimeTaskManager {
                         .await;
                 }
                 RealTimeTaskManagerLogEntryData::Schedule(data) => {
-                    {
+                    let (source_server_id, source_notification_id) = {
                         let mut tasks = instance.tasks().write().await;
                         let task = tasks.get_mut(usize::from(data.task_id())).expect("");
                         task.set_state(RealTimeTaskState::Scheduled(
                             RealTimeTaskScheduledState::new(data.target_server_id()),
                         ));
+
+                        (task.source_server_id(), task.source_notification_id())
+                    };
+
+                    {
+                        let mut occupations = instance.occupations().write().await;
+                        occupations
+                            .entry(data.target_server_id())
+                            .or_insert(HashSet::default())
+                            .insert(data.task_id());
                     }
 
                     {
-                        let mut deadline_sorted_tasks = instance.deadline_sorted_tasks().write().await;
-                        deadline_sorted_tasks.retain(|Reverse(entry)| entry.task_id() != data.task_id());
+                        let mut deadline_sorted_tasks =
+                            instance.deadline_sorted_tasks().write().await;
+                        deadline_sorted_tasks
+                            .retain(|Reverse(entry)| entry.task_id() != data.task_id());
+                    }
+
+                    if source_server_id == instance.server().server_id().await {
+                        let mut incoming_receiver = {
+                            let mut receivers = instance.receivers().write().await;
+                            receivers.remove(&source_notification_id).expect("")
+                        };
+
+                        let (sender, receiver) = notification_body_item_queue();
+
+                        let task_id = data.task_id();
+
+                        spawn(async move {
+                            let bytes = serialize_to_bytes(
+                                &RealTimeTaskManagerNotificationHeader::Execute(RealTimeTaskManagerExecuteNotificationHeader::new(task_id)),
+                            )
+                            .expect("").freeze();
+
+                            let data = serialize_to_bytes(
+                                &NotificationBodyItemType::Binary(bytes),
+                            )
+                            .expect("");
+
+                            sender.do_send(data).await;
+
+                            while let Some(item) = incoming_receiver.next().await {
+                                sender.do_send(item).await;
+                            }
+                        });
+
+                        instance
+                            .server()
+                            .servers()
+                            .get(data.target_server_id())
+                            .await
+                            .expect("")
+                            .notify(input.module_id(), receiver)
+                            .await;
                     }
                 }
-                RealTimeTaskManagerLogEntryData::Run(data) => {}
-                RealTimeTaskManagerLogEntryData::Finish(data) => {}
+                RealTimeTaskManagerLogEntryData::Run(data) => {
+                    let mut tasks = instance.tasks().write().await;
+                    let task = tasks.get_mut(usize::from(data.task_id())).expect("");
+                    task.set_state(RealTimeTaskState::Running(RealTimeTaskRunningState::new()));
+                }
+                RealTimeTaskManagerLogEntryData::Finish(data) => {
+                    let (target_server_id,) = {
+                        let mut tasks = instance.tasks().write().await;
+                        let task = tasks.get_mut(usize::from(data.task_id())).expect("");
+                        task.set_state(RealTimeTaskState::Finished(
+                            RealTimeTaskFinishedState::new(),
+                        ));
+
+                        (task.target_server_id().expect(""),)
+                    };
+
+                    {
+                        let mut occupations = instance.occupations().write().await;
+                        occupations
+                            .entry(target_server_id)
+                            .or_insert(HashSet::default())
+                            .remove(&data.task_id());
+                    }
+                }
             }
         }
     }
@@ -185,14 +267,9 @@ impl ServerModule for RealTimeTaskManager {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let (server, _source, notification_body_item_queue_receiver) = input.into();
+        let (server, source, notification_body_item_queue_receiver) = input.into();
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
-        let header = deserializer
-            .deserialize::<RealTimeTaskManagerNotificationHeader>()
-            .await
-            .unwrap();
-
         let server_id = server.server_id().await;
 
         let instance = {
@@ -200,30 +277,94 @@ impl ServerModule for RealTimeTaskManager {
             instances.get(&server_id).expect("").clone()
         };
 
-        let notification_id =
-            NotificationId::from(instance.local_counter().fetch_add(1, Ordering::Relaxed));
+        let header = deserializer
+            .deserialize::<RealTimeTaskManagerNotificationHeader>()
+            .await
+            .expect("");
 
-        {
-            let mut receivers = instance.receivers().write().await;
-            receivers.insert(notification_id, deserializer);
+        match header {
+            RealTimeTaskManagerNotificationHeader::Dispatch(header) => {
+                let notification_id =
+                    NotificationId::from(instance.local_counter().fetch_add(1, Ordering::Relaxed));
+
+                {
+                    let mut receivers = instance.receivers().write().await;
+                    receivers.insert(notification_id, deserializer);
+                }
+
+                server
+                    .logs()
+                    .get(instance.log_id())
+                    .commit(
+                        serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Dispatch(
+                            RealTimeTaskManagerLogEntryDispatchData::new(
+                                header.target_module_id(),
+                                server.server_id().await,
+                                notification_id,
+                                *header.deadline(),
+                            ),
+                        ))
+                        .expect("")
+                        .freeze(),
+                    )
+                    .await;
+            }
+            RealTimeTaskManagerNotificationHeader::Execute(header) => {
+                let (target_module_id,) = {
+                    let tasks = instance.tasks().read().await;
+                    let task = tasks.get(usize::from(header.task_id())).expect("");
+
+                    (task.target_module_id(),)
+                };
+
+                let module = instance.server().modules().get(target_module_id).await.expect("");
+
+                let (sender, receiver) = notification_body_item_queue();
+
+                server
+                    .logs()
+                    .get(instance.log_id())
+                    .commit(
+                        serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Run(
+                            RealTimeTaskManagerLogEntryRunData::new(
+                                header.task_id(),
+                            ),
+                        ))
+                        .expect("")
+                        .freeze(),
+                    )
+                    .await;
+
+                spawn(async move {
+                    while let Some(item) = deserializer.next().await {
+                        sender.do_send(item).await;
+                    }
+                });
+
+                module.on_notification(
+                    ServerModuleNotificationEventInput::new(
+                        server.clone(),
+                        target_module_id,
+                        ServerModuleNotificationEventInputServerSource::new(instance.server().server_id().await).into(),
+                        receiver,
+                    )
+                ).await;
+
+                server
+                    .logs()
+                    .get(instance.log_id())
+                    .commit(
+                        serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Finish(
+                            RealTimeTaskManagerLogEntryFinishData::new(
+                                header.task_id(),
+                            ),
+                        ))
+                        .expect("")
+                        .freeze(),
+                    )
+                    .await;
+            }
         }
-
-        server
-            .logs()
-            .get(instance.log_id())
-            .commit(
-                serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Dispatch(
-                    RealTimeTaskManagerLogEntryDispatchData::new(
-                        header.target_module_id(),
-                        server.server_id().await,
-                        notification_id,
-                        *header.deadline(),
-                    ),
-                ))
-                .expect("")
-                .freeze(),
-            )
-            .await;
     }
 }
 

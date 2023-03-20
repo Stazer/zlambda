@@ -108,6 +108,10 @@ impl RealTimeTaskManagerLogEntryRunData {
     pub fn new(task_id: RealTimeTaskId) -> Self {
         Self { task_id }
     }
+
+    pub fn task_id(&self) -> RealTimeTaskId {
+        self.task_id
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

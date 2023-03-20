@@ -241,7 +241,7 @@ where
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Serialize)]
-enum NotificationBodyItemType {
+pub enum NotificationBodyItemType {
     Json(Bytes),
     Binary(Bytes),
 }
