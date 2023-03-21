@@ -1,7 +1,7 @@
 use bytes::{BufMut, BytesMut};
 use postcard::serialize_with_flavor;
-use serde_json::to_vec;
 use serde::Serialize;
+use serde_json::to_vec;
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 

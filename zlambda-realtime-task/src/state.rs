@@ -42,30 +42,46 @@ impl RealTimeTaskScheduledState {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
-pub struct RealTimeTaskRunningState {}
+pub struct RealTimeTaskRunningState {
+    target_server_id: ServerId,
+}
 
-impl From<RealTimeTaskRunningState> for () {
-    fn from(_state: RealTimeTaskRunningState) -> Self {}
+impl From<RealTimeTaskRunningState> for (ServerId,) {
+    fn from(state: RealTimeTaskRunningState) -> Self {
+        (state.target_server_id,)
+    }
 }
 
 impl RealTimeTaskRunningState {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(target_server_id: ServerId) -> Self {
+        Self { target_server_id }
+    }
+
+    pub fn target_server_id(&self) -> ServerId {
+        self.target_server_id
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
-pub struct RealTimeTaskFinishedState {}
+pub struct RealTimeTaskFinishedState {
+    target_server_id: ServerId,
+}
 
-impl From<RealTimeTaskFinishedState> for () {
-    fn from(_state: RealTimeTaskFinishedState) -> Self {}
+impl From<RealTimeTaskFinishedState> for (ServerId,) {
+    fn from(state: RealTimeTaskFinishedState) -> Self {
+        (state.target_server_id,)
+    }
 }
 
 impl RealTimeTaskFinishedState {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(target_server_id: ServerId) -> Self {
+        Self { target_server_id }
+    }
+
+    pub fn target_server_id(&self) -> ServerId {
+        self.target_server_id
     }
 }
 

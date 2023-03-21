@@ -67,8 +67,6 @@ impl ServerModule for ProcessDispatcher {
     ) -> ServerModuleNotificationEventOutput {
         let (server, _source, notification_body_item_queue_receiver) = input.into();
 
-        println!("hello world");
-
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
         let header = deserializer
             .deserialize::<ProcessDispatcherNotificationHeader>()
@@ -89,7 +87,9 @@ impl ServerModule for ProcessDispatcher {
         let mut stdout = child.stdout.take().expect("stdout handle");
         let mut stdin = child.stdin.take().expect("stdin handle");
 
-        spawn(async move { server.notify(module_id, receiver).await });
+        spawn(async move {
+            server.notify(module_id, receiver).await;
+        });
 
         loop {
             let mut buffer = Vec::with_capacity(4096);
@@ -106,7 +106,7 @@ impl ServerModule for ProcessDispatcher {
                 },
                 item = deserializer.next() => {
                     match item {
-                        None => break,
+                        None => continue,
                         Some(item) => stdin.write(&item).await.expect("successful write"),
                     };
                 }

@@ -95,8 +95,13 @@ impl RealTimeTask {
         &self.deadline
     }
 
-    pub fn target_server_id(&self) -> &Option<ServerId> {
-        &None
+    pub fn target_server_id(&self) -> Option<ServerId> {
+        match &self.state {
+            RealTimeTaskState::Dispatched(_state) => None,
+            RealTimeTaskState::Scheduled(state) => Some(state.target_server_id()),
+            RealTimeTaskState::Running(state) => Some(state.target_server_id()),
+            RealTimeTaskState::Finished(state) => Some(state.target_server_id()),
+        }
     }
 }
 

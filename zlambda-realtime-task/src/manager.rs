@@ -1,12 +1,12 @@
 use crate::{
     DeadlineSortableRealTimeTask, RealTimeTask, RealTimeTaskDispatchedState,
-    RealTimeTaskFinishedState, RealTimeTaskId,
-    RealTimeTaskManagerInstance, RealTimeTaskManagerLogEntryData,
-    RealTimeTaskManagerLogEntryDispatchData,
-    RealTimeTaskRunningState, RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
-    RealTimeTaskSchedulingTaskRescheduleMessageInput, RealTimeTaskSchedulingTaskState,
-    RealTimeTaskState, RealTimeTaskManagerLogEntryRunData, RealTimeTaskManagerLogEntryFinishData,RealTimeTaskManagerDispatchNotificationHeader,RealTimeTaskManagerExecuteNotificationHeader,
-    RealTimeTaskManagerNotificationHeader,
+    RealTimeTaskFinishedState, RealTimeTaskId, RealTimeTaskManagerDispatchNotificationHeader,
+    RealTimeTaskManagerExecuteNotificationHeader, RealTimeTaskManagerInstance,
+    RealTimeTaskManagerLogEntryData, RealTimeTaskManagerLogEntryDispatchData,
+    RealTimeTaskManagerLogEntryFinishData, RealTimeTaskManagerLogEntryRunData,
+    RealTimeTaskManagerNotificationHeader, RealTimeTaskRunningState, RealTimeTaskScheduledState,
+    RealTimeTaskSchedulingTask, RealTimeTaskSchedulingTaskRescheduleMessageInput,
+    RealTimeTaskSchedulingTaskState, RealTimeTaskState,
 };
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
@@ -14,11 +14,11 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
-use zlambda_core::common::future::stream::{StreamExt};
+use zlambda_core::common::future::stream::StreamExt;
 use zlambda_core::common::module::Module;
 use zlambda_core::common::notification::{
-    notification_body_item_queue, NotificationBodyItemStreamExt, NotificationId,
-    NotificationBodyItemType,
+    notification_body_item_queue, NotificationBodyItemStreamExt, NotificationBodyItemType,
+    NotificationId,
 };
 use zlambda_core::common::runtime::spawn;
 use zlambda_core::common::serialize::serialize_to_bytes;
@@ -26,9 +26,9 @@ use zlambda_core::common::sync::RwLock;
 use zlambda_core::server::{
     LogIssuer, LogModuleIssuer, ServerId, ServerModule, ServerModuleCommitEventInput,
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventOutput, ServerModuleStartupEventInput,
-    ServerModuleStartupEventOutput, ServerSystemLogEntryData, SERVER_SYSTEM_LOG_ID,
-    ServerModuleNotificationEventInputServerSource,
+    ServerModuleNotificationEventInputServerSource, ServerModuleNotificationEventOutput,
+    ServerModuleStartupEventInput, ServerModuleStartupEventOutput, ServerSystemLogEntryData,
+    SERVER_SYSTEM_LOG_ID,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -209,14 +209,15 @@ impl ServerModule for RealTimeTaskManager {
 
                         spawn(async move {
                             let bytes = serialize_to_bytes(
-                                &RealTimeTaskManagerNotificationHeader::Execute(RealTimeTaskManagerExecuteNotificationHeader::new(task_id)),
+                                &RealTimeTaskManagerNotificationHeader::Execute(
+                                    RealTimeTaskManagerExecuteNotificationHeader::new(task_id),
+                                ),
                             )
-                            .expect("").freeze();
+                            .expect("")
+                            .freeze();
 
-                            let data = serialize_to_bytes(
-                                &NotificationBodyItemType::Binary(bytes),
-                            )
-                            .expect("");
+                            let data = serialize_to_bytes(&NotificationBodyItemType::Binary(bytes))
+                                .expect("");
 
                             sender.do_send(data).await;
 
@@ -238,17 +239,23 @@ impl ServerModule for RealTimeTaskManager {
                 RealTimeTaskManagerLogEntryData::Run(data) => {
                     let mut tasks = instance.tasks().write().await;
                     let task = tasks.get_mut(usize::from(data.task_id())).expect("");
-                    task.set_state(RealTimeTaskState::Running(RealTimeTaskRunningState::new()));
+                    //println!("{:?}", &task);
+                    task.set_state(RealTimeTaskState::Running(RealTimeTaskRunningState::new(
+                        task.target_server_id().expect(""),
+                    )));
                 }
                 RealTimeTaskManagerLogEntryData::Finish(data) => {
                     let (target_server_id,) = {
                         let mut tasks = instance.tasks().write().await;
                         let task = tasks.get_mut(usize::from(data.task_id())).expect("");
+
+                        let target_server_id = task.target_server_id().expect("");
+
                         task.set_state(RealTimeTaskState::Finished(
-                            RealTimeTaskFinishedState::new(),
+                            RealTimeTaskFinishedState::new(target_server_id),
                         ));
 
-                        (task.target_server_id().expect(""),)
+                        (target_server_id,)
                     };
 
                     {
@@ -267,7 +274,7 @@ impl ServerModule for RealTimeTaskManager {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let (server, source, notification_body_item_queue_receiver) = input.into();
+        let (server, _source, notification_body_item_queue_receiver) = input.into();
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
         let server_id = server.server_id().await;
@@ -295,6 +302,7 @@ impl ServerModule for RealTimeTaskManager {
                 server
                     .logs()
                     .get(instance.log_id())
+                    .entries()
                     .commit(
                         serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Dispatch(
                             RealTimeTaskManagerLogEntryDispatchData::new(
@@ -317,18 +325,22 @@ impl ServerModule for RealTimeTaskManager {
                     (task.target_module_id(),)
                 };
 
-                let module = instance.server().modules().get(target_module_id).await.expect("");
+                let module = instance
+                    .server()
+                    .modules()
+                    .get(target_module_id)
+                    .await
+                    .expect("");
 
                 let (sender, receiver) = notification_body_item_queue();
 
                 server
                     .logs()
                     .get(instance.log_id())
+                    .entries()
                     .commit(
                         serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Run(
-                            RealTimeTaskManagerLogEntryRunData::new(
-                                header.task_id(),
-                            ),
+                            RealTimeTaskManagerLogEntryRunData::new(header.task_id()),
                         ))
                         .expect("")
                         .freeze(),
@@ -341,23 +353,25 @@ impl ServerModule for RealTimeTaskManager {
                     }
                 });
 
-                module.on_notification(
-                    ServerModuleNotificationEventInput::new(
+                module
+                    .on_notification(ServerModuleNotificationEventInput::new(
                         server.clone(),
                         target_module_id,
-                        ServerModuleNotificationEventInputServerSource::new(instance.server().server_id().await).into(),
+                        ServerModuleNotificationEventInputServerSource::new(
+                            instance.server().server_id().await,
+                        )
+                        .into(),
                         receiver,
-                    )
-                ).await;
+                    ))
+                    .await;
 
                 server
                     .logs()
                     .get(instance.log_id())
+                    .entries()
                     .commit(
                         serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Finish(
-                            RealTimeTaskManagerLogEntryFinishData::new(
-                                header.task_id(),
-                            ),
+                            RealTimeTaskManagerLogEntryFinishData::new(header.task_id()),
                         ))
                         .expect("")
                         .freeze(),

@@ -1,8 +1,8 @@
 {
-    "program": "echo",
+    "program": "/bin/sh",
     "arguments": [
-        "Hello",
-        "World"
+        "-c",
+        "echo Begin && sleep 10 && echo End"
     ],
     "module_id": 0
 }

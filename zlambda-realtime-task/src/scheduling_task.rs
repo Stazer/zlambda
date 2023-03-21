@@ -14,6 +14,7 @@ use zlambda_core::common::runtime::{select, spawn};
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::RwLock;
 use zlambda_core::common::time::sleep;
+use zlambda_core::common::tracing::debug;
 use zlambda_core::server::{LogId, Server};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -195,6 +196,8 @@ impl RealTimeTaskSchedulingTask {
         let minimum = {
             let occupations = self.instance.occupations().read().await;
 
+            println!("{:?}", occupations);
+
             let mut minimum = None;
 
             for (server_id, tasks) in occupations.iter() {
@@ -215,12 +218,17 @@ impl RealTimeTaskSchedulingTask {
             None => {
                 let source_server_id = {
                     let tasks = self.instance.tasks().read().await;
-                    tasks.get(usize::from(task_id)).expect("").source_server_id()
+                    tasks
+                        .get(usize::from(task_id))
+                        .expect("")
+                        .source_server_id()
                 };
 
                 source_server_id
             }
         };
+
+        debug!("Schedule task {} to server {}", task_id, server_id);
 
         let data = serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Schedule(
             RealTimeTaskManagerLogEntryScheduleData::new(task_id, server_id),

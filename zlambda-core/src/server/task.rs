@@ -7,6 +7,7 @@ use crate::common::module::{ModuleId, ModuleManager};
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
 use crate::common::serialize::serialize_to_bytes;
+use crate::common::task::JoinHandle;
 use crate::general::{
     GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryRequestMessageInput,
     GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessage,
@@ -19,7 +20,7 @@ use crate::server::node::{
 };
 use crate::server::{
     AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogError, LogFollowerType, LogId,
-    LogLeaderType, LogManager, LogModuleIssuer, LogSystemIssuer, LogType, NewServerError, Server,
+    LogLeaderType, LogManager, LogSystemIssuer, LogType, NewServerError, Server,
     ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
     ServerCommitCommitMessageInput, ServerCommitLogCreateMessage,
     ServerCommitLogCreateMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
@@ -68,6 +69,7 @@ pub(crate) struct ServerTask {
     server: Arc<Server>,
     running: bool,
     log_manager: LogManager,
+    commit_tasks: Vec<JoinHandle<()>>,
 }
 
 impl ServerTask {
@@ -91,6 +93,8 @@ impl ServerTask {
         }
 
         let server = Server::new(queue_sender.clone());
+
+        let commit_tasks = Vec::default();
 
         match follower_data {
             None => Ok(Self {
@@ -116,6 +120,7 @@ impl ServerTask {
 
                     log_manager
                 })(),
+                commit_tasks,
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -228,6 +233,7 @@ impl ServerTask {
 
                         log_manager
                     })(),
+                    commit_tasks,
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -336,6 +342,7 @@ impl ServerTask {
 
                         log_manager
                     })(),
+                    commit_tasks,
                 })
             }
         }
@@ -1289,5 +1296,9 @@ impl ServerTask {
                 ServerNodeLogAppendInitiateMessageInput::new(log_id),
             ).await;
         }
+    }
+
+    async fn run_commit_task(4) {
+
     }
 }
