@@ -51,7 +51,31 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use crate::common::sync::mpsc;
+use crate::common::message::DoSend;
 use tracing::{debug, error, info};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+struct CommitTaskMessage {
+    module: Arc<dyn ServerModule>,
+    input: ServerModuleCommitEventInput,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+struct CommitTask {
+    receiver: mpsc::Receiver<CommitTaskMessage>,
+}
+
+impl CommitTask {
+    async fn run(&mut self) {
+        while let Some(message) = self.receiver.recv().await {
+            message.module.on_commit(message.input).await;
+        }
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,7 +93,8 @@ pub(crate) struct ServerTask {
     server: Arc<Server>,
     running: bool,
     log_manager: LogManager,
-    commit_tasks: Vec<JoinHandle<()>>,
+    commit_tasks: JoinHandle<()>,
+    commit_sender: mpsc::Sender<CommitTaskMessage>,
 }
 
 impl ServerTask {
@@ -94,7 +119,13 @@ impl ServerTask {
 
         let server = Server::new(queue_sender.clone());
 
-        let commit_tasks = Vec::default();
+        let (commit_sender, commit_receiver) = mpsc::channel(16);
+
+        let commit_tasks = spawn(async move {
+            (CommitTask {
+                receiver: commit_receiver,
+            }).run().await
+        });
 
         match follower_data {
             None => Ok(Self {
@@ -121,6 +152,7 @@ impl ServerTask {
                     log_manager
                 })(),
                 commit_tasks,
+                commit_sender,
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -234,6 +266,7 @@ impl ServerTask {
                         log_manager
                     })(),
                     commit_tasks,
+                    commit_sender,
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -343,6 +376,7 @@ impl ServerTask {
                         log_manager
                     })(),
                     commit_tasks,
+                    commit_sender,
                 })
             }
         }
@@ -1249,19 +1283,15 @@ impl ServerTask {
         }
 
         for (module_id, module) in self.module_manager.iter() {
-            let server = self.server.clone();
-            let module = module.clone();
-
-            spawn(async move {
-                module
-                    .on_commit(ServerModuleCommitEventInput::new(
-                        server,
+            self.commit_sender.do_send(CommitTaskMessage {
+                module: module.clone(),
+                input: ServerModuleCommitEventInput::new(
+                        self.server.clone(),
                         module_id,
                         log_id,
                         log_entry_id,
-                    ))
-                    .await;
-            });
+                    ) ,
+            }).await;
         }
     }
 
@@ -1296,9 +1326,5 @@ impl ServerTask {
                 ServerNodeLogAppendInitiateMessageInput::new(log_id),
             ).await;
         }
-    }
-
-    async fn run_commit_task(4) {
-
     }
 }
