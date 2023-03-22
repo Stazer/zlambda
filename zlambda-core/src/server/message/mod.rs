@@ -110,6 +110,13 @@ pub type ServerServerNodeMessageSenderGetMessage = SynchronousMessage<
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerServerNodeMessageSenderGetAllMessage = SynchronousMessage<
+    ServerServerNodeMessageSenderGetAllMessageInput,
+    ServerServerNodeMessageSenderGetAllMessageOutput,
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub type ServerCommitMessage = SynchronizableMessage<ServerCommitMessageInput>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,6 +163,7 @@ pub enum ServerMessage {
     ServerIdGet(ServerServerIdGetMessage),
     LeaderServerIdGet(ServerLeaderServerIdGetMessage),
     ServerNodeMessageSenderGet(ServerServerNodeMessageSenderGetMessage),
+    ServerNodeMessageSenderGetAll(ServerServerNodeMessageSenderGetAllMessage),
     Commit(ServerCommitMessage),
     CommitCommit(ServerCommitCommitMessage),
     ServerSocketAddressesGet(ServerServerSocketAddressesGetMessage),
@@ -274,6 +282,12 @@ impl From<ServerLeaderServerIdGetMessage> for ServerMessage {
 impl From<ServerServerNodeMessageSenderGetMessage> for ServerMessage {
     fn from(message: ServerServerNodeMessageSenderGetMessage) -> Self {
         Self::ServerNodeMessageSenderGet(message)
+    }
+}
+
+impl From<ServerServerNodeMessageSenderGetAllMessage> for ServerMessage {
+    fn from(message: ServerServerNodeMessageSenderGetAllMessage) -> Self {
+        Self::ServerNodeMessageSenderGetAll(message)
     }
 }
 

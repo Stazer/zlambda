@@ -534,6 +534,24 @@ impl ServerServerNodeMessageSenderGetMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ServerServerNodeMessageSenderGetAllMessageInput {
+}
+
+impl From<ServerServerNodeMessageSenderGetAllMessageInput> for () {
+    fn from(_input: ServerServerNodeMessageSenderGetAllMessageInput) -> Self {
+        ()
+    }
+}
+
+impl ServerServerNodeMessageSenderGetAllMessageInput {
+    pub fn new() -> Self {
+        Self { }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ServerCommitMessageInput {
     log_id: LogId,
     data: Bytes,

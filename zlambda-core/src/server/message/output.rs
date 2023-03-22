@@ -503,6 +503,33 @@ impl ServerServerNodeMessageSenderGetMessageOutput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ServerServerNodeMessageSenderGetAllMessageOutput {
+    server_node_message_senders: Vec<MessageQueueSender<ServerNodeMessage>>,
+}
+
+impl From<ServerServerNodeMessageSenderGetAllMessageOutput>
+    for (Vec<MessageQueueSender<ServerNodeMessage>>,)
+{
+    fn from(input: ServerServerNodeMessageSenderGetAllMessageOutput) -> Self {
+        (input.server_node_message_senders,)
+    }
+}
+
+impl ServerServerNodeMessageSenderGetAllMessageOutput {
+    pub fn new(server_node_message_senders: Vec<MessageQueueSender<ServerNodeMessage>>) -> Self {
+        Self {
+            server_node_message_senders,
+        }
+    }
+
+    pub fn server_node_message_senders(&self) -> &Vec<MessageQueueSender<ServerNodeMessage>> {
+        &self.server_node_message_senders
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ServerServerSocketAddressesGetMessageOutput {
     server_socket_addresses: Vec<Option<SocketAddr>>,
 }

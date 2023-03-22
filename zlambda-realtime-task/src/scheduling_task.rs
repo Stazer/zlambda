@@ -196,9 +196,13 @@ impl RealTimeTaskSchedulingTask {
         let minimum = {
             let occupations = self.instance.occupations().read().await;
 
-            println!("{:?}", occupations);
-
             let mut minimum = None;
+
+            //let server_ids = Vec::default();
+
+            /*for server in self.instance.server().servers().iter().await {
+                server_ids.push(server.server_id())
+            }*/
 
             for (server_id, tasks) in occupations.iter() {
                 minimum = match minimum {
@@ -213,8 +217,8 @@ impl RealTimeTaskSchedulingTask {
             minimum
         };
 
-        let server_id = match minimum {
-            Some((server_id, _tasks_length)) => server_id,
+        let (server_id, tasks_length) = match minimum {
+            Some((server_id, tasks_length)) => (server_id, tasks_length),
             None => {
                 let source_server_id = {
                     let tasks = self.instance.tasks().read().await;
@@ -224,11 +228,11 @@ impl RealTimeTaskSchedulingTask {
                         .source_server_id()
                 };
 
-                source_server_id
+                (source_server_id, 0)
             }
         };
 
-        debug!("Schedule task {} to server {}", task_id, server_id);
+        debug!("Schedule task {} to server {} with {} tasks", task_id, server_id, tasks_length);
 
         let data = serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Schedule(
             RealTimeTaskManagerLogEntryScheduleData::new(task_id, server_id),

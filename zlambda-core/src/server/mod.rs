@@ -33,6 +33,7 @@ use std::fmt::Debug;
 use std::future::pending;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::iter::once;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -295,6 +296,20 @@ impl<'a> ServerServers<'a> {
                 ServerServersServer::new(self.server(), Some(server_node_message_sender))
             })
         }
+    }
+
+    pub async fn iter(&self) -> impl Iterator<Item = ServerServersServer<'_>> {
+        let output = self
+            .server
+            .server_message_sender()
+            .do_send_synchronous(ServerServerNodeMessageSenderGetAllMessageInput::new())
+            .await;
+
+        let (server_node_message_senders,) = output.into();
+
+        once(ServerServersServer::new(self.server(), None)).chain(server_node_message_senders.into_iter().map(|server_node_message_sender| {
+            ServerServersServer::new(self.server(), Some(server_node_message_sender))
+        }))
     }
 }
 

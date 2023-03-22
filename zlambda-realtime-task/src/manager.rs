@@ -126,6 +126,7 @@ impl ServerModule for RealTimeTaskManager {
                 .server()
                 .logs()
                 .get(input.log_id())
+                .entries()
                 .get(input.log_entry_id())
                 .await
                 .expect("");
@@ -239,7 +240,6 @@ impl ServerModule for RealTimeTaskManager {
                 RealTimeTaskManagerLogEntryData::Run(data) => {
                     let mut tasks = instance.tasks().write().await;
                     let task = tasks.get_mut(usize::from(data.task_id())).expect("");
-                    //println!("{:?}", &task);
                     task.set_state(RealTimeTaskState::Running(RealTimeTaskRunningState::new(
                         task.target_server_id().expect(""),
                     )));

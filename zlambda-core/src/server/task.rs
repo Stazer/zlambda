@@ -3,7 +3,7 @@ use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };
-use crate::common::module::{ModuleId, ModuleManager};
+use crate::common::module::{ModuleManager};
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
 use crate::common::serialize::serialize_to_bytes;
@@ -19,6 +19,8 @@ use crate::server::node::{
     ServerNodeLogAppendInitiateMessageInput, ServerNodeLogAppendResponseMessageInput,
 };
 use crate::server::{
+    ServerServerNodeMessageSenderGetAllMessageOutput,
+    ServerServerNodeMessageSenderGetAllMessage,
     AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogError, LogFollowerType, LogId,
     LogLeaderType, LogManager, LogSystemIssuer, LogType, NewServerError, Server,
     ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
@@ -72,7 +74,9 @@ struct CommitTask {
 impl CommitTask {
     async fn run(&mut self) {
         while let Some(message) = self.receiver.recv().await {
-            message.module.on_commit(message.input).await;
+            spawn(async move {
+                message.module.on_commit(message.input).await;
+            });
         }
     }
 }
@@ -495,6 +499,10 @@ impl ServerTask {
             }
             ServerMessage::ServerNodeMessageSenderGet(message) => {
                 self.on_server_server_node_message_sender_get_message(message)
+                    .await
+            }
+            ServerMessage::ServerNodeMessageSenderGetAll(message) => {
+                self.on_server_server_node_message_sender_get_all_message(message)
                     .await
             }
             ServerMessage::Commit(message) => self.on_server_commit_message(message).await,
@@ -993,6 +1001,19 @@ impl ServerTask {
         sender
             .do_send(ServerServerNodeMessageSenderGetMessageOutput::new(
                 server_node_message_sender,
+            ))
+            .await;
+    }
+
+    async fn on_server_server_node_message_sender_get_all_message(
+        &mut self,
+        message: ServerServerNodeMessageSenderGetAllMessage,
+    ) {
+        let (input, sender) = message.into();
+
+        sender
+            .do_send(ServerServerNodeMessageSenderGetAllMessageOutput::new(
+                self.server_node_message_senders.iter().flatten().cloned().collect(),
             ))
             .await;
     }
