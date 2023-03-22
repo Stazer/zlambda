@@ -1,5 +1,5 @@
 use crate::server::ServerId;
-use crate::server::{LogEntry, LogEntryData, LogEntryId, LogError, LogTerm};
+use crate::server::{LogEntry, LogEntryData, LogEntryId, LogEntryIssuer, LogError, LogTerm};
 use std::collections::hash_map::RandomState;
 use std::collections::hash_set::Difference;
 use std::collections::HashSet;
@@ -147,20 +147,26 @@ impl LeadingLog {
 
     pub fn append(
         &mut self,
-        log_entries_data: Vec<LogEntryData>,
+        log_entries_data: Vec<(LogEntryData, Option<LogEntryIssuer>)>,
         acknowledgeable_server_ids: HashSet<ServerId>,
     ) -> Vec<LogEntryId> {
         self.entries.reserve(log_entries_data.len());
         let start = self.entries.len();
 
-        self.entries.extend(
-            log_entries_data
-                .into_iter()
-                .enumerate()
-                .map(|(index, data)| {
-                    LogEntry::new(LogEntryId::from(start + index), self.current_term, data)
-                }),
-        );
+        self.entries
+            .extend(
+                log_entries_data
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, (data, issuer))| {
+                        LogEntry::new(
+                            LogEntryId::from(start + index),
+                            self.current_term,
+                            data,
+                            issuer,
+                        )
+                    }),
+            );
 
         let log_entry_ids = (start..self.entries.len())
             .map(LogEntryId::from)

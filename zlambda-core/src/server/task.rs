@@ -1,12 +1,15 @@
 use crate::common::deserialize::deserialize_from_bytes;
+use crate::common::message::DoSend;
 use crate::common::message::{
+    SynchronizableMessageOutputSender,
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
     MessageSocketSender,
 };
-use crate::common::module::{ModuleManager};
+use crate::common::module::ModuleManager;
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::common::runtime::{select, spawn};
 use crate::common::serialize::serialize_to_bytes;
+use crate::common::sync::mpsc;
 use crate::common::task::JoinHandle;
 use crate::general::{
     GeneralMessage, GeneralRecoveryRequestMessage, GeneralRecoveryRequestMessageInput,
@@ -17,14 +20,13 @@ use crate::server::client::{ServerClientId, ServerClientMessage, ServerClientTas
 use crate::server::connection::ServerConnectionTask;
 use crate::server::node::{
     ServerNodeLogAppendInitiateMessageInput, ServerNodeLogAppendResponseMessageInput,
+    ServerNodeLogEntriesCommitMessageInput,
 };
 use crate::server::{
-    ServerServerNodeMessageSenderGetAllMessageOutput,
-    ServerServerNodeMessageSenderGetAllMessage,
-    AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogError, LogFollowerType, LogId,
-    LogLeaderType, LogManager, LogSystemIssuer, LogType, NewServerError, Server,
-    ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
-    ServerCommitCommitMessageInput, ServerCommitLogCreateMessage,
+    AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogEntryIssueId, LogEntryIssuer,
+    LogError, LogFollowerType, LogId, LogLeaderType, LogManager, LogSystemIssuer, LogType,
+    NewServerError, Server, ServerClientRegistrationMessage, ServerClientResignationMessage,
+    ServerCommitCommitMessage, ServerCommitCommitMessageInput, ServerCommitLogCreateMessage,
     ServerCommitLogCreateMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
     ServerCommitRegistrationMessageInput, ServerId, ServerLeaderServerIdGetMessage,
     ServerLeaderServerIdGetMessageOutput, ServerLogAppendInitiateMessage,
@@ -41,11 +43,12 @@ use crate::server::{
     ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerServerIdGetMessage, ServerServerIdGetMessageOutput,
+    ServerServerNodeMessageSenderGetAllMessage, ServerServerNodeMessageSenderGetAllMessageOutput,
     ServerServerNodeMessageSenderGetMessage, ServerServerNodeMessageSenderGetMessageOutput,
     ServerServerSocketAddressGetMessage, ServerServerSocketAddressGetMessageOutput,
     ServerServerSocketAddressesGetMessage, ServerServerSocketAddressesGetMessageOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerSystemCreateLogLogEntryData,
-    ServerSystemLogEntryData, SERVER_SYSTEM_LOG_ID,
+    ServerSystemLogEntryData, SERVER_SYSTEM_LOG_ID, ServerLogEntriesCommitMessage,
 };
 use async_recursion::async_recursion;
 use std::cmp::max;
@@ -53,8 +56,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use crate::common::sync::mpsc;
-use crate::common::message::DoSend;
 use tracing::{debug, error, info};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -74,9 +75,7 @@ struct CommitTask {
 impl CommitTask {
     async fn run(&mut self) {
         while let Some(message) = self.receiver.recv().await {
-            spawn(async move {
-                message.module.on_commit(message.input).await;
-            });
+            message.module.on_commit(message.input).await;
         }
     }
 }
@@ -99,6 +98,8 @@ pub(crate) struct ServerTask {
     log_manager: LogManager,
     commit_tasks: JoinHandle<()>,
     commit_sender: mpsc::Sender<CommitTaskMessage>,
+    current_log_entry_issue_id: LogEntryIssueId,
+    commit_issue_senders: HashMap<LogEntryIssueId, SynchronizableMessageOutputSender,>,
 }
 
 impl ServerTask {
@@ -113,6 +114,8 @@ impl ServerTask {
     {
         let tcp_listener = TcpListener::bind(listener_address).await?;
         let local_addr = tcp_listener.local_addr()?;
+        let current_log_entry_issue_id = LogEntryIssueId::from(0);
+        let commit_issue_senders = HashMap::default();
 
         let (queue_sender, queue_receiver) = message_queue();
         let mut module_manager = ModuleManager::default();
@@ -128,7 +131,9 @@ impl ServerTask {
         let commit_tasks = spawn(async move {
             (CommitTask {
                 receiver: commit_receiver,
-            }).run().await
+            })
+            .run()
+            .await
         });
 
         match follower_data {
@@ -157,6 +162,8 @@ impl ServerTask {
                 })(),
                 commit_tasks,
                 commit_sender,
+                current_log_entry_issue_id,
+                commit_issue_senders,
             }),
             Some((registration_address, None)) => {
                 let address = tcp_listener.local_addr()?;
@@ -271,6 +278,8 @@ impl ServerTask {
                     })(),
                     commit_tasks,
                     commit_sender,
+                    current_log_entry_issue_id,
+                    commit_issue_senders,
                 })
             }
             Some((recovery_address, Some(server_id))) => {
@@ -381,6 +390,8 @@ impl ServerTask {
                     })(),
                     commit_tasks,
                     commit_sender,
+                    current_log_entry_issue_id,
+                    commit_issue_senders,
                 })
             }
         }
@@ -475,6 +486,9 @@ impl ServerTask {
             }
             ServerMessage::LogEntriesGet(message) => {
                 self.on_server_log_entries_get_message(message).await
+            }
+            ServerMessage::LogEntriesCommit(message) => {
+                self.on_server_log_entries_commit_message(message).await
             }
             ServerMessage::ModuleGet(message) => self.on_server_module_get_message(message).await,
             ServerMessage::ModuleLoad(message) => self.on_server_module_load_message(message).await,
@@ -587,14 +601,17 @@ impl ServerTask {
             let log_entry_ids = self
                 .replicate(
                     SERVER_SYSTEM_LOG_ID,
-                    vec![serialize_to_bytes(&ServerSystemLogEntryData::from(
-                        AddServerLogEntryData::new(
-                            node_server_id.into(),
-                            input.server_socket_address(),
-                        ),
-                    ))
-                    .expect("")
-                    .freeze()],
+                    vec![(
+                        serialize_to_bytes(&ServerSystemLogEntryData::from(
+                            AddServerLogEntryData::new(
+                                node_server_id.into(),
+                                input.server_socket_address(),
+                            ),
+                        ))
+                        .expect("")
+                        .freeze(),
+                        None,
+                    )],
                 )
                 .await;
 
@@ -717,7 +734,14 @@ impl ServerTask {
 
         sender
             .do_send(ServerLogEntriesReplicationMessageOutput::new(
-                self.replicate(SERVER_SYSTEM_LOG_ID, log_entries_data).await,
+                self.replicate(
+                    SERVER_SYSTEM_LOG_ID,
+                    log_entries_data
+                        .into_iter()
+                        .map(|data| (data, None))
+                        .collect(),
+                )
+                .await,
             ))
             .await;
     }
@@ -790,6 +814,24 @@ impl ServerTask {
 
         output_sender
             .do_send(ServerLogEntriesGetMessageOutput::new(log_entry))
+            .await;
+    }
+
+    async fn on_server_log_entries_commit_message(&mut self, message: ServerLogEntriesCommitMessage) {
+        let (input,) = message.into();
+        let (log_id, log_entry_data, log_entry_issuer) = input.into();
+
+        let log_entry_id = match self
+            .replicate(log_id, vec![(log_entry_data, Some(log_entry_issuer))])
+            .await
+            .into_iter()
+            .next()
+        {
+            Some(log_entry_id) => log_entry_id,
+            None => return,
+        };
+
+        self.acknowledge(log_id, &vec![log_entry_id], self.server_id)
             .await;
     }
 
@@ -1013,7 +1055,14 @@ impl ServerTask {
 
         sender
             .do_send(ServerServerNodeMessageSenderGetAllMessageOutput::new(
-                self.server_node_message_senders.iter().flatten().cloned().collect(),
+                self.server_node_message_senders
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(server_id, sender)| match sender {
+                        None => None,
+                        Some(sender) => Some((ServerId::from(server_id), sender.clone())),
+                    })
+                    .collect(),
             ))
             .await;
     }
@@ -1022,30 +1071,58 @@ impl ServerTask {
         let (input, output_sender) = message.into();
         let (log_id, data) = input.into();
 
-        let log_entry_id = match self
-            .replicate(log_id, vec![data.into()])
-            .await
-            .into_iter()
-            .next()
-        {
-            Some(log_entry_id) => log_entry_id,
-            None => return,
-        };
+        if self.server_id == self.leader_server_id {
+            let log_entry_id = match self
+                .replicate(log_id, vec![(data.into(), None)])
+                .await
+                .into_iter()
+                .next()
+            {
+                Some(log_entry_id) => log_entry_id,
+                None => return,
+            };
 
-        if let Some(output_sender) = output_sender {
-            self.commit_messages
-                .entry(log_entry_id)
-                .or_insert(Vec::default())
-                .push(
-                    ServerCommitCommitMessage::new(ServerCommitCommitMessageInput::new(
-                        output_sender,
-                    ))
-                    .into(),
-                );
+            if let Some(output_sender) = output_sender {
+                self.commit_messages
+                    .entry(log_entry_id)
+                    .or_insert(Vec::default())
+                    .push(
+                        ServerCommitCommitMessage::new(ServerCommitCommitMessageInput::new(
+                            output_sender,
+                        ))
+                        .into(),
+                    );
+            }
+
+            self.acknowledge(log_id, &vec![log_entry_id], self.server_id)
+                .await;
+        } else {
+            let log_entry_issue_id = {
+                let current = self.current_log_entry_issue_id;
+                self.current_log_entry_issue_id =
+                    LogEntryIssueId::from(usize::from(self.current_log_entry_issue_id) + 1);
+
+                current
+            };
+
+            if let Some(output_sender) = output_sender {
+                self.commit_issue_senders.insert(log_entry_issue_id, output_sender);
+            }
+
+            let sender = self
+                .server_node_message_senders
+                .get(usize::from(self.leader_server_id))
+                .expect("")
+                .as_ref()
+                .expect("");
+            sender
+                .do_send_asynchronous(ServerNodeLogEntriesCommitMessageInput::new(
+                    log_id,
+                    data,
+                    log_entry_issue_id,
+                ))
+                .await;
         }
-
-        self.acknowledge(log_id, &vec![log_entry_id], self.server_id)
-            .await;
     }
 
     async fn on_server_commit_commit_message(&mut self, message: ServerCommitCommitMessage) {
@@ -1077,11 +1154,14 @@ impl ServerTask {
             let log_entry_ids = self
                 .replicate(
                     SERVER_SYSTEM_LOG_ID,
-                    vec![serialize_to_bytes(&ServerSystemLogEntryData::from(
-                        ServerSystemCreateLogLogEntryData::new(log_id, log_issuer),
-                    ))
-                    .expect("")
-                    .freeze()],
+                    vec![(
+                        serialize_to_bytes(&ServerSystemLogEntryData::from(
+                            ServerSystemCreateLogLogEntryData::new(log_id, log_issuer),
+                        ))
+                        .expect("")
+                        .freeze(),
+                        None,
+                    )],
                 )
                 .await;
 
@@ -1099,7 +1179,7 @@ impl ServerTask {
             self.acknowledge(SERVER_SYSTEM_LOG_ID, &log_entry_ids, self.server_id)
                 .await;
         } else {
-            unimplemented!()
+            panic!("This should not happen");
         }
     }
 
@@ -1115,7 +1195,7 @@ impl ServerTask {
     async fn replicate(
         &mut self,
         log_id: LogId,
-        log_entries_data: Vec<LogEntryData>,
+        log_entries_data: Vec<(LogEntryData, Option<LogEntryIssuer>)>,
     ) -> Vec<LogEntryId> {
         let log = self.log_manager.get_mut(log_id).expect("existing log id");
 
@@ -1303,16 +1383,38 @@ impl ServerTask {
             }
         }
 
+        if let Some(issuer) = self
+            .log_manager
+            .get(log_id)
+            .expect("")
+            .entries()
+            .get(log_entry_id)
+            .expect("")
+            .issuer()
+        {
+            match issuer {
+                LogEntryIssuer::Server(issuer) => {
+                    if issuer.server_id() == self.server_id {
+                        if let Some(sender) = self.commit_issue_senders.remove(&issuer.issue_id()) {
+                            sender.notify().await;
+                        }
+                    }
+                }
+            }
+        }
+
         for (module_id, module) in self.module_manager.iter() {
-            self.commit_sender.do_send(CommitTaskMessage {
-                module: module.clone(),
-                input: ServerModuleCommitEventInput::new(
+            self.commit_sender
+                .do_send(CommitTaskMessage {
+                    module: module.clone(),
+                    input: ServerModuleCommitEventInput::new(
                         self.server.clone(),
                         module_id,
                         log_id,
                         log_entry_id,
-                    ) ,
-            }).await;
+                    ),
+                })
+                .await;
         }
     }
 

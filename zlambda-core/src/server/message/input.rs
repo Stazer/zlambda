@@ -9,7 +9,7 @@ use crate::general::GeneralMessage;
 use crate::server::client::ServerClientId;
 use crate::server::{
     LogEntry, LogEntryData, LogEntryId, LogId, LogIssuer, LogTerm, ServerId,
-    ServerLogCreateMessageOutput, ServerModule,
+    ServerLogCreateMessageOutput, ServerModule, LogEntryIssuer,
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -235,6 +235,47 @@ impl ServerLogEntriesGetMessageInput {
 
     pub fn log_entry_id(&self) -> LogEntryId {
         self.log_entry_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerLogEntriesCommitMessageInput {
+    log_id: LogId,
+    log_entry_data: Bytes,
+    log_entry_issuer: LogEntryIssuer,
+}
+
+impl From<ServerLogEntriesCommitMessageInput> for (LogId, Bytes, LogEntryIssuer) {
+    fn from(input: ServerLogEntriesCommitMessageInput) -> Self {
+        (input.log_id, input.log_entry_data, input.log_entry_issuer)
+    }
+}
+
+impl ServerLogEntriesCommitMessageInput {
+    pub fn new(
+    log_id: LogId,
+    log_entry_data: Bytes,
+    log_entry_issuer: LogEntryIssuer,
+    ) -> Self {
+        Self {
+            log_id,
+            log_entry_data,
+            log_entry_issuer,
+        }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
+    }
+
+    pub fn log_entry_data(&self) -> &Bytes {
+        &self.log_entry_data
+    }
+
+    pub fn log_entry_issuer(&self) -> &LogEntryIssuer {
+        &self.log_entry_issuer
     }
 }
 
@@ -534,8 +575,7 @@ impl ServerServerNodeMessageSenderGetMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct ServerServerNodeMessageSenderGetAllMessageInput {
-}
+pub struct ServerServerNodeMessageSenderGetAllMessageInput {}
 
 impl From<ServerServerNodeMessageSenderGetAllMessageInput> for () {
     fn from(_input: ServerServerNodeMessageSenderGetAllMessageInput) -> Self {
@@ -545,7 +585,7 @@ impl From<ServerServerNodeMessageSenderGetAllMessageInput> for () {
 
 impl ServerServerNodeMessageSenderGetAllMessageInput {
     pub fn new() -> Self {
-        Self { }
+        Self {}
     }
 }
 

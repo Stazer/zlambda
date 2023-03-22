@@ -31,9 +31,9 @@ use crate::common::utility::Bytes;
 use futures::{Stream, StreamExt};
 use std::fmt::Debug;
 use std::future::pending;
+use std::iter::once;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::iter::once;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -282,7 +282,7 @@ impl<'a> ServerServers<'a> {
 
     pub async fn get(&self, server_id: ServerId) -> Option<ServerServersServer<'_>> {
         if self.server().server_id().await == server_id {
-            Some(ServerServersServer::new(self.server(), None))
+            Some(ServerServersServer::new(server_id, self.server(), None))
         } else {
             let output = self
                 .server
@@ -293,7 +293,7 @@ impl<'a> ServerServers<'a> {
             let (server_node_message_sender,) = output.into();
 
             server_node_message_sender.map(|server_node_message_sender| {
-                ServerServersServer::new(self.server(), Some(server_node_message_sender))
+                ServerServersServer::new(server_id, self.server(), Some(server_node_message_sender))
             })
         }
     }
@@ -307,9 +307,16 @@ impl<'a> ServerServers<'a> {
 
         let (server_node_message_senders,) = output.into();
 
-        once(ServerServersServer::new(self.server(), None)).chain(server_node_message_senders.into_iter().map(|server_node_message_sender| {
-            ServerServersServer::new(self.server(), Some(server_node_message_sender))
-        }))
+        once(ServerServersServer::new(
+            self.server().server_id().await,
+            self.server(),
+            None,
+        ))
+        .chain(server_node_message_senders.into_iter().map(
+            |(server_id, server_node_message_sender)| {
+                ServerServersServer::new(server_id, self.server(), Some(server_node_message_sender))
+            },
+        ))
     }
 }
 
@@ -317,19 +324,26 @@ impl<'a> ServerServers<'a> {
 
 #[derive(Clone, Debug)]
 pub struct ServerServersServer<'a> {
+    id: ServerId,
     server: &'a Server,
     server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>,
 }
 
 impl<'a> ServerServersServer<'a> {
     pub(crate) fn new(
+        id: ServerId,
         server: &'a Server,
         server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>,
     ) -> Self {
         Self {
+            id,
             server,
             server_node_message_sender,
         }
+    }
+
+    pub fn id(&self) -> ServerId {
+        self.id
     }
 
     pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)

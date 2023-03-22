@@ -2,7 +2,7 @@ use crate::common::message::{MessageSocketReceiver, MessageSocketSender};
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
-use crate::server::{LogEntry, LogEntryId, LogId, LogTerm};
+use crate::server::{LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -294,6 +294,43 @@ impl ServerNodeLogAppendInitiateMessageInput {
 
     pub fn log_id(&self) -> LogId {
         self.log_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerNodeLogEntriesCommitMessageInput {
+    log_id: LogId,
+    log_entry_data: Bytes,
+    log_entry_issue_id: LogEntryIssueId,
+}
+
+impl From<ServerNodeLogEntriesCommitMessageInput> for (LogId, Bytes, LogEntryIssueId) {
+    fn from(input: ServerNodeLogEntriesCommitMessageInput) -> Self {
+        (input.log_id, input.log_entry_data, input.log_entry_issue_id)
+    }
+}
+
+impl ServerNodeLogEntriesCommitMessageInput {
+    pub fn new(log_id: LogId, log_entry_data: Bytes, log_entry_issue_id: LogEntryIssueId) -> Self {
+        Self {
+            log_id,
+            log_entry_data,
+            log_entry_issue_id,
+        }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
+    }
+
+    pub fn log_entry_data(&self) -> &Bytes {
+        &self.log_entry_data
+    }
+
+    pub fn log_entry_issue_id(&self) -> LogEntryIssueId {
+        self.log_entry_issue_id
     }
 }
 

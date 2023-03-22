@@ -2,6 +2,7 @@ use crate::common::message::MessageQueueSender;
 use crate::common::module::{LoadModuleError, ModuleId, UnloadModuleError};
 use crate::server::node::ServerNodeMessage;
 use crate::server::{LogEntry, LogEntryId, LogId, LogTerm, ServerId, ServerModule};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -504,11 +505,11 @@ impl ServerServerNodeMessageSenderGetMessageOutput {
 
 #[derive(Debug)]
 pub struct ServerServerNodeMessageSenderGetAllMessageOutput {
-    server_node_message_senders: Vec<MessageQueueSender<ServerNodeMessage>>,
+    server_node_message_senders: HashMap<ServerId, MessageQueueSender<ServerNodeMessage>>,
 }
 
 impl From<ServerServerNodeMessageSenderGetAllMessageOutput>
-    for (Vec<MessageQueueSender<ServerNodeMessage>>,)
+    for (HashMap<ServerId, MessageQueueSender<ServerNodeMessage>>,)
 {
     fn from(input: ServerServerNodeMessageSenderGetAllMessageOutput) -> Self {
         (input.server_node_message_senders,)
@@ -516,13 +517,17 @@ impl From<ServerServerNodeMessageSenderGetAllMessageOutput>
 }
 
 impl ServerServerNodeMessageSenderGetAllMessageOutput {
-    pub fn new(server_node_message_senders: Vec<MessageQueueSender<ServerNodeMessage>>) -> Self {
+    pub fn new(
+        server_node_message_senders: HashMap<ServerId, MessageQueueSender<ServerNodeMessage>>,
+    ) -> Self {
         Self {
             server_node_message_senders,
         }
     }
 
-    pub fn server_node_message_senders(&self) -> &Vec<MessageQueueSender<ServerNodeMessage>> {
+    pub fn server_node_message_senders(
+        &self,
+    ) -> &HashMap<ServerId, MessageQueueSender<ServerNodeMessage>> {
         &self.server_node_message_senders
     }
 }

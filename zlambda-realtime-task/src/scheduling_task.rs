@@ -15,7 +15,7 @@ use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::RwLock;
 use zlambda_core::common::time::sleep;
 use zlambda_core::common::tracing::debug;
-use zlambda_core::server::{LogId, Server};
+use zlambda_core::server::{LogId, Server, ServerId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -198,17 +198,26 @@ impl RealTimeTaskSchedulingTask {
 
             let mut minimum = None;
 
-            //let server_ids = Vec::default();
+            for server_id in self
+                .instance
+                .server()
+                .servers()
+                .iter()
+                .await
+                .map(|server| server.id())
+            {
+                let tasks = match occupations.get(&server_id) {
+                    Some(tasks) => tasks,
+                    None => {
+                        minimum = Some((server_id, 0));
+                        break;
+                    }
+                };
 
-            /*for server in self.instance.server().servers().iter().await {
-                server_ids.push(server.server_id())
-            }*/
-
-            for (server_id, tasks) in occupations.iter() {
                 minimum = match minimum {
-                    None => Some((*server_id, tasks.len())),
+                    None => Some((server_id, tasks.len())),
                     Some((_server_id, tasks_length)) if tasks.len() < tasks_length => {
-                        Some((*server_id, tasks.len()))
+                        Some((server_id, tasks.len()))
                     }
                     minimum => minimum,
                 }
@@ -232,7 +241,10 @@ impl RealTimeTaskSchedulingTask {
             }
         };
 
-        debug!("Schedule task {} to server {} with {} tasks", task_id, server_id, tasks_length);
+        debug!(
+            "Schedule task {} to server {} with {} tasks",
+            task_id, server_id, tasks_length
+        );
 
         let data = serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Schedule(
             RealTimeTaskManagerLogEntryScheduleData::new(task_id, server_id),

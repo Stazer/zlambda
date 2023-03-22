@@ -53,6 +53,11 @@ pub type ServerLogEntriesGetMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerLogEntriesCommitMessage =
+    AsynchronousMessage<ServerLogEntriesCommitMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub type ServerModuleGetMessage =
     SynchronousMessage<ServerModuleGetMessageInput, ServerModuleGetMessageOutput>;
 
@@ -152,6 +157,7 @@ pub enum ServerMessage {
     LogEntriesAcknowledgement(ServerLogEntriesAcknowledgementMessage),
     LogEntriesRecovery(ServerLogEntriesRecoveryMessage),
     LogEntriesGet(ServerLogEntriesGetMessage),
+    LogEntriesCommit(ServerLogEntriesCommitMessage),
     LogAppendRequest(ServerLogAppendRequestMessage),
     LogAppendInitiate(ServerLogAppendInitiateMessage),
     ModuleGet(ServerModuleGetMessage),
@@ -216,6 +222,12 @@ impl From<ServerLogEntriesRecoveryMessage> for ServerMessage {
 impl From<ServerLogEntriesGetMessage> for ServerMessage {
     fn from(message: ServerLogEntriesGetMessage) -> Self {
         Self::LogEntriesGet(message)
+    }
+}
+
+impl From<ServerLogEntriesCommitMessage> for ServerMessage {
+    fn from(message: ServerLogEntriesCommitMessage) -> Self {
+        Self::LogEntriesCommit(message)
     }
 }
 

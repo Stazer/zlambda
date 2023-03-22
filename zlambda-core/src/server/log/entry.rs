@@ -1,8 +1,55 @@
 use crate::common::bytes::Bytes;
-use crate::server::LogTerm;
+use crate::common::utility::TaggedType;
+use crate::server::{LogTerm, ServerId};
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct LogEntryIssueIdTag;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type LogEntryIssueId = TaggedType<usize, LogEntryIssueIdTag>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LogEntryServerIssuer {
+    server_id: ServerId,
+    issue_id: LogEntryIssueId,
+}
+
+impl LogEntryServerIssuer {
+    pub fn new(server_id: ServerId, issue_id: LogEntryIssueId) -> Self {
+        Self {
+            server_id,
+            issue_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn issue_id(&self) -> LogEntryIssueId {
+        self.issue_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum LogEntryIssuer {
+    Server(LogEntryServerIssuer),
+}
+
+impl From<LogEntryServerIssuer> for LogEntryIssuer {
+    fn from(issuer: LogEntryServerIssuer) -> Self {
+        Self::Server(issuer)
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,16 +96,27 @@ impl LogEntryId {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LogEntry {
     id: LogEntryId,
     term: LogTerm,
     data: LogEntryData,
+    issuer: Option<LogEntryIssuer>,
 }
 
 impl LogEntry {
-    pub fn new(id: LogEntryId, term: LogTerm, data: LogEntryData) -> Self {
-        Self { id, term, data }
+    pub fn new(
+        id: LogEntryId,
+        term: LogTerm,
+        data: LogEntryData,
+        issuer: Option<LogEntryIssuer>,
+    ) -> Self {
+        Self {
+            id,
+            term,
+            data,
+            issuer,
+        }
     }
 
     pub fn id(&self) -> LogEntryId {
@@ -71,5 +129,9 @@ impl LogEntry {
 
     pub fn data(&self) -> &LogEntryData {
         &self.data
+    }
+
+    pub fn issuer(&self) -> &Option<LogEntryIssuer> {
+        &self.issuer
     }
 }

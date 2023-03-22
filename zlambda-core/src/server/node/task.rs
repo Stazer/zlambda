@@ -10,7 +10,8 @@ use crate::general::{
     GeneralLogEntriesAppendInitiateMessage, GeneralLogEntriesAppendInitiateMessageInput,
     GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
     GeneralLogEntriesAppendResponseMessage, GeneralLogEntriesAppendResponseMessageInput,
-    GeneralMessage, GeneralNodeHandshakeRequestMessage, GeneralNodeHandshakeRequestMessageInput,
+    GeneralLogEntriesCommitMessage, GeneralLogEntriesCommitMessageInput, GeneralMessage,
+    GeneralNodeHandshakeRequestMessage, GeneralNodeHandshakeRequestMessageInput,
     GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
     GeneralNodeHandshakeResponseMessageInputResult, GeneralNotificationMessage,
     GeneralNotificationMessageInput, GeneralNotificationMessageInputEndType,
@@ -18,12 +19,12 @@ use crate::general::{
     GeneralNotificationMessageInputStartType, GeneralNotificationMessageInputType,
 };
 use crate::server::node::{
-    ServerNodeLogAppendInitiateMessage, ServerNodeLogAppendResponseMessage, ServerNodeMessage,
-    ServerNodeNodeHandshakeMessage, ServerNodeNotificationEndMessage,
-    ServerNodeNotificationImmediateMessage, ServerNodeNotificationNextMessage,
-    ServerNodeNotificationStartMessage, ServerNodeNotificationStartMessageOutput,
-    ServerNodeRecoveryMessage, ServerNodeRegistrationMessage, ServerNodeReplicationMessage,
-    ServerNodeShutdownMessage,
+    ServerNodeLogAppendInitiateMessage, ServerNodeLogAppendResponseMessage,
+    ServerNodeLogEntriesCommitMessage, ServerNodeMessage, ServerNodeNodeHandshakeMessage,
+    ServerNodeNotificationEndMessage, ServerNodeNotificationImmediateMessage,
+    ServerNodeNotificationNextMessage, ServerNodeNotificationStartMessage,
+    ServerNodeNotificationStartMessageOutput, ServerNodeRecoveryMessage,
+    ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeShutdownMessage,
 };
 use crate::server::{
     Server, ServerId, ServerLeaderServerIdGetMessageInput, ServerLogAppendInitiateMessageInput,
@@ -31,6 +32,7 @@ use crate::server::{
     ServerLogEntriesRecoveryMessageInput, ServerMessage, ServerModuleGetMessageInput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
     ServerServerIdGetMessageInput, ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
+    ServerLogEntriesCommitMessageInput, LogEntryIssuer, LogEntryServerIssuer
 };
 use std::collections::HashMap;
 use std::future::pending;
@@ -245,6 +247,10 @@ impl ServerNodeTask {
                 self.on_server_node_log_append_initiate_message(message)
                     .await
             }
+            ServerNodeMessage::LogEntriesCommit(message) => {
+                self.on_server_node_log_entries_commit_message(message)
+                    .await
+            }
             ServerNodeMessage::NotificationImmediate(message) => {
                 self.on_server_node_notification_immediate_message(message)
                     .await
@@ -436,6 +442,31 @@ impl ServerNodeTask {
         }
     }
 
+    async fn on_server_node_log_entries_commit_message(
+        &mut self,
+        message: ServerNodeLogEntriesCommitMessage,
+    ) {
+        let (input,) = message.into();
+        let (log_id, log_entry_data, log_entry_issue_id) = input.into();
+
+        if let Some(general_socket) = &mut self.general_socket {
+            if let Err(error) = general_socket
+                .0
+                .send(GeneralLogEntriesCommitMessage::new(
+                    GeneralLogEntriesCommitMessageInput::new(
+                        log_id,
+                        log_entry_data,
+                        log_entry_issue_id,
+                    ),
+                ))
+                .await
+            {
+                error!("{}", error);
+                return;
+            }
+        }
+    }
+
     async fn on_server_node_notification_immediate_message(
         &mut self,
         message: ServerNodeNotificationImmediateMessage,
@@ -560,6 +591,9 @@ impl ServerNodeTask {
                 self.on_general_log_entries_append_initiate_message(message)
                     .await
             }
+            GeneralMessage::LogEntriesCommit(message) => {
+                self.on_general_log_entries_commit_message(message).await
+            }
             GeneralMessage::Notification(message) => {
                 self.on_general_notification_message(message).await
             }
@@ -649,6 +683,25 @@ impl ServerNodeTask {
             let _ = general_socket;
             self.general_socket = None;
         }
+    }
+
+    async fn on_general_log_entries_commit_message(
+        &mut self,
+        message: GeneralLogEntriesCommitMessage,
+    ) {
+        let (input,) = message.into();
+        let (log_id, log_entry_data, log_entry_issue_id) = input.into();
+
+        self.server_message_sender.do_send_asynchronous(
+            ServerLogEntriesCommitMessageInput::new(
+                log_id,
+                log_entry_data,
+                LogEntryIssuer::Server(LogEntryServerIssuer::new(
+                    self.server_id,
+                    log_entry_issue_id,
+                ))
+            )
+        ).await;
     }
 
     async fn on_general_notification_message(&mut self, message: GeneralNotificationMessage) {

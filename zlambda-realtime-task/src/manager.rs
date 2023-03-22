@@ -227,14 +227,16 @@ impl ServerModule for RealTimeTaskManager {
                             }
                         });
 
-                        instance
-                            .server()
-                            .servers()
-                            .get(data.target_server_id())
-                            .await
-                            .expect("")
-                            .notify(input.module_id(), receiver)
-                            .await;
+                        spawn(async move {
+                            instance
+                                .server()
+                                .servers()
+                                .get(data.target_server_id())
+                                .await
+                                .expect("")
+                                .notify(input.module_id(), receiver)
+                                .await;
+                        });
                     }
                 }
                 RealTimeTaskManagerLogEntryData::Run(data) => {

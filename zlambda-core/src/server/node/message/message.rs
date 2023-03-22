@@ -1,11 +1,12 @@
 use crate::common::message::{AsynchronousMessage, SynchronousMessage};
 use crate::server::node::{
     ServerNodeLogAppendInitiateMessageInput, ServerNodeLogAppendResponseMessageInput,
-    ServerNodeNodeHandshakeMessageInput, ServerNodeNotificationEndMessageInput,
-    ServerNodeNotificationImmediateMessageInput, ServerNodeNotificationNextMessageInput,
-    ServerNodeNotificationStartMessageInput, ServerNodeNotificationStartMessageOutput,
-    ServerNodeRecoveryMessageInput, ServerNodeRegistrationMessageInput,
-    ServerNodeReplicationMessageInput, ServerNodeShutdownMessageInput,
+    ServerNodeLogEntriesCommitMessageInput, ServerNodeNodeHandshakeMessageInput,
+    ServerNodeNotificationEndMessageInput, ServerNodeNotificationImmediateMessageInput,
+    ServerNodeNotificationNextMessageInput, ServerNodeNotificationStartMessageInput,
+    ServerNodeNotificationStartMessageOutput, ServerNodeRecoveryMessageInput,
+    ServerNodeRegistrationMessageInput, ServerNodeReplicationMessageInput,
+    ServerNodeShutdownMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,6 +41,11 @@ pub type ServerNodeLogAppendInitiateMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerNodeLogEntriesCommitMessage =
+    AsynchronousMessage<ServerNodeLogEntriesCommitMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub type ServerNodeNotificationImmediateMessage =
     AsynchronousMessage<ServerNodeNotificationImmediateMessageInput>;
 
@@ -71,6 +77,7 @@ pub enum ServerNodeMessage {
     NodeHandshake(ServerNodeNodeHandshakeMessage),
     LogAppendResponse(ServerNodeLogAppendResponseMessage),
     LogAppendInitiate(ServerNodeLogAppendInitiateMessage),
+    LogEntriesCommit(ServerNodeLogEntriesCommitMessage),
     NotificationImmediate(ServerNodeNotificationImmediateMessage),
     NotificationStart(ServerNodeNotificationStartMessage),
     NotificationNext(ServerNodeNotificationNextMessage),
@@ -116,6 +123,12 @@ impl From<ServerNodeLogAppendResponseMessage> for ServerNodeMessage {
 impl From<ServerNodeLogAppendInitiateMessage> for ServerNodeMessage {
     fn from(message: ServerNodeLogAppendInitiateMessage) -> Self {
         Self::LogAppendInitiate(message)
+    }
+}
+
+impl From<ServerNodeLogEntriesCommitMessage> for ServerNodeMessage {
+    fn from(message: ServerNodeLogEntriesCommitMessage) -> Self {
+        Self::LogEntriesCommit(message)
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
-use crate::server::{LogEntry, LogEntryId, LogId, LogTerm, ServerId};
+use crate::server::{LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm, ServerId};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -430,6 +430,43 @@ impl GeneralLogEntriesAppendInitiateMessageInput {
 
     pub fn log_id(&self) -> LogId {
         self.log_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralLogEntriesCommitMessageInput {
+    log_id: LogId,
+    log_entry_data: Bytes,
+    log_entry_issue_id: LogEntryIssueId,
+}
+
+impl From<GeneralLogEntriesCommitMessageInput> for (LogId, Bytes, LogEntryIssueId) {
+    fn from(input: GeneralLogEntriesCommitMessageInput) -> Self {
+        (input.log_id, input.log_entry_data, input.log_entry_issue_id)
+    }
+}
+
+impl GeneralLogEntriesCommitMessageInput {
+    pub fn new(log_id: LogId, log_entry_data: Bytes, log_entry_issue_id: LogEntryIssueId) -> Self {
+        Self {
+            log_id,
+            log_entry_data,
+            log_entry_issue_id,
+        }
+    }
+
+    pub fn log_id(&self) -> LogId {
+        self.log_id
+    }
+
+    pub fn log_entry_data(&self) -> &Bytes {
+        &self.log_entry_data
+    }
+
+    pub fn log_entry_issue_id(&self) -> LogEntryIssueId {
+        self.log_entry_issue_id
     }
 }
 

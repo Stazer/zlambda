@@ -2,10 +2,11 @@ use crate::common::message::AsynchronousMessage;
 use crate::general::{
     GeneralClientRegistrationRequestMessageInput, GeneralClientRegistrationResponseMessageInput,
     GeneralLogEntriesAppendInitiateMessageInput, GeneralLogEntriesAppendRequestMessageInput,
-    GeneralLogEntriesAppendResponseMessageInput, GeneralNodeHandshakeRequestMessageInput,
-    GeneralNodeHandshakeResponseMessageInput, GeneralNotificationMessageInput,
-    GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
-    GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
+    GeneralLogEntriesAppendResponseMessageInput, GeneralLogEntriesCommitMessageInput,
+    GeneralNodeHandshakeRequestMessageInput, GeneralNodeHandshakeResponseMessageInput,
+    GeneralNotificationMessageInput, GeneralRecoveryRequestMessageInput,
+    GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessageInput,
+    GeneralRegistrationResponseMessageInput,
 };
 use serde::{Deserialize, Serialize};
 
@@ -54,6 +55,10 @@ pub type GeneralLogEntriesAppendInitiateMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type GeneralLogEntriesCommitMessage = AsynchronousMessage<GeneralLogEntriesCommitMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pub type GeneralClientRegistrationRequestMessage =
     AsynchronousMessage<GeneralClientRegistrationRequestMessageInput>;
 
@@ -79,6 +84,7 @@ pub enum GeneralMessage {
     LogEntriesAppendRequest(GeneralLogEntriesAppendRequestMessage),
     LogEntriesAppendResponse(GeneralLogEntriesAppendResponseMessage),
     LogEntriesAppendInitiate(GeneralLogEntriesAppendInitiateMessage),
+    LogEntriesCommit(GeneralLogEntriesCommitMessage),
     ClientRegistrationRequest(GeneralClientRegistrationRequestMessage),
     ClientRegistrationResponse(GeneralClientRegistrationResponseMessage),
     Notification(GeneralNotificationMessage),
@@ -135,6 +141,12 @@ impl From<GeneralLogEntriesAppendResponseMessage> for GeneralMessage {
 impl From<GeneralLogEntriesAppendInitiateMessage> for GeneralMessage {
     fn from(message: GeneralLogEntriesAppendInitiateMessage) -> Self {
         Self::LogEntriesAppendInitiate(message)
+    }
+}
+
+impl From<GeneralLogEntriesCommitMessage> for GeneralMessage {
+    fn from(message: GeneralLogEntriesCommitMessage) -> Self {
+        Self::LogEntriesCommit(message)
     }
 }
 
