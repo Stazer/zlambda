@@ -27,12 +27,12 @@ use crate::server::node::{
     ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeShutdownMessage,
 };
 use crate::server::{
-    Server, ServerId, ServerLeaderServerIdGetMessageInput, ServerLogAppendInitiateMessageInput,
-    ServerLogAppendRequestMessageInput, ServerLogEntriesAcknowledgementMessageInput,
+    LogEntryIssuer, LogEntryServerIssuer, Server, ServerId, ServerLeaderServerIdGetMessageInput,
+    ServerLogAppendInitiateMessageInput, ServerLogAppendRequestMessageInput,
+    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesCommitMessageInput,
     ServerLogEntriesRecoveryMessageInput, ServerMessage, ServerModuleGetMessageInput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
     ServerServerIdGetMessageInput, ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
-    ServerLogEntriesCommitMessageInput, LogEntryIssuer, LogEntryServerIssuer
 };
 use std::collections::HashMap;
 use std::future::pending;
@@ -692,16 +692,16 @@ impl ServerNodeTask {
         let (input,) = message.into();
         let (log_id, log_entry_data, log_entry_issue_id) = input.into();
 
-        self.server_message_sender.do_send_asynchronous(
-            ServerLogEntriesCommitMessageInput::new(
+        self.server_message_sender
+            .do_send_asynchronous(ServerLogEntriesCommitMessageInput::new(
                 log_id,
                 log_entry_data,
                 LogEntryIssuer::Server(LogEntryServerIssuer::new(
                     self.server_id,
                     log_entry_issue_id,
-                ))
-            )
-        ).await;
+                )),
+            ))
+            .await;
     }
 
     async fn on_general_notification_message(&mut self, message: GeneralNotificationMessage) {

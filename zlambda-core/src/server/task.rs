@@ -1,9 +1,8 @@
 use crate::common::deserialize::deserialize_from_bytes;
 use crate::common::message::DoSend;
 use crate::common::message::{
-    SynchronizableMessageOutputSender,
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
-    MessageSocketSender,
+    MessageSocketSender, SynchronizableMessageOutputSender,
 };
 use crate::common::module::ModuleManager;
 use crate::common::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -32,15 +31,15 @@ use crate::server::{
     ServerLeaderServerIdGetMessageOutput, ServerLogAppendInitiateMessage,
     ServerLogAppendInitiateMessageOutput, ServerLogAppendRequestMessage, ServerLogCreateMessage,
     ServerLogCreateMessageOutput, ServerLogEntriesAcknowledgementMessage,
-    ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput, ServerLogEntriesRecoveryMessage,
-    ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
-    ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
-    ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
-    ServerModuleShutdownEventInput, ServerModuleStartupEventInput, ServerModuleUnloadMessage,
-    ServerModuleUnloadMessageOutput, ServerNodeMessage, ServerNodeReplicationMessage,
-    ServerNodeReplicationMessageInput, ServerNodeTask, ServerRecoveryMessage,
-    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
-    ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
+    ServerLogEntriesCommitMessage, ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput,
+    ServerLogEntriesRecoveryMessage, ServerLogEntriesReplicationMessage,
+    ServerLogEntriesReplicationMessageOutput, ServerMessage, ServerModule,
+    ServerModuleCommitEventInput, ServerModuleGetMessage, ServerModuleGetMessageOutput,
+    ServerModuleLoadMessage, ServerModuleLoadMessageOutput, ServerModuleShutdownEventInput,
+    ServerModuleStartupEventInput, ServerModuleUnloadMessage, ServerModuleUnloadMessageOutput,
+    ServerNodeMessage, ServerNodeReplicationMessage, ServerNodeReplicationMessageInput,
+    ServerNodeTask, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
+    ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerServerIdGetMessage, ServerServerIdGetMessageOutput,
     ServerServerNodeMessageSenderGetAllMessage, ServerServerNodeMessageSenderGetAllMessageOutput,
@@ -48,7 +47,7 @@ use crate::server::{
     ServerServerSocketAddressGetMessage, ServerServerSocketAddressGetMessageOutput,
     ServerServerSocketAddressesGetMessage, ServerServerSocketAddressesGetMessageOutput,
     ServerSocketAcceptMessage, ServerSocketAcceptMessageInput, ServerSystemCreateLogLogEntryData,
-    ServerSystemLogEntryData, SERVER_SYSTEM_LOG_ID, ServerLogEntriesCommitMessage,
+    ServerSystemLogEntryData, SERVER_SYSTEM_LOG_ID,
 };
 use async_recursion::async_recursion;
 use std::cmp::max;
@@ -99,7 +98,7 @@ pub(crate) struct ServerTask {
     commit_tasks: JoinHandle<()>,
     commit_sender: mpsc::Sender<CommitTaskMessage>,
     current_log_entry_issue_id: LogEntryIssueId,
-    commit_issue_senders: HashMap<LogEntryIssueId, SynchronizableMessageOutputSender,>,
+    commit_issue_senders: HashMap<LogEntryIssueId, SynchronizableMessageOutputSender>,
 }
 
 impl ServerTask {
@@ -817,7 +816,10 @@ impl ServerTask {
             .await;
     }
 
-    async fn on_server_log_entries_commit_message(&mut self, message: ServerLogEntriesCommitMessage) {
+    async fn on_server_log_entries_commit_message(
+        &mut self,
+        message: ServerLogEntriesCommitMessage,
+    ) {
         let (input,) = message.into();
         let (log_id, log_entry_data, log_entry_issuer) = input.into();
 
@@ -1106,7 +1108,8 @@ impl ServerTask {
             };
 
             if let Some(output_sender) = output_sender {
-                self.commit_issue_senders.insert(log_entry_issue_id, output_sender);
+                self.commit_issue_senders
+                    .insert(log_entry_issue_id, output_sender);
             }
 
             let sender = self

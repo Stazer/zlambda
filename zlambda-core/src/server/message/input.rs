@@ -8,8 +8,8 @@ use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::client::ServerClientId;
 use crate::server::{
-    LogEntry, LogEntryData, LogEntryId, LogId, LogIssuer, LogTerm, ServerId,
-    ServerLogCreateMessageOutput, ServerModule, LogEntryIssuer,
+    LogEntry, LogEntryData, LogEntryId, LogEntryIssuer, LogId, LogIssuer, LogTerm, ServerId,
+    ServerLogCreateMessageOutput, ServerModule,
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -254,11 +254,7 @@ impl From<ServerLogEntriesCommitMessageInput> for (LogId, Bytes, LogEntryIssuer)
 }
 
 impl ServerLogEntriesCommitMessageInput {
-    pub fn new(
-    log_id: LogId,
-    log_entry_data: Bytes,
-    log_entry_issuer: LogEntryIssuer,
-    ) -> Self {
+    pub fn new(log_id: LogId, log_entry_data: Bytes, log_entry_issuer: LogEntryIssuer) -> Self {
         Self {
             log_id,
             log_entry_data,

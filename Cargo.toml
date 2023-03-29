@@ -7,4 +7,6 @@ members = [
     "zlambda-router",
     "zlambda-realtime-task",
     "zlambda-wasm",
+    "zlambda-ebpf",
+    "zlambda-ebpf-common",
 ]
