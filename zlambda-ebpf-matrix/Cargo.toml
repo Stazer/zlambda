@@ -1,16 +1,15 @@
+#cargo-features = ["per-package-target"]
+
 [package]
 name = "zlambda-ebpf-matrix"
 version = "0.0.0"
 edition = "2021"
+#forced-target = "bpfel-unknown-none"
 
 [dependencies]
 aya-bpf = { git = "https://github.com/aya-rs/aya", branch = "main" }
 aya-log-ebpf = { git = "https://github.com/aya-rs/aya", branch = "main" }
-zlambda-ebpf-common = { path = "../zlambda-ebpf-common" }
-
-[[bin]]
-name = "myapp"
-path = "src/main.rs"
+zlambda-ebpf = { path = "../zlambda-ebpf" }
 
 [profile.dev]
 opt-level = 3

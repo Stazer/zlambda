@@ -17,7 +17,7 @@ use zlambda_core::server::{
     ServerModuleNotificationEventOutput,
 };
 use zlambda_dynamic::DynamicLibraryManager;
-use zlambda_ebpf::EbpfLoader;
+use zlambda_ebpf_loader::EbpfLoader;
 use zlambda_process::ProcessDispatcher;
 use zlambda_realtime_task::RealTimeTaskManager;
 use zlambda_router::round_robin::{GlobalRoundRobinRouter, LocalRoundRobinRouter};

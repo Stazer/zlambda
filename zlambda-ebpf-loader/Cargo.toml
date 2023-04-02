@@ -1,0 +1,12 @@
+[package]
+name = "zlambda-ebpf-loader"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+zlambda-ebpf = { path = "../zlambda-ebpf" }
+zlambda-core = { path = "../zlambda-core" }
+
+[lib]
+crate-type = ["rlib", "cdylib"]

@@ -8,5 +8,6 @@ members = [
     "zlambda-realtime-task",
     "zlambda-wasm",
     "zlambda-ebpf",
-    "zlambda-ebpf-common",
+    "zlambda-ebpf-loader",
+    #"zlambda-ebpf-matrix",
 ]

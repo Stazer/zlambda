@@ -1,5 +1,5 @@
 use crate::{
-    DeadlineSortableRealTimeTask, RealTimeTaskId, RealTimeTaskManagerInstance,
+    RealTimeTaskId, RealTimeTaskManagerInstance,
     RealTimeTaskManagerLogEntryData, RealTimeTaskManagerLogEntryScheduleData,
     RealTimeTaskSchedulingTaskMessage, RealTimeTaskSchedulingTaskPauseMessage,
     RealTimeTaskSchedulingTaskRescheduleMessage, RealTimeTaskSchedulingTaskResumeMessage,
@@ -15,7 +15,7 @@ use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::RwLock;
 use zlambda_core::common::time::sleep;
 use zlambda_core::common::tracing::debug;
-use zlambda_core::server::{LogId, Server, ServerId};
+use zlambda_core::server::{LogId, Server};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

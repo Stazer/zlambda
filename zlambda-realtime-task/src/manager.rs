@@ -1,6 +1,6 @@
 use crate::{
     DeadlineSortableRealTimeTask, RealTimeTask, RealTimeTaskDispatchedState,
-    RealTimeTaskFinishedState, RealTimeTaskId, RealTimeTaskManagerDispatchNotificationHeader,
+    RealTimeTaskFinishedState, RealTimeTaskId,
     RealTimeTaskManagerExecuteNotificationHeader, RealTimeTaskManagerInstance,
     RealTimeTaskManagerLogEntryData, RealTimeTaskManagerLogEntryDispatchData,
     RealTimeTaskManagerLogEntryFinishData, RealTimeTaskManagerLogEntryRunData,
