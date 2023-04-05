@@ -12,8 +12,8 @@ use core::hint::unreachable_unchecked;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[xdp(name = "application")]
-pub fn application(ctx: XdpContext) -> u32 {
+#[xdp(name = "main")]
+pub fn main(ctx: XdpContext) -> u32 {
     info!(&ctx, "received a packet");
 
     XDP_PASS
