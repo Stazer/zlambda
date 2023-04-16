@@ -52,7 +52,7 @@ enum MainCommand {
         command: ServerCommand,
     },
     Client {
-        #[clap(default_value = "0.0.0.0:8000")]
+        #[clap(default_value = "127.0.0.1:8000")]
         address: String,
         #[clap(subcommand)]
         command: ClientCommand,

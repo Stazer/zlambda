@@ -125,7 +125,7 @@ impl ServerTask {
 
         let server = Server::new(queue_sender.clone());
 
-        let (commit_sender, commit_receiver) = mpsc::channel(16);
+        let (commit_sender, commit_receiver) = mpsc::channel(256);
 
         let commit_tasks = spawn(async move {
             (CommitTask {

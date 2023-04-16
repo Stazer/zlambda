@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 aya = { git = "https://github.com/aya-rs/aya", branch = "main" }
+aya-log = { git = "https://github.com/aya-rs/aya", branch = "main" }
 zlambda-ebpf = { path = "../zlambda-ebpf" }
 zlambda-core = { path = "../zlambda-core" }
 

@@ -139,7 +139,7 @@ where
 
     pub async fn deserialize<S>(&mut self) -> Result<S, NotificationError>
     where
-        S: DeserializeOwned,
+        S: DeserializeOwned + std::fmt::Debug,
     {
         loop {
             let bytes = match self.stream.next().await {
@@ -225,7 +225,7 @@ where
 
     pub fn serialize_binary(&mut self, value: Bytes) -> Result<(), NotificationError> {
         self.buffer
-            .extend_from_slice(&to_allocvec(&NotificationBodyItemType::Binary(value))?);
+            .extend_from_slice(&to_allocvec(&NotificationBodyItemType::Binary(Bytes::from(to_allocvec(&value)?)))?);
 
         Ok(())
     }

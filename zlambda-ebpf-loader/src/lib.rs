@@ -1,9 +1,13 @@
 use zlambda_core::common::async_trait;
-use zlambda_core::common::bytes::Bytes;
+use zlambda_core::common::bytes::{Bytes, BytesMut};
 use std::collections::HashMap;
+use zlambda_core::common::stream::{StreamExt};
+use zlambda_core::common::runtime::{spawn};
 use zlambda_core::common::module::{Module};
 use zlambda_core::common::sync::{RwLock};
+use zlambda_core::common::task::{JoinHandle};
 use zlambda_core::common::deserialize::{deserialize_from_bytes};
+use zlambda_core::common::tracing::{error};
 use serde::{Deserialize, Serialize};
 use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
@@ -12,8 +16,16 @@ use zlambda_core::server::{
     LogModuleIssuer, ServerId, LogId,
     SERVER_SYSTEM_LOG_ID, LogIssuer, ServerSystemLogEntryData,
 };
+use zlambda_core::common::notification::{
+    notification_body_item_queue, NotificationBodyItemStreamExt,
+};
+use zlambda_core::common::net::{
+    UdpSocket,
+};
+use std::future::pending;
 use aya::Bpf;
-use aya::programs::Xdp;
+use aya_log::BpfLogger;
+use aya::programs::{XdpFlags, Xdp};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,9 +36,56 @@ enum LogEntryData {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Deserialize, Serialize)]
-struct NotificationHeader {
+struct BpfTask {
+    bpf: Bpf,
+}
 
+impl BpfTask {
+    fn new(
+        bpf: Bpf,
+    ) -> Self {
+        Self {
+            bpf,
+        }
+    }
+
+    fn spawn(mut self) -> JoinHandle<()> {
+        spawn(async move {
+            let socket = UdpSocket::bind("0.0.0.0:10200").await.expect("");
+
+            if let Err(error) = BpfLogger::init(&mut self.bpf) {
+                error!("{}", error);
+                return;
+            }
+
+            let program = match self.bpf.program_mut("main") {
+                Some(program) => program,
+                None => {
+                    error!("Binary does not include a main program");
+                    return;
+                }
+            };
+
+            let xdp: &mut Xdp = match program.try_into() {
+                Ok(xdp) => xdp,
+                Err(error) => {
+                    error!("{}", error);
+                    return;
+                }
+            };
+
+            if let Err(error) = xdp.load() {
+                error!("{}", error);
+                return;
+            }
+
+            if let Err(error) = xdp.attach("enp0s5", XdpFlags::SKB_MODE) {
+                error!("{}", error);
+            }
+
+            pending().await
+        })
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +93,13 @@ struct NotificationHeader {
 #[derive(Debug)]
 struct Instance {
     log_id: LogId,
+    bpf_tasks: Vec<JoinHandle<()>>,
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize, Serialize)]
+struct NotificationHeader(Bytes);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,6 +131,7 @@ impl ServerModule for EbpfLoader {
                 let mut instances = self.instances.write().await;
                 instances.insert(server_id, Instance {
                     log_id,
+                    bpf_tasks: Vec::default(),
                 });
             }
         }
@@ -73,9 +139,28 @@ impl ServerModule for EbpfLoader {
 
     async fn on_notification(
         &self,
-        _input: ServerModuleNotificationEventInput,
+        input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        println!("{:?}", _input);
+        let server_id = input.server().server_id().await;
+
+        let log_id = {
+            let instances = self.instances.read().await;
+            match instances.get(&server_id).map(|instance| instance.log_id) {
+                Some(log_id) => log_id,
+                None => unreachable!(),
+            }
+        };
+
+        let mut bytes = BytesMut::default();
+        let (server, _source, mut notification_body_item_queue_receiver) = input.into();
+
+        let mut deserializer = notification_body_item_queue_receiver.deserializer();
+        let data = deserializer
+            .deserialize::<Bytes>()
+            .await
+            .unwrap();
+
+        server.logs().get(log_id).commit(data).await;
     }
 
     async fn on_commit(
@@ -105,8 +190,46 @@ impl ServerModule for EbpfLoader {
                     let mut instances = self.instances.write().await;
                     instances.insert(input.server().server_id().await, Instance {
                         log_id: data.log_id(),
+                        bpf_tasks: Vec::default(),
                     });
                 }
+            }
+        } else {
+            let server_id = input.server().server_id().await;
+
+            let log_id = {
+                let instances = self.instances.read().await;
+                match instances.get(&server_id).map(|instance| instance.log_id) {
+                    Some(log_id) => log_id,
+                    None => unreachable!(),
+                }
+            };
+
+            if input.log_id() == log_id  {
+                let log_entry = match input.server().logs().get(log_id).entries().get(input.log_entry_id()).await {
+                    Some(log_entry) => log_entry,
+                    None => unreachable!(),
+                };
+
+                let bpf = match Bpf::load(log_entry.data()) {
+                    Ok(bpf) => bpf,
+                    Err(error) => {
+                        error!("{}", error);
+                        return;
+                    }
+                };
+
+                /*let mut instances = self.instances.write().await;
+
+                let instance = match instances.get_mut(&server_id) {
+                    Some(instance) => instance,
+                    None => unreachable!(),
+                };*/
+
+                //instance.bpf_tasks.push(
+                    BpfTask::new(bpf).spawn()
+                //)
+                ;
             }
         }
     }

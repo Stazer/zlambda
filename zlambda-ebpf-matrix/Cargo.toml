@@ -9,6 +9,10 @@ edition = "2021"
 [dependencies]
 aya-bpf = { git = "https://github.com/aya-rs/aya", branch = "main" }
 aya-log-ebpf = { git = "https://github.com/aya-rs/aya", branch = "main" }
+network-types = "0.0.4"
+serde = { version = "1.*", features = ["derive"], default-features = false }
+heapless = "*"
+serde-json-core = { version = "0", default-features = false }
 zlambda-ebpf = { path = "../zlambda-ebpf" }
 
 [profile.dev]
