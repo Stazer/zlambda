@@ -10,4 +10,4 @@ pub type LogId = TaggedType<usize, LogIdTag>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub const SERVER_SYSTEM_LOG_ID: LogId = LogId::from(0);
+pub const SERVER_SYSTEM_LOG_ID: LogId = LogId::new(0);

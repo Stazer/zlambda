@@ -53,10 +53,10 @@ impl BpfTask {
         spawn(async move {
             let socket = UdpSocket::bind("0.0.0.0:10200").await.expect("");
 
-            if let Err(error) = BpfLogger::init(&mut self.bpf) {
+            /*if let Err(error) = BpfLogger::init(&mut self.bpf) {
                 error!("{}", error);
                 return;
-            }
+            }*/
 
             let program = match self.bpf.program_mut("main") {
                 Some(program) => program,
@@ -219,17 +219,7 @@ impl ServerModule for EbpfLoader {
                     }
                 };
 
-                /*let mut instances = self.instances.write().await;
-
-                let instance = match instances.get_mut(&server_id) {
-                    Some(instance) => instance,
-                    None => unreachable!(),
-                };*/
-
-                //instance.bpf_tasks.push(
-                    BpfTask::new(bpf).spawn()
-                //)
-                ;
+                BpfTask::new(bpf).spawn();
             }
         }
     }

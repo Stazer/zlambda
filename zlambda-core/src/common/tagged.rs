@@ -62,13 +62,13 @@ where
 
 impl<T1, T2> Eq for TaggedType<T1, T2> where T1: Eq {}
 
-impl<T1, T2> const From<T1> for TaggedType<T1, T2> {
+impl<T1, T2> From<T1> for TaggedType<T1, T2> {
     fn from(inner: T1) -> Self {
         Self::new(inner)
     }
 }
 
-impl<T2> const From<TaggedType<usize, T2>> for usize {
+impl<T2> From<TaggedType<usize, T2>> for usize {
     fn from(r#type: TaggedType<usize, T2>) -> Self {
         r#type.0
     }
@@ -174,7 +174,7 @@ where
 }
 
 impl<T1, T2> TaggedType<T1, T2> {
-    const fn new(inner: T1) -> Self {
+    pub const fn new(inner: T1) -> Self {
         Self(inner, PhantomData::<T2>)
     }
 }
