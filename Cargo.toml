@@ -9,5 +9,10 @@ members = [
     "zlambda-wasm",
     "zlambda-ebpf",
     "zlambda-ebpf-loader",
-    #"zlambda-ebpf-matrix",
+    "zlambda-matrix",
+    "zlambda-matrix-converter",
+]
+
+exclude = [
+    "zlambda-ebpf-matrix",
 ]

@@ -8,6 +8,7 @@ use zlambda_core::common::sync::{RwLock};
 use zlambda_core::common::task::{JoinHandle};
 use zlambda_core::common::deserialize::{deserialize_from_bytes};
 use zlambda_core::common::tracing::{error};
+use zlambda_ebpf::EBPF_UDP_PORT;
 use serde::{Deserialize, Serialize};
 use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
@@ -51,12 +52,12 @@ impl BpfTask {
 
     fn spawn(mut self) -> JoinHandle<()> {
         spawn(async move {
-            let socket = UdpSocket::bind("0.0.0.0:10200").await.expect("");
+            let socket = UdpSocket::bind(&format!("0.0.0.0:{}", EBPF_UDP_PORT)).await.expect("");
 
-            /*if let Err(error) = BpfLogger::init(&mut self.bpf) {
-                error!("{}", error);
+            if let Err(error) = BpfLogger::init(&mut self.bpf) {
+                error!("BpfLogger::init {:?}", error);
                 return;
-            }*/
+            }
 
             let program = match self.bpf.program_mut("main") {
                 Some(program) => program,
@@ -69,18 +70,18 @@ impl BpfTask {
             let xdp: &mut Xdp = match program.try_into() {
                 Ok(xdp) => xdp,
                 Err(error) => {
-                    error!("{}", error);
+                    error!("program::try_into {:?}", error);
                     return;
                 }
             };
 
             if let Err(error) = xdp.load() {
-                error!("{}", error);
+                error!("xdp.load {:?}", error);
                 return;
             }
 
             if let Err(error) = xdp.attach("enp0s5", XdpFlags::SKB_MODE) {
-                error!("{}", error);
+                error!("xdp.attach {:?}", error);
             }
 
             pending().await
