@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![feature(unwrap_infallible)]
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -12,9 +13,11 @@ use aya_bpf::bindings::xdp_action::{XDP_ABORTED, XDP_PASS, XDP_TX};
 use aya_bpf::macros::xdp;
 use aya_bpf::programs::XdpContext;
 use aya_log_ebpf::{error, info};
+use aya_bpf::helpers::{bpf_csum_diff, bpf_xdp_adjust_tail};
 use core::hint::unreachable_unchecked;
 use core::mem::{size_of, swap};
 use core::panic::PanicInfo;
+use core::num::TryFromIntError;
 use network_types::eth::{EthHdr, EtherType};
 use network_types::ip::{IpProto, Ipv4Hdr};
 use network_types::udp::UdpHdr;
@@ -46,33 +49,39 @@ impl<T> AccessMut<T> for XdpContext {
 
 pub enum MainError {
     UnexpectedData,
+    TryFromIntError(TryFromIntError),
 }
 
 impl From<MainError> for &str {
     fn from(error: MainError) -> Self {
         match error {
             MainError::UnexpectedData => "Unexpected data",
+            MainError::TryFromIntError(_error) => "try from int error",
         }
+    }
+}
+
+impl From<TryFromIntError> for MainError {
+    fn from(error: TryFromIntError) -> Self {
+        Self::TryFromIntError(error)
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[xdp(name = "main")]
-pub fn main(context: XdpContext) -> u32 {
-    match do_main(context) {
+pub fn main(mut context: XdpContext) -> u32 {
+    match do_main(&mut context) {
         Err(_error) => XDP_ABORTED,
         Ok(result) => result,
     }
 }
 
-pub const UDP_DATA_SIZE: usize = (u16::MAX as usize) - EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN;
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-fn do_main(mut context: XdpContext) -> Result<u32, MainError> {
+fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
     if !matches!(
-        (<XdpContext as Access<EthHdr>>::access(&context, 0).ok_or(MainError::UnexpectedData)?)
+        (<XdpContext as Access<EthHdr>>::access(context, 0).ok_or(MainError::UnexpectedData)?)
             .ether_type,
         EtherType::Ipv4
     ) {
@@ -80,7 +89,7 @@ fn do_main(mut context: XdpContext) -> Result<u32, MainError> {
     }
 
     if !matches!(
-        <XdpContext as Access<Ipv4Hdr>>::access(&context, EthHdr::LEN)
+        <XdpContext as Access<Ipv4Hdr>>::access(context, EthHdr::LEN)
             .ok_or(MainError::UnexpectedData)?
             .proto,
         IpProto::Udp
@@ -90,7 +99,7 @@ fn do_main(mut context: XdpContext) -> Result<u32, MainError> {
 
     if !matches!(
         u16::from_be(
-            <XdpContext as Access<UdpHdr>>::access(&context, EthHdr::LEN + Ipv4Hdr::LEN)
+            <XdpContext as Access<UdpHdr>>::access(context, EthHdr::LEN + Ipv4Hdr::LEN)
                 .ok_or(MainError::UnexpectedData)?
                 .dest,
         ),
@@ -99,13 +108,13 @@ fn do_main(mut context: XdpContext) -> Result<u32, MainError> {
         return Ok(XDP_PASS);
     }
 
-    info!(&context, "Hello World");
-
     let (mut context, dimension) = {
-        let mut reader = AccessReader::new(AccessOffset::new(
-            context,
-            EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN,
-        ));
+        let mut reader = AccessReader::new(
+            AccessOffset::new(
+                context,
+                EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN,
+            ),
+        );
 
         let dimension =
             MatrixDimension::<u8>::read(&mut reader).ok_or(MainError::UnexpectedData)?;
@@ -113,29 +122,38 @@ fn do_main(mut context: XdpContext) -> Result<u32, MainError> {
         (reader.into_inner().into_inner(), dimension)
     };
 
-    let left = MatrixAccess::<_, _, u8>::new(
-        AccessOffset::new(
-            &context,
-            EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 2 * size_of::<u8>(), /* yep :D */
-        ),
-        dimension.flip(),
-    );
-    let right = MatrixAccess::<_, _, u8>::new(
-        AccessOffset::new(
-            &context,
-            EthHdr::LEN
-                + Ipv4Hdr::LEN
-                + UdpHdr::LEN
-                + 2 * size_of::<u8>() * dimension.element_count().unwrap(),
-        ),
-        dimension,
-    );
 
-    info!(&context, "Hi {}", right.get(0, 0)?.unwrap_or_default());
+    unsafe {
+        bpf_xdp_adjust_tail(context.ctx, (dimension.element_count()? + size_of::<u8>()).try_into()?)
+    };
+
+    {
+        let context: &XdpContext = context;
+
+        let left = MatrixAccess::<_, _, u8>::new(
+            AccessOffset::new(
+                context,
+                EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 2 * size_of::<u8>(), /* yep :D */
+            ),
+            dimension.flip(),
+        );
+
+        let right = MatrixAccess::<_, _, u8>::new(
+            AccessOffset::new(
+                context,
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN
+                    + 2 * size_of::<u8>()
+                    + dimension.element_count()? + size_of::<u8>(),
+            ),
+            dimension,
+        );
+    }
 
     {
         let udp_header =
-            <XdpContext as AccessMut<UdpHdr>>::access_mut(&mut context, EthHdr::LEN + Ipv4Hdr::LEN)
+            <XdpContext as AccessMut<UdpHdr>>::access_mut(context, EthHdr::LEN + Ipv4Hdr::LEN)
                 .ok_or(MainError::UnexpectedData)?;
         swap(&mut udp_header.source, &mut udp_header.dest);
         udp_header.check = 0;

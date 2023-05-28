@@ -1,17 +1,47 @@
 use core::marker::PhantomData;
 use core::mem::size_of;
 use core::ops::{Add, Mul};
+use core::convert::AsMut;
+use core::num::TryFromIntError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub trait Access<T> {
+pub trait Access<T>
+{
     fn access(&self, index: usize) -> Option<&T>;
+}
+
+impl<'a, A, T> Access<T> for &'a A
+where
+    A: Access<T> + 'static
+{
+    fn access(&self, index: usize) -> Option<&T> {
+        A::access(self, index)
+    }
+}
+
+impl<'a, A, T> Access<T> for &'a mut A
+where
+    A: Access<T> + 'static
+{
+    fn access(&self, index: usize) -> Option<&T> {
+        A::access(self, index)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub trait AccessMut<T> {
     fn access_mut(&mut self, index: usize) -> Option<&mut T>;
+}
+
+impl<'a, A, T> AccessMut<T> for &'a mut A
+where
+    A: AccessMut<T>
+{
+    fn access_mut(&mut self, index: usize) -> Option<&mut T> {
+        A::access_mut(self, index)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,43 +148,6 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct AccessIterator<A, T> {
-    access: A,
-    offset: usize,
-    r#type: PhantomData<T>,
-}
-
-impl<A, T> AccessIterator<A, T> {
-    pub fn new(access: A) -> Self {
-        Self {
-            access,
-            offset: 0,
-            r#type: PhantomData,
-        }
-    }
-}
-
-impl<'a, A, T> Iterator for AccessIterator<&'a A, T>
-where
-    A: Access<T>,
-    T: 'a,
-{
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let item = match self.access.access(self.offset) {
-            Some(item) => item,
-            None => return None,
-        };
-
-        self.offset += 1;
-
-        Some(item)
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 pub trait Reader {
     fn read_u8(&mut self) -> Option<u8>;
 }
@@ -213,9 +206,9 @@ pub struct MatrixDimension<T> {
 }
 
 impl<T> MatrixDimension<T> {
-    pub fn read<R>(reader: &mut R) -> Option<Self>
+    pub fn read<'a, R>(reader: &'a mut R) -> Option<Self>
     where
-        R: Reader,
+        R: Reader + 'a,
         T: Readable,
     {
         let a = match T::read(reader) {
@@ -249,9 +242,10 @@ impl<T> MatrixDimension<T> {
         }
     }
 
-    pub fn element_count(&self) -> Result<usize, <T as TryInto<usize>>::Error>
+    pub fn element_count(&self) -> Result<usize, TryFromIntError>
     where
-        T: TryInto<usize> + Copy,
+        T: Copy + TryInto<usize>,
+        TryFromIntError: From<<T as TryInto<usize>>::Error>,
     {
         Ok(self.a.try_into()? * self.b.try_into()?)
     }
@@ -274,11 +268,11 @@ impl<A, D, T> MatrixAccess<A, D, T> {
         }
     }
 
-    pub fn get(&self, x: usize, y: usize) -> Result<Option<T>, <D as TryInto<usize>>::Error>
+    pub fn get(&self, x: usize, y: usize) -> Result<Option<&T>, TryFromIntError>
     where
         A: Access<T>,
         D: Copy + TryInto<usize>,
-        T: Copy,
+        TryFromIntError: From<<D as TryInto<usize>>::Error>,
     {
         Ok(self.access.access((*self.dimension.a()).try_into()? * x + y))
     }
