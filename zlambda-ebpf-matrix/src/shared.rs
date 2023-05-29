@@ -1,7 +1,9 @@
 use core::marker::PhantomData;
 use core::mem::size_of;
-use core::ops::{Add, Mul};
+use core::ops::{Add, Mul, Range};
 use core::convert::AsMut;
+use core::iter::Step;
+use num_traits::Zero;
 use core::num::TryFromIntError;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,6 +44,12 @@ where
     fn access_mut(&mut self, index: usize) -> Option<&mut T> {
         A::access_mut(self, index)
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub trait Mutate<T> {
+    fn mutate(&mut self, index: usize, value: T);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +213,18 @@ pub struct MatrixDimension<T> {
     b: T,
 }
 
+impl<T> Clone for MatrixDimension<T>
+where
+    T: Clone
+{
+    fn clone(&self) -> Self {
+        Self {
+            a: self.a.clone(),
+            b: self.b.clone(),
+        }
+    }
+}
+
 impl<T> MatrixDimension<T> {
     pub fn read<'a, R>(reader: &'a mut R) -> Option<Self>
     where
@@ -277,19 +297,58 @@ impl<A, D, T> MatrixAccess<A, D, T> {
         Ok(self.access.access((*self.dimension.a()).try_into()? * x + y))
     }
 
-    /*pub fn get_mut(
-        &mut self,
-        x: usize,
-        y: usize,
-    ) -> Result<Option<&mut T>, <&D as TryInto<usize>>::Error>
+    pub fn get_mut(&mut self, x: usize, y: usize) -> Result<Option<&mut T>, TryFromIntError>
     where
         A: AccessMut<T>,
-        D: TryInto<usize> + Copy,
+        D: Copy + TryInto<usize>,
+        TryFromIntError: From<<D as TryInto<usize>>::Error>,
     {
-        Ok(self
-            .access
-            .access_mut(self.dimension.a().try_into()? * x + y))
-    }*/
+        Ok(self.access.access_mut((*self.dimension.a()).try_into()? * x + y))
+    }
+
+    pub fn multiply<A2>(&self, right: &Self, result: &mut MatrixAccess<A2, D, T>) -> Result<(), TryFromIntError>
+    where
+        A: Access<T>,
+        A2: AccessMut<T>,
+        D: Copy + TryInto<usize> + Zero + Step,
+        TryFromIntError: From<<D as TryInto<usize>>::Error>,
+        T: Zero + num_traits::One
+            + Copy
+            + Mul<T>
+            + Add<<T as Mul<T>>::Output>
+            + From<<T as Add<<T as Mul<T>>::Output>>::Output>,
+    {
+        for i in (Range {
+            start: D::zero(),
+            end: *self.dimension.a(),
+        }) {
+            for j in (Range {
+                start: D::zero(),
+                end: *self.dimension.b(),
+            }) {
+
+                /*if let Some(old_value) = result.get_mut(0, 0)?/*i.try_into()?, j.try_into()?)?*/ {
+                    *old_value = T::one()
+                }*/
+                let mut value = T::zero();
+
+                /*for k in (Range {
+                    start: D::zero(),
+                    end: *self.dimension.a(),
+                }) {
+                    let (left_value, right_value) = match (self.get(k.try_into()?, i.try_into()?)?, right.get(j.try_into()?, k.try_into()?)?) {
+                        (Some(left_value), Some(right_value)) => (*left_value, *right_value),
+                        (_, _) => return Ok(()),
+                    };
+
+                    value = left_value;//
+                    //T::one();//T::from(value + left_value * right_value);
+                }*/
+            }
+        }
+
+        Ok(())
+    }
 
     pub fn into_inner(self) -> A {
         self.access

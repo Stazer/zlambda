@@ -1,6 +1,6 @@
 #![no_std]
 #![no_main]
-#![feature(unwrap_infallible)]
+#![feature(step_trait)]
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -13,7 +13,7 @@ use aya_bpf::bindings::xdp_action::{XDP_ABORTED, XDP_PASS, XDP_TX};
 use aya_bpf::macros::xdp;
 use aya_bpf::programs::XdpContext;
 use aya_log_ebpf::{error, info};
-use aya_bpf::helpers::{bpf_csum_diff, bpf_xdp_adjust_tail};
+use aya_bpf::helpers::{bpf_xdp_adjust_tail};
 use core::hint::unreachable_unchecked;
 use core::mem::{size_of, swap};
 use core::panic::PanicInfo;
@@ -36,6 +36,16 @@ impl<T> Access<T> for XdpContext {
 }
 
 impl<T> AccessMut<T> for XdpContext {
+    fn access_mut(&mut self, index: usize) -> Option<&mut T> {
+        if self.data() + index + size_of::<T>() > self.data_end() {
+            return None;
+        }
+
+        Some(unsafe { &mut *((self.data() + index) as *mut T) })
+    }
+}
+
+impl<'a, T> AccessMut<T> for &'a XdpContext {
     fn access_mut(&mut self, index: usize) -> Option<&mut T> {
         if self.data() + index + size_of::<T>() > self.data_end() {
             return None;
@@ -122,9 +132,10 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
         (reader.into_inner().into_inner(), dimension)
     };
 
+    let matrix_size = dimension.element_count()? * size_of::<u8>();
 
     unsafe {
-        bpf_xdp_adjust_tail(context.ctx, (dimension.element_count()? + size_of::<u8>()).try_into()?)
+        bpf_xdp_adjust_tail(context.ctx, matrix_size.try_into()?)
     };
 
     {
@@ -145,10 +156,39 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
                     + Ipv4Hdr::LEN
                     + UdpHdr::LEN
                     + 2 * size_of::<u8>()
-                    + dimension.element_count()? + size_of::<u8>(),
+                    + dimension.element_count()? * size_of::<u8>(),
+            ),
+            dimension.clone(),
+        );
+
+        /*info!(
+            context,
+            "{} {} {} {}",
+            left.get(0, 0).unwrap_or_default().copied().unwrap_or_default(),
+            left.get(1, 0).unwrap_or_default().copied().unwrap_or_default(),
+            left.get(0, 1).unwrap_or_default().copied().unwrap_or_default(),
+            left.get(1, 1).unwrap_or_default().copied().unwrap_or_default(),
+        );*/
+
+        let mut result = MatrixAccess::<_, _, u8>::new(
+            AccessOffset::new(
+                context,
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN
+                    + 2 * size_of::<u8>()
+                    + dimension.element_count()? * size_of::<u8>()
+                    + dimension.element_count()? * size_of::<u8>(),
             ),
             dimension,
         );
+
+
+        if let Some(old_value) = result.get_mut(0, 0)? {
+            *old_value = 95;
+        }
+
+        //left.multiply(&right, &mut result)?;
     }
 
     {
@@ -156,17 +196,19 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
             <XdpContext as AccessMut<UdpHdr>>::access_mut(context, EthHdr::LEN + Ipv4Hdr::LEN)
                 .ok_or(MainError::UnexpectedData)?;
         swap(&mut udp_header.source, &mut udp_header.dest);
-        udp_header.check = 0;
+        udp_header.check = 0; // ignore checksum calculation
+        udp_header.len = u16::from_ne_bytes((u16::from_be_bytes(udp_header.len.to_ne_bytes()) + u16::try_from(matrix_size)?).to_be_bytes());
     }
 
     {
-        let ip_header = <XdpContext as AccessMut<Ipv4Hdr>>::access_mut(&mut context, EthHdr::LEN)
+        let ip_header = <XdpContext as AccessMut<Ipv4Hdr>>::access_mut(context, EthHdr::LEN)
             .ok_or(MainError::UnexpectedData)?;
         swap(&mut ip_header.src_addr, &mut ip_header.dst_addr);
+        ip_header.tot_len = u16::from_ne_bytes((u16::from_be_bytes(ip_header.tot_len.to_ne_bytes()) + u16::try_from(matrix_size)?).to_be_bytes());
     }
 
     {
-        let ethernet_header = <XdpContext as AccessMut<EthHdr>>::access_mut(&mut context, 0)
+        let ethernet_header = <XdpContext as AccessMut<EthHdr>>::access_mut(context, 0)
             .ok_or(MainError::UnexpectedData)?;
         swap(&mut ethernet_header.src_addr, &mut ethernet_header.dst_addr);
     }
