@@ -52,14 +52,23 @@ pub trait Mutate<T> {
     fn mutate(&mut self, index: usize, value: T);
 }
 
+impl<'a, A, T> Mutate<T> for &'a mut A
+where
+    A: Mutate<T>
+{
+    fn mutate(&mut self, index: usize, value: T) {
+        A::mutate(self, index, value)
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct AccessOffset<T> {
+pub struct Offset<T> {
     access: T,
     offset: usize,
 }
 
-impl<T> Clone for AccessOffset<T>
+impl<T> Clone for Offset<T>
 where
     T: Clone,
 {
@@ -71,7 +80,7 @@ where
     }
 }
 
-impl<T> AccessOffset<T> {
+impl<T> Offset<T> {
     pub fn new(access: T, offset: usize) -> Self {
         Self { access, offset }
     }
@@ -81,7 +90,7 @@ impl<T> AccessOffset<T> {
     }
 }
 
-impl<A, T> Access<T> for AccessOffset<A>
+impl<A, T> Access<T> for Offset<A>
 where
     A: Access<T>,
 {
@@ -90,12 +99,21 @@ where
     }
 }
 
-impl<A, T> AccessMut<T> for AccessOffset<A>
+impl<A, T> AccessMut<T> for Offset<A>
 where
     A: AccessMut<T>,
 {
     fn access_mut(&mut self, index: usize) -> Option<&mut T> {
         self.access.access_mut(self.offset + index)
+    }
+}
+
+impl<M, T> Mutate<T> for Offset<M>
+where
+    M: Mutate<T>
+{
+    fn mutate(&mut self, index: usize, value: T) {
+        self.access.mutate(self.offset + index, value);
     }
 }
 
@@ -273,13 +291,13 @@ impl<T> MatrixDimension<T> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct MatrixAccess<A, D, T> {
+pub struct Matrix<A, D, T> {
     access: A,
     dimension: MatrixDimension<D>,
     r#type: PhantomData<T>,
 }
 
-impl<A, D, T> MatrixAccess<A, D, T> {
+impl<A, D, T> Matrix<A, D, T> {
     pub fn new(access: A, dimension: MatrixDimension<D>) -> Self {
         Self {
             access,
@@ -306,7 +324,19 @@ impl<A, D, T> MatrixAccess<A, D, T> {
         Ok(self.access.access_mut((*self.dimension.a()).try_into()? * x + y))
     }
 
-    pub fn multiply<A2>(&self, right: &Self, result: &mut MatrixAccess<A2, D, T>) -> Result<(), TryFromIntError>
+    pub fn set(&mut self, x: usize, y: usize, value: T) -> Result<(), TryFromIntError>
+    where
+        A: Mutate<T>,
+        D: Copy + TryInto<usize>,
+        TryFromIntError: From<<D as TryInto<usize>>::Error>,
+    {
+        self.access.mutate(0, value);
+
+        //Ok(self.access.mutate((*self.dimension.a()).try_into()? * x + y, value))
+        Ok(())
+    }
+
+    pub fn multiply<A2>(&self, right: &Self, result: &mut Matrix<A2, D, T>) -> Result<(), TryFromIntError>
     where
         A: Access<T>,
         A2: AccessMut<T>,

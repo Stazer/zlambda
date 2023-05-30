@@ -20,6 +20,7 @@ use core::panic::PanicInfo;
 use core::num::TryFromIntError;
 use network_types::eth::{EthHdr, EtherType};
 use network_types::ip::{IpProto, Ipv4Hdr};
+use core::hint::black_box;
 use network_types::udp::UdpHdr;
 use zlambda_ebpf::EBPF_UDP_PORT;
 
@@ -54,6 +55,27 @@ impl<'a, T> AccessMut<T> for &'a XdpContext {
         Some(unsafe { &mut *((self.data() + index) as *mut T) })
     }
 }
+
+impl<T> Mutate<T> for XdpContext {
+    fn mutate(&mut self, index: usize, value: T) {
+        if self.data() + index + size_of::<T>() > self.data_end() {
+            return
+        }
+
+        *unsafe { &mut *((self.data() + index) as *mut T) } = value;
+    }
+}
+
+/*impl<'a, T> Mutate<T> for &'a XdpContext {
+    fn mutate(&mut self, index: usize, value: T) {
+        if self.data() + index + size_of::<T>() > self.data_end() {
+            error!(*self, "overflow...");
+            return
+        }
+
+        unsafe { &mut *((self.data() + index) as *mut T) } = value
+    }
+}*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -118,9 +140,9 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
         return Ok(XDP_PASS);
     }
 
-    let (mut context, dimension) = {
+    let (context, dimension) = {
         let mut reader = AccessReader::new(
-            AccessOffset::new(
+            Offset::new(
                 context,
                 EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN,
             ),
@@ -132,25 +154,42 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
         (reader.into_inner().into_inner(), dimension)
     };
 
-    let matrix_size = dimension.element_count()? * size_of::<u8>();
+    let matrix_size = (dimension.a() * dimension.b()) as usize;
 
     unsafe {
         bpf_xdp_adjust_tail(context.ctx, matrix_size.try_into()?)
     };
 
-    {
-        let context: &XdpContext = context;
+    let s = EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 2 * size_of::<u8>() + 2 * matrix_size;
 
-        let left = MatrixAccess::<_, _, u8>::new(
-            AccessOffset::new(
+    let value =
+        <XdpContext as AccessMut<u8>>::access_mut(
+            context,
+            s,
+        )
+        .ok_or(MainError::UnexpectedData)?;
+
+        *value = 95;
+
+    //let a = black_box(context.data());
+
+    /*if a + s > context.data_end() {
+        return Err(MainError::UnexpectedData)
+    }*/
+
+    {
+        /*let context: &XdpContext = context;
+
+        let left = Matrix::<_, _, u8>::new(
+            Offset::new(
                 context,
                 EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 2 * size_of::<u8>(), /* yep :D */
             ),
             dimension.flip(),
         );
 
-        let right = MatrixAccess::<_, _, u8>::new(
-            AccessOffset::new(
+        let right = Matrix::<_, _, u8>::new(
+            Offset::new(
                 context,
                 EthHdr::LEN
                     + Ipv4Hdr::LEN
@@ -159,7 +198,7 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
                     + dimension.element_count()? * size_of::<u8>(),
             ),
             dimension.clone(),
-        );
+        );*/
 
         /*info!(
             context,
@@ -170,23 +209,52 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
             left.get(1, 1).unwrap_or_default().copied().unwrap_or_default(),
         );*/
 
-        let mut result = MatrixAccess::<_, _, u8>::new(
-            AccessOffset::new(
-                context,
+        /*let mut result = Matrix::<_, _, u8>::new(
+            Offset::new(
+                &mut context,
                 EthHdr::LEN
                     + Ipv4Hdr::LEN
                     + UdpHdr::LEN
                     + 2 * size_of::<u8>()
                     + dimension.element_count()? * size_of::<u8>()
-                    + dimension.element_count()? * size_of::<u8>(),
+                    //+ dimension.element_count()? * size_of::<u8>(),
             ),
             dimension,
-        );
+        );*/
+
+        /*let value =
+            <XdpContext as AccessMut<u8>>::access_mut(
+                context,
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN
+                    + 2 * size_of::<u8>()
+                    + matrix_size
+                    //+ matrix_size
+                    //+ dimension.element_count()? * size_of::<u8>()
+                    //+ dimension.element_count()? * size_of::<u8>(),
+            )
+            .ok_or(MainError::UnexpectedData)?;
+
+        *value = 95;*/
 
 
-        if let Some(old_value) = result.get_mut(0, 0)? {
+
+        /*context.mutate(
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN,
+                    //+ 2 * size_of::<u8>()
+                    //+ dimension.element_count()? * size_of::<u8>(),
+                    //+ dimension.element_count()? * size_of::<u8>(),
+            95u8,
+        );*/
+
+        //result.set(0, 0, 95)?;
+
+        /*if let Some(old_value) = result.get_mut(0, 0)? {
             *old_value = 95;
-        }
+        }*/
 
         //left.multiply(&right, &mut result)?;
     }
