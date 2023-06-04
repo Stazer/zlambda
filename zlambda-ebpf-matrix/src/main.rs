@@ -26,9 +26,16 @@ use zlambda_ebpf::EBPF_UDP_PORT;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+fn maybe_optimize<T>(value: T) -> T {
+    value
+    //black_box(value)
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 impl<T> Access<T> for XdpContext {
     fn access(&self, index: usize) -> Option<&T> {
-        if self.data() + index + size_of::<T>() > self.data_end() {
+        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
             return None;
         }
 
@@ -38,7 +45,7 @@ impl<T> Access<T> for XdpContext {
 
 impl<T> AccessMut<T> for XdpContext {
     fn access_mut(&mut self, index: usize) -> Option<&mut T> {
-        if self.data() + index + size_of::<T>() > self.data_end() {
+        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
             return None;
         }
 
@@ -48,7 +55,7 @@ impl<T> AccessMut<T> for XdpContext {
 
 impl<'a, T> AccessMut<T> for &'a XdpContext {
     fn access_mut(&mut self, index: usize) -> Option<&mut T> {
-        if self.data() + index + size_of::<T>() > self.data_end() {
+        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
             return None;
         }
 
@@ -58,7 +65,7 @@ impl<'a, T> AccessMut<T> for &'a XdpContext {
 
 impl<T> Mutate<T> for XdpContext {
     fn mutate(&mut self, index: usize, value: T) {
-        if self.data() + index + size_of::<T>() > self.data_end() {
+        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
             return
         }
 
@@ -66,16 +73,15 @@ impl<T> Mutate<T> for XdpContext {
     }
 }
 
-/*impl<'a, T> Mutate<T> for &'a XdpContext {
+impl<'a, T> Mutate<T> for &'a XdpContext {
     fn mutate(&mut self, index: usize, value: T) {
-        if self.data() + index + size_of::<T>() > self.data_end() {
-            error!(*self, "overflow...");
+        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
             return
         }
 
-        unsafe { &mut *((self.data() + index) as *mut T) } = value
+        *unsafe { &mut *((self.data() + index) as *mut T) } = value
     }
-}*/
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -149,38 +155,23 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
         );
 
         let dimension =
-            MatrixDimension::<u8>::read(&mut reader).ok_or(MainError::UnexpectedData)?;
+            MatrixDimension::read(&mut reader).ok_or(MainError::UnexpectedData)?;
 
         (reader.into_inner().into_inner(), dimension)
     };
 
-    let matrix_size = (dimension.a() * dimension.b()) as usize;
+    let matrix_size = dimension.element_count();
+
+    error!(context, "{}", EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
 
     unsafe {
-        bpf_xdp_adjust_tail(context.ctx, matrix_size.try_into()?)
+        bpf_xdp_adjust_tail(context.ctx, 4)//(matrix_size * size_of::<u8>()) as _)
     };
 
-    let s = EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 2 * size_of::<u8>() + 2 * matrix_size;
-
-    let value =
-        <XdpContext as AccessMut<u8>>::access_mut(
-            context,
-            s,
-        )
-        .ok_or(MainError::UnexpectedData)?;
-
-        *value = 95;
-
-    //let a = black_box(context.data());
-
-    /*if a + s > context.data_end() {
-        return Err(MainError::UnexpectedData)
-    }*/
-
     {
-        /*let context: &XdpContext = context;
+        let context: &XdpContext = context;
 
-        let left = Matrix::<_, _, u8>::new(
+        let left = Matrix::<_, MatrixItem>::new(
             Offset::new(
                 context,
                 EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 2 * size_of::<u8>(), /* yep :D */
@@ -188,17 +179,40 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
             dimension.flip(),
         );
 
-        let right = Matrix::<_, _, u8>::new(
+        let right = Matrix::<_, MatrixItem>::new(
             Offset::new(
                 context,
                 EthHdr::LEN
                     + Ipv4Hdr::LEN
                     + UdpHdr::LEN
                     + 2 * size_of::<u8>()
-                    + dimension.element_count()? * size_of::<u8>(),
+                    + 4
+                    //+ matrix_size * size_of::<u8>(),
             ),
             dimension.clone(),
-        );*/
+        );
+
+        let mut result = Matrix::<_, u8>::new(
+            Offset::new(
+                context,
+                EthHdr::LEN
+                    + Ipv4Hdr::LEN
+                    + UdpHdr::LEN
+                    + 2 * size_of::<u8>()
+                    + 4
+                    + 4
+                    //+ matrix_size * size_of::<u8>()
+                    //+ matrix_size * size_of::<u8>(),
+            ),
+            dimension,
+        );
+
+        //result.set(0, 0, 95);
+        //result.set(1, 0, 137u8);
+        //result.set(0, 0, 137);
+        //result.set(0, 0, 137);
+
+        left.multiply(&right, &mut result);
 
         /*info!(
             context,
@@ -237,8 +251,6 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
             .ok_or(MainError::UnexpectedData)?;
 
         *value = 95;*/
-
-
 
         /*context.mutate(
                 EthHdr::LEN

@@ -23,6 +23,7 @@ codegen-units = 1
 rpath = false
 
 [profile.release]
+#opt-level = 1
 lto = true
 panic = "abort"
 codegen-units = 1

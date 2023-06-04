@@ -226,79 +226,68 @@ impl Readable for u8 {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct MatrixDimension<T> {
-    a: T,
-    b: T,
+pub type MatrixDimensionItem = u8;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone)]
+pub struct MatrixDimension {
+    a: usize,
+    b: usize,
 }
 
-impl<T> Clone for MatrixDimension<T>
-where
-    T: Clone
-{
-    fn clone(&self) -> Self {
-        Self {
-            a: self.a.clone(),
-            b: self.b.clone(),
-        }
-    }
-}
-
-impl<T> MatrixDimension<T> {
+impl MatrixDimension {
     pub fn read<'a, R>(reader: &'a mut R) -> Option<Self>
     where
         R: Reader + 'a,
-        T: Readable,
     {
-        let a = match T::read(reader) {
-            Some(a) => a,
+        let a = match u8::read(reader) {
+            Some(a) => usize::from(a),
             None => return None,
         };
 
-        let b = match T::read(reader) {
-            Some(b) => b,
+        let b = match u8::read(reader) {
+            Some(b) => usize::from(b),
             None => return None,
         };
 
         Some(Self { a, b })
     }
 
-    pub fn a(&self) -> &T {
-        &self.a
+    pub fn a(&self) -> usize {
+        self.a
     }
 
-    pub fn b(&self) -> &T {
-        &self.b
+    pub fn b(&self) -> usize {
+        self.b
     }
 
-    pub fn flip(&self) -> Self
-    where
-        T: Clone,
-    {
+    pub fn flip(&self) -> Self {
         Self {
-            a: self.b.clone(),
-            b: self.a.clone(),
+            a: self.b,
+            b: self.a,
         }
     }
 
-    pub fn element_count(&self) -> Result<usize, TryFromIntError>
-    where
-        T: Copy + TryInto<usize>,
-        TryFromIntError: From<<T as TryInto<usize>>::Error>,
-    {
-        Ok(self.a.try_into()? * self.b.try_into()?)
+    pub fn element_count(&self) -> usize {
+        self.a * self.b
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct Matrix<A, D, T> {
+pub type MatrixItem = u8;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct Matrix<A, T> {
     access: A,
-    dimension: MatrixDimension<D>,
+    dimension: MatrixDimension,
     r#type: PhantomData<T>,
 }
 
-impl<A, D, T> Matrix<A, D, T> {
-    pub fn new(access: A, dimension: MatrixDimension<D>) -> Self {
+impl<A, T> Matrix<A, T> {
+    pub fn new(access: A, dimension: MatrixDimension) -> Self {
         Self {
             access,
             dimension,
@@ -306,78 +295,48 @@ impl<A, D, T> Matrix<A, D, T> {
         }
     }
 
-    pub fn get(&self, x: usize, y: usize) -> Result<Option<&T>, TryFromIntError>
+    pub fn get(&self, x: usize, y: usize) -> Option<MatrixItem>
     where
-        A: Access<T>,
-        D: Copy + TryInto<usize>,
-        TryFromIntError: From<<D as TryInto<usize>>::Error>,
+        A: Access<MatrixItem>,
     {
-        Ok(self.access.access((*self.dimension.a()).try_into()? * x + y))
+        self.access.access(self.dimension.a() * x + y).copied()
     }
 
-    pub fn get_mut(&mut self, x: usize, y: usize) -> Result<Option<&mut T>, TryFromIntError>
+    pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut MatrixItem>
     where
-        A: AccessMut<T>,
-        D: Copy + TryInto<usize>,
-        TryFromIntError: From<<D as TryInto<usize>>::Error>,
+        A: AccessMut<MatrixItem>,
     {
-        Ok(self.access.access_mut((*self.dimension.a()).try_into()? * x + y))
+        self.access.access_mut(self.dimension.a() * x + y)
     }
 
-    pub fn set(&mut self, x: usize, y: usize, value: T) -> Result<(), TryFromIntError>
+    pub fn set(&mut self, x: usize, y: usize, value: MatrixItem)
     where
-        A: Mutate<T>,
-        D: Copy + TryInto<usize>,
-        TryFromIntError: From<<D as TryInto<usize>>::Error>,
+        A: Mutate<MatrixItem>,
     {
-        self.access.mutate(0, value);
-
-        //Ok(self.access.mutate((*self.dimension.a()).try_into()? * x + y, value))
-        Ok(())
+        self.access.mutate(2 * x + y, value)
     }
 
-    pub fn multiply<A2>(&self, right: &Self, result: &mut Matrix<A2, D, T>) -> Result<(), TryFromIntError>
+    pub fn multiply<A2>(&self, right: &Self, result: &mut Matrix<A2, T>)
     where
-        A: Access<T>,
-        A2: AccessMut<T>,
-        D: Copy + TryInto<usize> + Zero + Step,
-        TryFromIntError: From<<D as TryInto<usize>>::Error>,
-        T: Zero + num_traits::One
-            + Copy
-            + Mul<T>
-            + Add<<T as Mul<T>>::Output>
-            + From<<T as Add<<T as Mul<T>>::Output>>::Output>,
+        A: Access<MatrixItem>,
+        A2: Mutate<MatrixItem>,
     {
-        for i in (Range {
-            start: D::zero(),
-            end: *self.dimension.a(),
-        }) {
-            for j in (Range {
-                start: D::zero(),
-                end: *self.dimension.b(),
-            }) {
+        for i in 0..2{//self.dimension.a() {
+            for j in 0..2{//self.dimension.b(){
+                let mut value = 0;
 
-                /*if let Some(old_value) = result.get_mut(0, 0)?/*i.try_into()?, j.try_into()?)?*/ {
-                    *old_value = T::one()
-                }*/
-                let mut value = T::zero();
-
-                /*for k in (Range {
-                    start: D::zero(),
-                    end: *self.dimension.a(),
-                }) {
-                    let (left_value, right_value) = match (self.get(k.try_into()?, i.try_into()?)?, right.get(j.try_into()?, k.try_into()?)?) {
-                        (Some(left_value), Some(right_value)) => (*left_value, *right_value),
-                        (_, _) => return Ok(()),
+                for k in 0..2 {//self.dimension.a() {
+                    let (left_value, right_value) = match (self.get(i, k), right.get(k, j)) {
+                        (Some(left_value), Some(right_value)) => (left_value, right_value),
+                        (_, _) => return,
                     };
 
-                    value = left_value;//
-                    //T::one();//T::from(value + left_value * right_value);
-                }*/
+                    value += left_value * right_value;
+                }
+
+                result.set(i, j, value);
             }
         }
-
-        Ok(())
     }
 
     pub fn into_inner(self) -> A {
