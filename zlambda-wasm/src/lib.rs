@@ -8,7 +8,8 @@ use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
-use wasmer::{imports, Instance, Module, Store, Value};
+use wasmer_compiler_llvm::LLVM;
+use wasmer::{Memory, MemoryType, imports, Instance, Module, Store, Value, ExternRef};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,28 +37,24 @@ impl ServerModule for ImmediateWasmExecutor {
 
 impl ImmediateWasmExecutor {
     pub fn new() -> Self {
-    let module_wat = r#"
-    (module
-      (type $t0 (func (param i32) (result i32)))
-      (func $add_one (export "add_one") (type $t0) (param $p0 i32) (result i32)
-        get_local $p0
-        i32.const 1
-        i32.add))
-    "#;
+        let mut store = Store::new(LLVM::default());
+        let module = Module::new(&store, include_bytes!("../../zlambda-wasm-matrix/pkg/zlambda_wasm_matrix_bg.wasm")).expect("");
 
-        let module_wat = include_bytes!("../../zlambda-wasm-matrix/pkg/zlambda_wasm_matrix_bg.wasm");
+        //let memory = Memory::new(&mut store, MemoryType::new(1, None, false)).unwrap();
 
-        let mut store = Store::default();
-        let module = Module::new(&store, &module_wat).expect("");
+        let data = [4, 5, 6, 7];
+
+        let a = ExternRef::new(&mut store, data);
         // The module doesn't import anything, so we create an empty import object.
         let import_object = imports! {};
         let instance = Instance::new(&mut store, &module, &import_object).expect("");
 
-        let add_one = instance.exports.get_function("greet").expect("");
-        let result = add_one.call(&mut store, &[]).expect("");
-        println!("DATA: {:?}",result);
+        let add_one = instance.exports.get_function("calculate").expect("");
+        let result = add_one.call(&mut store, &[data.into(), Value::I32(2), Value::I32(2)]).expect("");
 
-        println!("hello world");
+        println!("DATA: {:?}", result);
+
+        //println!("hello world");
 
         Self {}
     }

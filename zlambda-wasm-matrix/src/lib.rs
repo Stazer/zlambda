@@ -1,12 +1,9 @@
-use console_error_panic_hook::set_once;
-
-pub fn set_panic_hook() {
-    set_once();
-}
-
 use wasm_bindgen::prelude::*;
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[wasm_bindgen]
-pub fn greet() -> i64 {
-    0xdeadbeef
+pub fn calculate(data: &[u8], dimension_a: u8, dimension_b: u8) -> u8 {
+
+    137
 }

@@ -6,5 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wasmer = { version = "4.0.0", features = [ "llvm" ], default-features = false }
+wasmer = { version = "4", features = [ "llvm" ], default-features = false }
+wasmer-compiler-llvm = "4"
 zlambda-core = { path = "../zlambda-core" }
