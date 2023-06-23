@@ -7,12 +7,13 @@ members = [
     "zlambda-router",
     "zlambda-realtime-task",
     "zlambda-wasm",
-    "zlambda-ebpf",
-    "zlambda-ebpf-loader",
-    "zlambda-matrix",
-    "zlambda-matrix-converter",
+    "zlambda-wasm-matrix",
 ]
 
 exclude = [
     "zlambda-ebpf-matrix",
+    "zlambda-ebpf",
+    "zlambda-ebpf-loader",
+    "zlambda-matrix",
+    "zlambda-matrix-converter",
 ]

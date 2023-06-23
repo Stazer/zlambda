@@ -7,8 +7,6 @@ edition = "2021"
 aya-bpf = { git = "https://github.com/aya-rs/aya", branch = "main" }
 aya-log-ebpf = { git = "https://github.com/aya-rs/aya", branch = "main" }
 zlambda-ebpf = { path = "../zlambda-ebpf" }
-zlambda-matrix = { path = "../zlambda-matrix" }
-num-traits = { version = "*", default-features = false }
 network-types = "0.0.4"
 
 [profile.dev]

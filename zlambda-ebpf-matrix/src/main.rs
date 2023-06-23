@@ -4,8 +4,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-mod shared;
-pub use shared::*;
+pub use zlambda_matrix::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,7 +19,6 @@ use core::panic::PanicInfo;
 use core::num::TryFromIntError;
 use network_types::eth::{EthHdr, EtherType};
 use network_types::ip::{IpProto, Ipv4Hdr};
-use core::hint::black_box;
 use network_types::udp::UdpHdr;
 use zlambda_ebpf::EBPF_UDP_PORT;
 
@@ -207,68 +205,7 @@ fn do_main(mut context: &mut XdpContext) -> Result<u32, MainError> {
             dimension,
         );
 
-        //result.set(0, 0, 95);
-        //result.set(1, 0, 137u8);
-        //result.set(0, 0, 137);
-        //result.set(0, 0, 137);
-
         left.multiply(&right, &mut result);
-
-        /*info!(
-            context,
-            "{} {} {} {}",
-            left.get(0, 0).unwrap_or_default().copied().unwrap_or_default(),
-            left.get(1, 0).unwrap_or_default().copied().unwrap_or_default(),
-            left.get(0, 1).unwrap_or_default().copied().unwrap_or_default(),
-            left.get(1, 1).unwrap_or_default().copied().unwrap_or_default(),
-        );*/
-
-        /*let mut result = Matrix::<_, _, u8>::new(
-            Offset::new(
-                &mut context,
-                EthHdr::LEN
-                    + Ipv4Hdr::LEN
-                    + UdpHdr::LEN
-                    + 2 * size_of::<u8>()
-                    + dimension.element_count()? * size_of::<u8>()
-                    //+ dimension.element_count()? * size_of::<u8>(),
-            ),
-            dimension,
-        );*/
-
-        /*let value =
-            <XdpContext as AccessMut<u8>>::access_mut(
-                context,
-                EthHdr::LEN
-                    + Ipv4Hdr::LEN
-                    + UdpHdr::LEN
-                    + 2 * size_of::<u8>()
-                    + matrix_size
-                    //+ matrix_size
-                    //+ dimension.element_count()? * size_of::<u8>()
-                    //+ dimension.element_count()? * size_of::<u8>(),
-            )
-            .ok_or(MainError::UnexpectedData)?;
-
-        *value = 95;*/
-
-        /*context.mutate(
-                EthHdr::LEN
-                    + Ipv4Hdr::LEN
-                    + UdpHdr::LEN,
-                    //+ 2 * size_of::<u8>()
-                    //+ dimension.element_count()? * size_of::<u8>(),
-                    //+ dimension.element_count()? * size_of::<u8>(),
-            95u8,
-        );*/
-
-        //result.set(0, 0, 95)?;
-
-        /*if let Some(old_value) = result.get_mut(0, 0)? {
-            *old_value = 95;
-        }*/
-
-        //left.multiply(&right, &mut result)?;
     }
 
     {
