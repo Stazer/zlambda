@@ -9,8 +9,8 @@ use zlambda_core::server::{
     ServerModuleNotificationEventOutput,
 };
 use wasmer_compiler_llvm::LLVM;
-use wasmer::{Memory, MemoryType, imports, Instance, Function, Module, Store, Value, ExternRef};
-use rand::{Rng, RngCore, thread_rng};
+use wasmer::{imports, Instance, Module, Store, Value};
+use rand::{RngCore, thread_rng};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,11 +36,17 @@ impl ServerModule for ImmediateWasmExecutor {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+const MATRIX_SIZE: usize = 128;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 impl ImmediateWasmExecutor {
     pub fn new() -> Self {
         let mut rng = thread_rng();
-        let mut left: [u8; 128 * 128] = [0; 128 * 128];
-        let mut right: [u8; 128 * 128] = [0; 128 * 128];
+        let mut left: [u8; MATRIX_SIZE * MATRIX_SIZE] = [0; MATRIX_SIZE * MATRIX_SIZE];
+        let mut right: [u8; MATRIX_SIZE * MATRIX_SIZE] = [0; MATRIX_SIZE * MATRIX_SIZE];
         rng.fill_bytes(&mut left);
         rng.fill_bytes(&mut right);
 
@@ -48,18 +54,33 @@ impl ImmediateWasmExecutor {
         let module = Module::new(&store, include_bytes!("../../target/wasm32-unknown-unknown/release/zlambda_wasm_matrix.wasm")).expect("");
 
         let import_object = imports! {};
-        let instance = Instance::new(&mut store, &module, &import_object).expect("");
+        let instance = Instance::new(&mut store, &module, &import_object).unwrap();
+
+        {
+            let memory = instance.exports.get_memory("memory").unwrap();
+            memory.view(&store).write(1, &left).unwrap();
+            memory.view(&store).write(1 + left.len() as u64, &right).unwrap();
+        }
+
+        let main = instance.exports.get_function("main").expect("");
+        main.call(&mut store, &[Value::I32(1)]).expect("");
+
         let memory = instance.exports.get_memory("memory").unwrap();
-        memory.view(&store).write(1, &left).unwrap();
-        memory.view(&store).write(1 + left.len() as u64, &right).unwrap();
+        let mut result: [u8; MATRIX_SIZE * MATRIX_SIZE] = [0; MATRIX_SIZE * MATRIX_SIZE];
+        memory.view(&store).read((1) as _, &mut result).unwrap();
 
-        let add_one = instance.exports.get_function("main").expect("");
-        add_one.call(&mut store, &[Value::I32(1)]).expect("");
+        println!("{:?}", result);
 
-        println!("hello world");
+        let memory = instance.exports.get_memory("memory").unwrap();
+        let mut result: [u8; MATRIX_SIZE * MATRIX_SIZE] = [0; MATRIX_SIZE * MATRIX_SIZE];
+        memory.view(&store).read((1 + left.len()) as _, &mut result).unwrap();
 
+        println!("{:?}", result);
 
-        //println!("hello world");
+        let mut result: [u8; MATRIX_SIZE * MATRIX_SIZE] = [0; MATRIX_SIZE * MATRIX_SIZE];
+        memory.view(&store).read((1 + left.len() + right.len()) as _, &mut result).unwrap();
+
+        println!("{:?}", result);
 
         Self {}
     }
