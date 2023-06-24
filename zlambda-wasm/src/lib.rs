@@ -9,7 +9,8 @@ use zlambda_core::server::{
     ServerModuleNotificationEventOutput,
 };
 use wasmer_compiler_llvm::LLVM;
-use wasmer::{Memory, MemoryType, imports, Instance, Module, Store, Value, ExternRef};
+use wasmer::{Memory, MemoryType, imports, Instance, Function, Module, Store, Value, ExternRef};
+use rand::{Rng, RngCore, thread_rng};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,22 +38,26 @@ impl ServerModule for ImmediateWasmExecutor {
 
 impl ImmediateWasmExecutor {
     pub fn new() -> Self {
+        let mut rng = thread_rng();
+        let mut left: [u8; 128 * 128] = [0; 128 * 128];
+        let mut right: [u8; 128 * 128] = [0; 128 * 128];
+        rng.fill_bytes(&mut left);
+        rng.fill_bytes(&mut right);
+
         let mut store = Store::new(LLVM::default());
-        let module = Module::new(&store, include_bytes!("../../zlambda-wasm-matrix/pkg/zlambda_wasm_matrix_bg.wasm")).expect("");
+        let module = Module::new(&store, include_bytes!("../../target/wasm32-unknown-unknown/release/zlambda_wasm_matrix.wasm")).expect("");
 
-        //let memory = Memory::new(&mut store, MemoryType::new(1, None, false)).unwrap();
-
-        let data = [4, 5, 6, 7];
-
-        let a = ExternRef::new(&mut store, data);
-        // The module doesn't import anything, so we create an empty import object.
         let import_object = imports! {};
         let instance = Instance::new(&mut store, &module, &import_object).expect("");
+        let memory = instance.exports.get_memory("memory").unwrap();
+        memory.view(&store).write(1, &left).unwrap();
+        memory.view(&store).write(1 + left.len() as u64, &right).unwrap();
 
-        let add_one = instance.exports.get_function("calculate").expect("");
-        let result = add_one.call(&mut store, &[data.into(), Value::I32(2), Value::I32(2)]).expect("");
+        let add_one = instance.exports.get_function("main").expect("");
+        add_one.call(&mut store, &[Value::I32(1)]).expect("");
 
-        println!("DATA: {:?}", result);
+        println!("hello world");
+
 
         //println!("hello world");
 

@@ -9,3 +9,4 @@ edition = "2021"
 wasmer = { version = "4", features = [ "llvm" ], default-features = false }
 wasmer-compiler-llvm = "4"
 zlambda-core = { path = "../zlambda-core" }
+rand = "*"
