@@ -1,8 +1,0 @@
-{
-    "program": "/bin/sh",
-    "arguments": [
-        "-c",
-        "echo Begin && sleep 2 && echo End"
-    ],
-    "module_id": 0
-}

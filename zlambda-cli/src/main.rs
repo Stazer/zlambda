@@ -131,11 +131,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .add_module(PrintServerModule::default())
                 .add_module(ProcessDispatcher::default())
                 .add_module(RealTimeTaskManager::default())
-                //.add_module(zlambda_ebpf_loader::EbpfLoader::default())
                 .add_module(GlobalRoundRobinRouter::default())
                 .add_module(LocalRoundRobinRouter::default())
                 .add_module(DynamicLibraryManager::default())
-                .add_module(ImmediateWasmExecutor::new())
+                .add_module(ImmediateWasmExecutor::default())
+                //.add_module(zlambda_ebpf_loader::EbpfLoader::default())
                 .build(
                     listener_address,
                     match command {
