@@ -159,6 +159,10 @@ impl Server {
         ServerLogs::new(self)
     }
 
+    pub fn clients(&self) -> ServerClients<'_> {
+        ServerClients::new(self)
+    }
+
     pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
     where
         T: Stream<Item = Bytes> + Unpin + Send + 'static,
@@ -512,5 +516,63 @@ impl<'a> ServerLogsLogEntries<'a> {
             .server_message_sender()
             .do_send_synchronized(ServerCommitMessageInput::new(self.log_id, data))
             .await;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct ServerClients<'a> {
+    server: &'a Server,
+}
+
+impl<'a> ServerClients<'a> {
+    pub(crate) fn new(server: &'a Server) -> Self {
+        Self { server }
+    }
+
+    pub fn server(&self) -> &Server {
+        self.server
+    }
+
+    pub async fn get(&self, server_client_id: ServerClientId) -> Option<ServerClientsClient<'_>> {
+        let output = self
+            .server
+            .server_message_sender()
+            .do_send_synchronous(ServerClientGetMessageInput::new(server_client_id))
+            .await;
+
+        let (sender,) = output.into();
+
+        sender.map(|sender| ServerClientsClient::new(server_client_id, self.server, sender))
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct ServerClientsClient<'a> {
+    server_client_id: ServerClientId,
+    server: &'a Server,
+    server_client_message_sender: MessageQueueSender<ServerClientMessage>,
+}
+
+impl<'a> ServerClientsClient<'a> {
+    pub(crate) fn new(
+        server_client_id: ServerClientId,
+        server: &'a Server,
+        server_client_message_sender: MessageQueueSender<ServerClientMessage>,
+    ) -> Self {
+        Self {
+            server_client_id,
+            server,
+            server_client_message_sender,
+        }
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+
+    pub fn server(&self) -> &Server {
+        self.server
     }
 }

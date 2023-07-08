@@ -1,3 +1,5 @@
+use wasmer::{imports, Instance, Module, Store, Value};
+use wasmer_compiler_llvm::LLVM;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::fs::read;
 use zlambda_core::common::future::stream::{empty, StreamExt};
@@ -8,8 +10,6 @@ use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
-use wasmer_compiler_llvm::LLVM;
-use wasmer::{imports, Instance, Module, Store, Value};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,13 +30,15 @@ impl ServerModule for ImmediateWasmExecutor {
         &self,
         mut input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let (_server, source, notification_body_item_queue_receiver) = input.into();
+        let (_server, _source, notification_body_item_queue_receiver) = input.into();
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
 
-        println!("{:?}", source);
-
         let mut store = Store::new(LLVM::default());
-        let module = Module::new(&store, include_bytes!("../../target/wasm32-unknown-unknown/release/zlambda_wasm_matrix.wasm")).expect("");
+        let module = Module::new(
+            &store,
+            include_bytes!("../../target/wasm32-unknown-unknown/release/zlambda_wasm_matrix.wasm"),
+        )
+        .expect("");
 
         let import_object = imports! {};
         let instance = Instance::new(&mut store, &module, &import_object).unwrap();
@@ -45,10 +47,7 @@ impl ServerModule for ImmediateWasmExecutor {
 
         let mut csum: usize = 0;
 
-        while let Some(mut bytes) = deserializer
-            .next()
-            .await
-        {
+        while let Some(mut bytes) = deserializer.next().await {
             if written == 0 {
                 // Split body item type header
                 let _ = bytes.split_to(14);
@@ -69,7 +68,10 @@ impl ServerModule for ImmediateWasmExecutor {
 
         let memory = instance.exports.get_memory("memory").unwrap();
         let mut result: [u8; MATRIX_ELEMENT_COUNT] = [0; MATRIX_ELEMENT_COUNT];
-        memory.view(&store).read((1 + 2 * MATRIX_ELEMENT_COUNT) as _, &mut result).unwrap();
+        memory
+            .view(&store)
+            .read((1 + 2 * MATRIX_ELEMENT_COUNT) as _, &mut result)
+            .unwrap();
 
         println!("hello {} {}", csum, written);
     }

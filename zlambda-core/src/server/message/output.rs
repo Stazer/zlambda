@@ -1,7 +1,9 @@
 use crate::common::message::MessageQueueSender;
 use crate::common::module::{LoadModuleError, ModuleId, UnloadModuleError};
 use crate::server::node::ServerNodeMessage;
-use crate::server::{LogEntry, LogEntryId, LogId, LogTerm, ServerId, ServerModule};
+use crate::server::{
+    LogEntry, LogEntryId, LogId, LogTerm, ServerClientMessage, ServerId, ServerModule,
+};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -573,5 +575,30 @@ impl From<ServerLogCreateMessageOutput> for (LogId,) {
 impl ServerLogCreateMessageOutput {
     pub fn new(log_id: LogId) -> Self {
         Self { log_id }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerClientGetMessageOutput {
+    server_client_message_sender: Option<MessageQueueSender<ServerClientMessage>>,
+}
+
+impl From<ServerClientGetMessageOutput> for (Option<MessageQueueSender<ServerClientMessage>>,) {
+    fn from(output: ServerClientGetMessageOutput) -> Self {
+        (output.server_client_message_sender,)
+    }
+}
+
+impl ServerClientGetMessageOutput {
+    pub fn new(server_client_message_sender: Option<MessageQueueSender<ServerClientMessage>>) -> Self {
+        Self {
+            server_client_message_sender,
+        }
+    }
+
+    pub fn server_client_message_sender(&self) -> &Option<MessageQueueSender<ServerClientMessage>> {
+        &self.server_client_message_sender
     }
 }

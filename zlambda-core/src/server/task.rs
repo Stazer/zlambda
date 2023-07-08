@@ -24,8 +24,9 @@ use crate::server::node::{
 use crate::server::{
     AddServerLogEntryData, Log, LogEntryData, LogEntryId, LogEntryIssueId, LogEntryIssuer,
     LogError, LogFollowerType, LogId, LogLeaderType, LogManager, LogSystemIssuer, LogType,
-    NewServerError, Server, ServerClientRegistrationMessage, ServerClientResignationMessage,
-    ServerCommitCommitMessage, ServerCommitCommitMessageInput, ServerCommitLogCreateMessage,
+    NewServerError, Server, ServerClientGetMessage, ServerClientGetMessageOutput,
+    ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
+    ServerCommitCommitMessageInput, ServerCommitLogCreateMessage,
     ServerCommitLogCreateMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
     ServerCommitRegistrationMessageInput, ServerId, ServerLeaderServerIdGetMessage,
     ServerLeaderServerIdGetMessageOutput, ServerLogAppendInitiateMessage,
@@ -529,6 +530,9 @@ impl ServerTask {
             ServerMessage::LogCreate(message) => self.on_server_log_create_message(message).await,
             ServerMessage::CommitLogCreate(message) => {
                 self.on_server_commit_log_create_message(message).await
+            }
+            ServerMessage::ServerClientGet(message) => {
+                self.on_server_client_get_message(message).await
             }
         }
     }
@@ -1192,6 +1196,20 @@ impl ServerTask {
 
         output_sender
             .do_send(ServerLogCreateMessageOutput::new(log_id))
+            .await;
+    }
+
+    async fn on_server_client_get_message(&mut self, message: ServerClientGetMessage) {
+        let (input, output_sender) = message.into();
+        let (server_client_id,) = input.into();
+
+        output_sender
+            .do_send(ServerClientGetMessageOutput::new(
+                match self.server_client_message_senders.get(usize::from(server_client_id)) {
+                    Some(Some(sender)) => Some(sender.clone()),
+                    None | Some(None) => None,
+                }
+            ))
             .await;
     }
 

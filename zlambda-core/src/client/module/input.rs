@@ -62,10 +62,8 @@ impl ClientModuleNotificationEventInputBody {
         Self { receiver }
     }
 
-    pub fn stream(&mut self) -> impl Stream<Item = Bytes> + '_ {
-        stream!(while let Some(bytes) = self.receiver.receive().await {
-            yield bytes
-        })
+    pub fn receiver_mut(&mut self) -> &mut MessageQueueReceiver<Bytes> {
+        &mut self.receiver
     }
 }
 

@@ -5,7 +5,10 @@
 use clap::{Args, Parser, Subcommand};
 use std::error::Error;
 use std::path::Path;
-use zlambda_core::client::ClientTask;
+use zlambda_core::client::{
+    ClientModule, ClientModuleNotificationEventInput, ClientModuleNotificationEventOutput,
+    ClientTask,
+};
 use zlambda_core::common::async_trait;
 use zlambda_core::common::fs::read;
 use zlambda_core::common::future::stream::{empty, StreamExt};
@@ -83,13 +86,25 @@ enum ClientCommand {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Default, Debug)]
-pub struct PrintServerModule {}
+pub struct PrintModule {}
 
 #[async_trait]
-impl Module for PrintServerModule {}
+impl Module for PrintModule {}
 
 #[async_trait]
-impl ServerModule for PrintServerModule {
+impl ClientModule for PrintModule {
+    async fn on_notification(
+        &self,
+        mut input: ClientModuleNotificationEventInput,
+    ) -> ClientModuleNotificationEventOutput {
+        while let Some(bytes) = input.body_mut().receiver_mut().next().await {
+            println!("{:?}", bytes);
+        }
+    }
+}
+
+#[async_trait]
+impl ServerModule for PrintModule {
     async fn on_notification(
         &self,
         mut input: ServerModuleNotificationEventInput,
@@ -104,7 +119,33 @@ impl ServerModule for PrintServerModule {
     }
 }
 
-impl PrintServerModule {
+impl PrintModule {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Default, Debug)]
+pub struct PrintAndExitModule {}
+
+#[async_trait]
+impl Module for PrintAndExitModule {}
+
+#[async_trait]
+impl ClientModule for PrintAndExitModule {
+    async fn on_notification(
+        &self,
+        mut input: ClientModuleNotificationEventInput,
+    ) -> ClientModuleNotificationEventOutput {
+        while let Some(bytes) = input.body_mut().receiver_mut().next().await {
+            println!("{:?}", bytes);
+        }
+    }
+}
+
+impl PrintAndExitModule {
     pub fn new() -> Self {
         Self {}
     }
@@ -128,7 +169,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             ServerBuilder::default()
-                .add_module(PrintServerModule::default())
+                .add_module(PrintModule::default())
                 .add_module(ProcessDispatcher::default())
                 .add_module(RealTimeTaskManager::default())
                 .add_module(GlobalRoundRobinRouter::default())
@@ -151,7 +192,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .await;
         }
         MainCommand::Client { address, command } => {
-            let client_task = ClientTask::new(address, vec![].into_iter()).await?;
+            let client_task = ClientTask::new(
+                address,
+                vec![Box::<dyn ClientModule>::from(Box::new(
+                    PrintModule::default(),
+                ))]
+                .into_iter(),
+            )
+            .await?;
 
             // TODO
 

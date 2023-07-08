@@ -145,6 +145,11 @@ pub type ServerCommitLogCreateMessage = AsynchronousMessage<ServerCommitLogCreat
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerClientGetMessage =
+    SynchronousMessage<ServerClientGetMessageInput, ServerClientGetMessageOutput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
@@ -174,6 +179,7 @@ pub enum ServerMessage {
     ServerSocketAddressesGet(ServerServerSocketAddressesGetMessage),
     LogCreate(ServerLogCreateMessage),
     CommitLogCreate(ServerCommitLogCreateMessage),
+    ServerClientGet(ServerClientGetMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -329,5 +335,11 @@ impl From<ServerLogCreateMessage> for ServerMessage {
 impl From<ServerCommitLogCreateMessage> for ServerMessage {
     fn from(message: ServerCommitLogCreateMessage) -> Self {
         Self::CommitLogCreate(message)
+    }
+}
+
+impl From<ServerClientGetMessage> for ServerMessage {
+    fn from(message: ServerClientGetMessage) -> Self {
+        Self::ServerClientGet(message)
     }
 }
