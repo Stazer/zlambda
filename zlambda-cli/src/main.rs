@@ -142,6 +142,8 @@ impl ClientModule for PrintAndExitModule {
         while let Some(bytes) = input.body_mut().receiver_mut().next().await {
             println!("{:?}", bytes);
         }
+
+        input.client_handle().exit().await;
     }
 }
 
@@ -195,7 +197,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let client_task = ClientTask::new(
                 address,
                 vec![Box::<dyn ClientModule>::from(Box::new(
-                    PrintModule::default(),
+                    PrintAndExitModule::default(),
                 ))]
                 .into_iter(),
             )

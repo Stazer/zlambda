@@ -1,0 +1,8 @@
+{
+    "program": "/bin/sh",
+    "arguments": [
+        "-c",
+        "echo Hello World"
+    ],
+    "client_module_id": 0
+}

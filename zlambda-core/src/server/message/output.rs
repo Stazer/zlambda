@@ -592,7 +592,9 @@ impl From<ServerClientGetMessageOutput> for (Option<MessageQueueSender<ServerCli
 }
 
 impl ServerClientGetMessageOutput {
-    pub fn new(server_client_message_sender: Option<MessageQueueSender<ServerClientMessage>>) -> Self {
+    pub fn new(
+        server_client_message_sender: Option<MessageQueueSender<ServerClientMessage>>,
+    ) -> Self {
         Self {
             server_client_message_sender,
         }

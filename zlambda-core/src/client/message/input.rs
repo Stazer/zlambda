@@ -118,3 +118,14 @@ impl ClientNotificationEndMessageInput {
         &self.body
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ClientExitMessageInput;
+
+impl ClientExitMessageInput {
+    pub fn new() -> Self {
+        Self
+    }
+}

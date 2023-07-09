@@ -17,24 +17,44 @@ use zlambda_core::server::{
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum ProcessDispatcherNotificationTargetHeader {
+    Server { server_module_id: ModuleId },
+    Client { client_module_id: ModuleId },
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ProcessDispatcherNotificationHeader {
     program: String,
     arguments: Vec<String>,
-    module_id: ModuleId,
+    #[serde(flatten)]
+    target: ProcessDispatcherNotificationTargetHeader,
 }
 
-impl From<ProcessDispatcherNotificationHeader> for (String, Vec<String>, ModuleId) {
+impl From<ProcessDispatcherNotificationHeader>
+    for (
+        String,
+        Vec<String>,
+        ProcessDispatcherNotificationTargetHeader,
+    )
+{
     fn from(header: ProcessDispatcherNotificationHeader) -> Self {
-        (header.program, header.arguments, header.module_id)
+        (header.program, header.arguments, header.target)
     }
 }
 
 impl ProcessDispatcherNotificationHeader {
-    pub fn new(program: String, arguments: Vec<String>, module_id: ModuleId) -> Self {
+    pub fn new(
+        program: String,
+        arguments: Vec<String>,
+        target: ProcessDispatcherNotificationTargetHeader,
+    ) -> Self {
         Self {
             program,
             arguments,
-            module_id,
+            target,
         }
     }
 
@@ -46,8 +66,8 @@ impl ProcessDispatcherNotificationHeader {
         &self.arguments
     }
 
-    pub fn module_id(&self) -> ModuleId {
-        self.module_id
+    pub fn target(&self) -> &ProcessDispatcherNotificationTargetHeader {
+        &self.target
     }
 }
 
@@ -73,14 +93,16 @@ impl ServerModule for ProcessDispatcher {
             .await
             .unwrap();
 
-        let module_id = header.module_id();
+        let (program, arguments, target) = header.into();
 
-        let mut child = Command::new(header.program)
-            .args(header.arguments)
+        let mut child = Command::new(program)
+            .args(arguments)
             .stdout(Stdio::piped())
             .stdin(Stdio::piped())
             .spawn()
             .expect("running process");
+
+        println!("{:?}\n", _source);
 
         let (sender, receiver) = notification_body_item_queue();
 
@@ -88,7 +110,16 @@ impl ServerModule for ProcessDispatcher {
         let mut stdin = child.stdin.take().expect("stdin handle");
 
         spawn(async move {
-            server.notify(module_id, receiver).await;
+            match target {
+                ProcessDispatcherNotificationTargetHeader::Server { server_module_id } => {
+                    server.notify(server_module_id, receiver).await;
+                }
+                ProcessDispatcherNotificationTargetHeader::Client { client_module_id } => {
+                    if let Some(client) = server.local_clients().get(0.into()).await {
+                        client.notify(client_module_id, receiver).await;
+                    }
+                }
+            }
         });
 
         loop {

@@ -1205,10 +1205,13 @@ impl ServerTask {
 
         output_sender
             .do_send(ServerClientGetMessageOutput::new(
-                match self.server_client_message_senders.get(usize::from(server_client_id)) {
+                match self
+                    .server_client_message_senders
+                    .get(usize::from(server_client_id))
+                {
                     Some(Some(sender)) => Some(sender.clone()),
                     None | Some(None) => None,
-                }
+                },
             ))
             .await;
     }

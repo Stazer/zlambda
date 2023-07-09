@@ -159,8 +159,8 @@ impl Server {
         ServerLogs::new(self)
     }
 
-    pub fn clients(&self) -> ServerClients<'_> {
-        ServerClients::new(self)
+    pub fn local_clients(&self) -> ServerLocalClients<'_> {
+        ServerLocalClients::new(self)
     }
 
     pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
@@ -521,11 +521,11 @@ impl<'a> ServerLogsLogEntries<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct ServerClients<'a> {
+pub struct ServerLocalClients<'a> {
     server: &'a Server,
 }
 
-impl<'a> ServerClients<'a> {
+impl<'a> ServerLocalClients<'a> {
     pub(crate) fn new(server: &'a Server) -> Self {
         Self { server }
     }
@@ -534,7 +534,10 @@ impl<'a> ServerClients<'a> {
         self.server
     }
 
-    pub async fn get(&self, server_client_id: ServerClientId) -> Option<ServerClientsClient<'_>> {
+    pub async fn get(
+        &self,
+        server_client_id: ServerClientId,
+    ) -> Option<ServerLocalClientsLocalClient<'_>> {
         let output = self
             .server
             .server_message_sender()
@@ -543,19 +546,20 @@ impl<'a> ServerClients<'a> {
 
         let (sender,) = output.into();
 
-        sender.map(|sender| ServerClientsClient::new(server_client_id, self.server, sender))
+        sender
+            .map(|sender| ServerLocalClientsLocalClient::new(server_client_id, self.server, sender))
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct ServerClientsClient<'a> {
+pub struct ServerLocalClientsLocalClient<'a> {
     server_client_id: ServerClientId,
     server: &'a Server,
     server_client_message_sender: MessageQueueSender<ServerClientMessage>,
 }
 
-impl<'a> ServerClientsClient<'a> {
+impl<'a> ServerLocalClientsLocalClient<'a> {
     pub(crate) fn new(
         server_client_id: ServerClientId,
         server: &'a Server,
@@ -574,5 +578,61 @@ impl<'a> ServerClientsClient<'a> {
 
     pub fn server(&self) -> &Server {
         self.server
+    }
+
+    pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
+    where
+        T: Stream<Item = Bytes> + Unpin + Send + 'static,
+    {
+        let first = match body.next().await {
+            None => return,
+            Some(first) => first,
+        };
+
+        let mut previous = match body.next().await {
+            None => {
+                self.server_client_message_sender
+                    .do_send_asynchronous(ServerClientNotificationImmediateMessageInput::new(
+                        module_id, first,
+                    ))
+                    .await;
+
+                return;
+            }
+            Some(previous) => previous,
+        };
+
+        let (notification_id,) = self
+            .server_client_message_sender
+            .do_send_synchronous(ServerClientNotificationStartMessageInput::new(
+                module_id, first,
+            ))
+            .await
+            .into();
+
+        loop {
+            let next = match body.next().await {
+                None => {
+                    self.server_client_message_sender
+                        .do_send_asynchronous(ServerClientNotificationEndMessageInput::new(
+                            notification_id,
+                            previous,
+                        ))
+                        .await;
+
+                    break;
+                }
+                Some(next) => next,
+            };
+
+            self.server_client_message_sender
+                .do_send_asynchronous(ServerClientNotificationNextMessageInput::new(
+                    notification_id,
+                    previous,
+                ))
+                .await;
+
+            previous = next;
+        }
     }
 }
