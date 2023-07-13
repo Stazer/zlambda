@@ -8,8 +8,8 @@ use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::client::ServerClientId;
 use crate::server::{
-    LogEntry, LogEntryData, LogEntryId, LogEntryIssuer, LogId, LogIssuer, LogTerm,
-    ServerClientGetMessageOutput, ServerId, ServerLogCreateMessageOutput, ServerModule,
+    LogEntry, LogEntryData, LogEntryId, LogEntryIssuer, LogId, LogIssuer, LogTerm, ServerId,
+    ServerLogCreateMessageOutput, ServerModule,
 };
 use std::net::SocketAddr;
 use std::sync::Arc;

@@ -1,14 +1,11 @@
 use wasmer::{imports, Instance, Module, Store, Value};
 use wasmer_compiler_llvm::LLVM;
 use zlambda_core::common::async_trait;
-use zlambda_core::common::fs::read;
-use zlambda_core::common::future::stream::{empty, StreamExt};
-use zlambda_core::common::module::{Module as CommonModule, ModuleId};
+use zlambda_core::common::future::stream::StreamExt;
+use zlambda_core::common::module::Module as CommonModule;
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
-use zlambda_core::common::utility::{Bytes, BytesMut};
 use zlambda_core::server::{
-    ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventOutput,
+    ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,7 +25,7 @@ impl CommonModule for ImmediateWasmExecutor {}
 impl ServerModule for ImmediateWasmExecutor {
     async fn on_notification(
         &self,
-        mut input: ServerModuleNotificationEventInput,
+        input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
         let (_server, _source, notification_body_item_queue_receiver) = input.into();
         let mut deserializer = notification_body_item_queue_receiver.deserializer();

@@ -1,4 +1,3 @@
-use crate::common::module::ModuleId;
 use crate::server::{LogId, LogIssuer, ServerId};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;

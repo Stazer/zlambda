@@ -2,7 +2,9 @@ use crate::common::message::{MessageSocketReceiver, MessageSocketSender};
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
-use crate::server::{LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm};
+use crate::server::{
+    LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm, ServerClientId, ServerId,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -337,9 +339,35 @@ impl ServerNodeLogEntriesCommitMessageInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
+pub struct ServerNodeNotificationOriginInput {
+    server_id: ServerId,
+    server_client_id: ServerClientId,
+}
+
+impl ServerNodeNotificationOriginInput {
+    pub fn new(server_id: ServerId, server_client_id: ServerClientId) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
 pub struct ServerNodeNotificationImmediateMessageInput {
     module_id: ModuleId,
     body: Bytes,
+    origin: Option<ServerNodeNotificationOriginInput>,
 }
 
 impl From<ServerNodeNotificationImmediateMessageInput> for (ModuleId, Bytes) {
@@ -348,9 +376,25 @@ impl From<ServerNodeNotificationImmediateMessageInput> for (ModuleId, Bytes) {
     }
 }
 
+impl From<ServerNodeNotificationImmediateMessageInput>
+    for (ModuleId, Bytes, Option<ServerNodeNotificationOriginInput>)
+{
+    fn from(input: ServerNodeNotificationImmediateMessageInput) -> Self {
+        (input.module_id, input.body, input.origin)
+    }
+}
+
 impl ServerNodeNotificationImmediateMessageInput {
-    pub fn new(module_id: ModuleId, body: Bytes) -> Self {
-        Self { module_id, body }
+    pub fn new(
+        module_id: ModuleId,
+        body: Bytes,
+        origin: Option<ServerNodeNotificationOriginInput>,
+    ) -> Self {
+        Self {
+            module_id,
+            body,
+            origin,
+        }
     }
 
     pub fn module_id(&self) -> ModuleId {
@@ -359,6 +403,10 @@ impl ServerNodeNotificationImmediateMessageInput {
 
     pub fn body(&self) -> &Bytes {
         &self.body
+    }
+
+    pub fn origin(&self) -> &Option<ServerNodeNotificationOriginInput> {
+        &self.origin
     }
 }
 
@@ -368,6 +416,7 @@ impl ServerNodeNotificationImmediateMessageInput {
 pub struct ServerNodeNotificationStartMessageInput {
     module_id: ModuleId,
     body: Bytes,
+    origin: Option<ServerNodeNotificationOriginInput>,
 }
 
 impl From<ServerNodeNotificationStartMessageInput> for (ModuleId, Bytes) {
@@ -376,9 +425,25 @@ impl From<ServerNodeNotificationStartMessageInput> for (ModuleId, Bytes) {
     }
 }
 
+impl From<ServerNodeNotificationStartMessageInput>
+    for (ModuleId, Bytes, Option<ServerNodeNotificationOriginInput>)
+{
+    fn from(input: ServerNodeNotificationStartMessageInput) -> Self {
+        (input.module_id, input.body, input.origin)
+    }
+}
+
 impl ServerNodeNotificationStartMessageInput {
-    pub fn new(module_id: ModuleId, body: Bytes) -> Self {
-        Self { module_id, body }
+    pub fn new(
+        module_id: ModuleId,
+        body: Bytes,
+        origin: Option<ServerNodeNotificationOriginInput>,
+    ) -> Self {
+        Self {
+            module_id,
+            body,
+            origin,
+        }
     }
 
     pub fn module_id(&self) -> ModuleId {
@@ -387,6 +452,10 @@ impl ServerNodeNotificationStartMessageInput {
 
     pub fn body(&self) -> &Bytes {
         &self.body
+    }
+
+    pub fn origin(&self) -> &Option<ServerNodeNotificationOriginInput> {
+        &self.origin
     }
 }
 

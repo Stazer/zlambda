@@ -530,11 +530,8 @@ impl From<GeneralNotificationMessageInputImmediateType>
 }
 
 impl GeneralNotificationMessageInputImmediateType {
-    pub fn new(module_id: ModuleId) -> Self {
-        Self {
-            module_id,
-            origin: None,
-        }
+    pub fn new(module_id: ModuleId, origin: Option<GeneralNotificationMessageInputOrigin>) -> Self {
+        Self { module_id, origin }
     }
 
     pub fn module_id(&self) -> ModuleId {
@@ -574,11 +571,15 @@ impl From<GeneralNotificationMessageInputStartType>
 }
 
 impl GeneralNotificationMessageInputStartType {
-    pub fn new(module_id: ModuleId, notification_id: usize) -> Self {
+    pub fn new(
+        module_id: ModuleId,
+        notification_id: usize,
+        origin: Option<GeneralNotificationMessageInputOrigin>,
+    ) -> Self {
         Self {
             module_id,
             notification_id,
-            origin: None,
+            origin,
         }
     }
 

@@ -10,9 +10,10 @@ use zlambda_core::common::notification::{
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::{Mutex, RwLock};
 use zlambda_core::server::{
-    LogId, ServerId, ServerModule, ServerModuleCommitEventInput, ServerModuleCommitEventOutput,
-    ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
-    ServerModuleStartupEventInput, ServerModuleStartupEventOutput,
+    LogId, ServerClientId, ServerId, ServerModule, ServerModuleCommitEventInput,
+    ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventInputSource, ServerModuleNotificationEventOutput,
+    ServerModuleStartupEventInput, ServerModuleStartupEventOutput, ServerNotificationOrigin,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,16 +42,47 @@ impl GlobalRoundRobinRouterNotificationHeader {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct GlobalRoundRobinLogEntryOriginData {
+    server_id: ServerId,
+    server_client_id: ServerClientId,
+}
+
+impl GlobalRoundRobinLogEntryOriginData {
+    pub fn new(server_id: ServerId, server_client_id: ServerClientId) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct GlobalRoundRobinLogEntryData {
     issuer_server_id: ServerId,
     local_counter: usize,
+    origin: Option<GlobalRoundRobinLogEntryOriginData>,
 }
 
 impl GlobalRoundRobinLogEntryData {
-    pub fn new(issuer_server_id: ServerId, local_counter: usize) -> Self {
+    pub fn new(
+        issuer_server_id: ServerId,
+        local_counter: usize,
+        origin: Option<GlobalRoundRobinLogEntryOriginData>,
+    ) -> Self {
         Self {
             issuer_server_id,
             local_counter,
+            origin,
         }
     }
 
@@ -60,6 +92,10 @@ impl GlobalRoundRobinLogEntryData {
 
     pub fn local_counter(&self) -> usize {
         self.local_counter
+    }
+
+    pub fn origin(&self) -> &Option<GlobalRoundRobinLogEntryOriginData> {
+        &self.origin
     }
 }
 
@@ -96,7 +132,7 @@ impl ServerModule for GlobalRoundRobinRouter {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let (server, _source, notification_body_item_queue_receiver) = input.into();
+        let (server, source, notification_body_item_queue_receiver) = input.into();
 
         let server_id = server.server_id().await;
 
@@ -118,13 +154,36 @@ impl ServerModule for GlobalRoundRobinRouter {
             );
         }
 
+        let origin = match source {
+            ServerModuleNotificationEventInputSource::Server(server) => {
+                if let Some(origin) = server.origin() {
+                    Some(ServerNotificationOrigin::new(
+                        origin.server_id(),
+                        origin.server_client_id(),
+                    ))
+                } else {
+                    None
+                }
+            }
+            ServerModuleNotificationEventInputSource::Client(client) => Some(
+                ServerNotificationOrigin::new(server.server_id().await, client.server_client_id()),
+            ),
+        };
+
         server
             .logs()
             .get(log_id)
+            .entries()
             .commit(
-                serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(server_id, local_counter))
-                    .expect("")
-                    .into(),
+                serialize_to_bytes(&GlobalRoundRobinLogEntryData::new(
+                    server_id,
+                    local_counter,
+                    origin.map(|o| {
+                        GlobalRoundRobinLogEntryOriginData::new(o.server_id(), o.server_client_id())
+                    }),
+                ))
+                .expect("")
+                .into(),
             )
             .await;
     }
@@ -151,6 +210,7 @@ impl ServerModule for GlobalRoundRobinRouter {
             .server()
             .logs()
             .get(log_id)
+            .entries()
             .get(input.log_entry_id())
             .await
             .expect("existing log entry");
@@ -197,7 +257,15 @@ impl ServerModule for GlobalRoundRobinRouter {
             .unwrap();
 
         if let Some(server) = input.server().servers().get(next_server_id).await {
-            server.notify(header.module_id(), deserializer).await;
+            server
+                .notify(
+                    header.module_id(),
+                    deserializer,
+                    log_entry_data.origin().as_ref().map(|o| {
+                        ServerNotificationOrigin::new(o.server_id(), o.server_client_id())
+                    }),
+                )
+                .await;
         }
     }
 }

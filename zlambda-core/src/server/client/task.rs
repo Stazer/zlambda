@@ -157,7 +157,7 @@ impl ServerClientTask {
             .general_message_sender
             .send(GeneralNotificationMessage::new(
                 GeneralNotificationMessageInput::new(
-                    GeneralNotificationMessageInputImmediateType::new(module_id).into(),
+                    GeneralNotificationMessageInputImmediateType::new(module_id, None).into(),
                     body,
                 ),
             ))
@@ -187,7 +187,7 @@ impl ServerClientTask {
             .general_message_sender
             .send(GeneralNotificationMessage::new(
                 GeneralNotificationMessageInput::new(
-                    GeneralNotificationMessageInputStartType::new(module_id, notification_id)
+                    GeneralNotificationMessageInputStartType::new(module_id, notification_id, None)
                         .into(),
                     body,
                 ),

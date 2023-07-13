@@ -18,7 +18,7 @@ pub use log::*;
 pub use message::*;
 pub use module::*;
 pub use node::*;
-pub use task::*;
+use task::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -327,6 +327,31 @@ impl<'a> ServerServers<'a> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
+pub struct ServerNotificationOrigin {
+    server_id: ServerId,
+    server_client_id: ServerClientId,
+}
+
+impl ServerNotificationOrigin {
+    pub fn new(server_id: ServerId, server_client_id: ServerClientId) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
 pub struct ServerServersServer<'a> {
     id: ServerId,
     server: &'a Server,
@@ -350,8 +375,12 @@ impl<'a> ServerServersServer<'a> {
         self.id
     }
 
-    pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
-    where
+    pub async fn notify<T>(
+        &self,
+        module_id: ModuleId,
+        mut body: T,
+        origin: Option<ServerNotificationOrigin>,
+    ) where
         T: Stream<Item = Bytes> + Unpin + Send + 'static,
     {
         let server_node_message_sender = match &self.server_node_message_sender {
@@ -368,7 +397,14 @@ impl<'a> ServerServersServer<'a> {
             None => {
                 server_node_message_sender
                     .do_send_asynchronous(ServerNodeNotificationImmediateMessageInput::new(
-                        module_id, first,
+                        module_id,
+                        first,
+                        origin.map(|o| {
+                            ServerNodeNotificationOriginInput::new(
+                                o.server_id(),
+                                o.server_client_id(),
+                            )
+                        }),
                     ))
                     .await;
 
@@ -379,7 +415,11 @@ impl<'a> ServerServersServer<'a> {
 
         let (notification_id,) = server_node_message_sender
             .do_send_synchronous(ServerNodeNotificationStartMessageInput::new(
-                module_id, first,
+                module_id,
+                first,
+                origin.map(|o| {
+                    ServerNodeNotificationOriginInput::new(o.server_id(), o.server_client_id())
+                }),
             ))
             .await
             .into();

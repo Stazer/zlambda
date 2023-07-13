@@ -29,7 +29,32 @@ use serde::{Deserialize, Serialize};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use zlambda_core::common::module::ModuleId;
 use zlambda_core::common::notification::NotificationId;
-use zlambda_core::server::ServerId;
+use zlambda_core::server::{ServerClientId, ServerId};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RealTimeTaskOrigin {
+    server_id: ServerId,
+    server_client_id: ServerClientId,
+}
+
+impl RealTimeTaskOrigin {
+    pub fn new(server_id: ServerId, server_client_id: ServerClientId) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,6 +66,7 @@ pub struct RealTimeTask {
     source_server_id: ServerId,
     source_notification_id: NotificationId,
     deadline: Option<DateTime<Utc>>,
+    origin: Option<RealTimeTaskOrigin>,
 }
 
 impl RealTimeTask {
@@ -51,6 +77,7 @@ impl RealTimeTask {
         source_server_id: ServerId,
         source_notification_id: NotificationId,
         deadline: Option<DateTime<Utc>>,
+        origin: Option<RealTimeTaskOrigin>,
     ) -> Self {
         Self {
             id,
@@ -59,6 +86,7 @@ impl RealTimeTask {
             source_server_id,
             source_notification_id,
             deadline,
+            origin,
         }
     }
 
@@ -101,6 +129,10 @@ impl RealTimeTask {
             RealTimeTaskState::Running(state) => Some(state.target_server_id()),
             RealTimeTaskState::Finished(state) => Some(state.target_server_id()),
         }
+    }
+
+    pub fn origin(&self) -> &Option<RealTimeTaskOrigin> {
+        &self.origin
     }
 }
 

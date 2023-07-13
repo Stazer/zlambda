@@ -3,8 +3,9 @@ use crate::{
     RealTimeTaskFinishedState, RealTimeTaskId, RealTimeTaskManagerExecuteNotificationHeader,
     RealTimeTaskManagerInstance, RealTimeTaskManagerLogEntryData,
     RealTimeTaskManagerLogEntryDispatchData, RealTimeTaskManagerLogEntryFinishData,
-    RealTimeTaskManagerLogEntryRunData, RealTimeTaskManagerNotificationHeader,
-    RealTimeTaskRunningState, RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
+    RealTimeTaskManagerLogEntryOriginData, RealTimeTaskManagerLogEntryRunData,
+    RealTimeTaskManagerNotificationHeader, RealTimeTaskOrigin, RealTimeTaskRunningState,
+    RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
     RealTimeTaskSchedulingTaskRescheduleMessageInput, RealTimeTaskSchedulingTaskState,
     RealTimeTaskState,
 };
@@ -26,8 +27,9 @@ use zlambda_core::common::sync::RwLock;
 use zlambda_core::server::{
     LogIssuer, LogModuleIssuer, ServerId, ServerModule, ServerModuleCommitEventInput,
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventInputServerSource, ServerModuleNotificationEventOutput,
-    ServerModuleStartupEventInput, ServerModuleStartupEventOutput, ServerSystemLogEntryData,
+    ServerModuleNotificationEventInputServerSource, ServerModuleNotificationEventInputSource,
+    ServerModuleNotificationEventOutput, ServerModuleStartupEventInput,
+    ServerModuleStartupEventOutput, ServerNotificationOrigin, ServerSystemLogEntryData,
     SERVER_SYSTEM_LOG_ID,
 };
 
@@ -147,6 +149,9 @@ impl ServerModule for RealTimeTaskManager {
                             data.source_server_id(),
                             data.source_notification_id(),
                             *data.deadline(),
+                            data.origin().as_ref().map(|o| {
+                                RealTimeTaskOrigin::new(o.server_id(), o.server_client_id())
+                            }),
                         );
 
                         let task_data = (task.id(), *task.deadline());
@@ -173,14 +178,20 @@ impl ServerModule for RealTimeTaskManager {
                         .await;
                 }
                 RealTimeTaskManagerLogEntryData::Schedule(data) => {
-                    let (source_server_id, source_notification_id) = {
+                    let (source_server_id, source_notification_id, origin) = {
                         let mut tasks = instance.tasks().write().await;
                         let task = tasks.get_mut(usize::from(data.task_id())).expect("");
                         task.set_state(RealTimeTaskState::Scheduled(
                             RealTimeTaskScheduledState::new(data.target_server_id()),
                         ));
 
-                        (task.source_server_id(), task.source_notification_id())
+                        (
+                            task.source_server_id(),
+                            task.source_notification_id(),
+                            task.origin().as_ref().map(|o| {
+                                ServerNotificationOrigin::new(o.server_id(), o.server_client_id())
+                            }),
+                        )
                     };
 
                     {
@@ -234,7 +245,7 @@ impl ServerModule for RealTimeTaskManager {
                                 .get(data.target_server_id())
                                 .await
                                 .expect("")
-                                .notify(input.module_id(), receiver)
+                                .notify(input.module_id(), receiver, origin)
                                 .await;
                         });
                     }
@@ -276,7 +287,7 @@ impl ServerModule for RealTimeTaskManager {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let (server, _source, notification_body_item_queue_receiver) = input.into();
+        let (server, source, notification_body_item_queue_receiver) = input.into();
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
         let server_id = server.server_id().await;
@@ -290,6 +301,25 @@ impl ServerModule for RealTimeTaskManager {
             .deserialize::<RealTimeTaskManagerNotificationHeader>()
             .await
             .expect("");
+
+        let origin = match source {
+            ServerModuleNotificationEventInputSource::Server(server) => {
+                if let Some(origin) = server.origin() {
+                    Some(RealTimeTaskManagerLogEntryOriginData::new(
+                        origin.server_id(),
+                        origin.server_client_id(),
+                    ))
+                } else {
+                    None
+                }
+            }
+            ServerModuleNotificationEventInputSource::Client(client) => {
+                Some(RealTimeTaskManagerLogEntryOriginData::new(
+                    server.server_id().await,
+                    client.server_client_id(),
+                ))
+            }
+        };
 
         match header {
             RealTimeTaskManagerNotificationHeader::Dispatch(header) => {
@@ -312,6 +342,7 @@ impl ServerModule for RealTimeTaskManager {
                                 server.server_id().await,
                                 notification_id,
                                 *header.deadline(),
+                                origin,
                             ),
                         ))
                         .expect("")

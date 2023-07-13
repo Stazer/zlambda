@@ -96,6 +96,7 @@ pub(crate) struct ServerTask {
     server: Arc<Server>,
     running: bool,
     log_manager: LogManager,
+    #[allow(dead_code)]
     commit_tasks: JoinHandle<()>,
     commit_sender: mpsc::Sender<CommitTaskMessage>,
     current_log_entry_issue_id: LogEntryIssueId,
@@ -1057,7 +1058,7 @@ impl ServerTask {
         &mut self,
         message: ServerServerNodeMessageSenderGetAllMessage,
     ) {
-        let (input, sender) = message.into();
+        let (_input, sender) = message.into();
 
         sender
             .do_send(ServerServerNodeMessageSenderGetAllMessageOutput::new(

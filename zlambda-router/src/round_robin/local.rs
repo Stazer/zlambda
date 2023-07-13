@@ -4,7 +4,9 @@ use zlambda_core::common::async_trait;
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::server::{
-    ServerId, ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
+    ServerId, ServerModule, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventInputSource, ServerModuleNotificationEventOutput,
+    ServerNotificationOrigin,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,7 +48,23 @@ impl ServerModule for LocalRoundRobinRouter {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let (server, _source, notification_body_item_queue_receiver) = input.into();
+        let (server, source, notification_body_item_queue_receiver) = input.into();
+
+        let origin = match source {
+            ServerModuleNotificationEventInputSource::Server(server) => {
+                if let Some(origin) = server.origin() {
+                    Some(ServerNotificationOrigin::new(
+                        origin.server_id(),
+                        origin.server_client_id(),
+                    ))
+                } else {
+                    None
+                }
+            }
+            ServerModuleNotificationEventInputSource::Client(client) => Some(
+                ServerNotificationOrigin::new(server.server_id().await, client.server_client_id()),
+            ),
+        };
 
         let counter = self.counter.fetch_add(1, Ordering::Relaxed);
 
@@ -77,7 +95,9 @@ impl ServerModule for LocalRoundRobinRouter {
             .unwrap();
 
         if let Some(server) = server.servers().get(next_server_id).await {
-            server.notify(header.module_id(), deserializer).await;
+            server
+                .notify(header.module_id(), deserializer, origin)
+                .await;
         }
     }
 }

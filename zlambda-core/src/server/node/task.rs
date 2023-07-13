@@ -16,7 +16,8 @@ use crate::general::{
     GeneralNodeHandshakeResponseMessageInputResult, GeneralNotificationMessage,
     GeneralNotificationMessageInput, GeneralNotificationMessageInputEndType,
     GeneralNotificationMessageInputImmediateType, GeneralNotificationMessageInputNextType,
-    GeneralNotificationMessageInputStartType, GeneralNotificationMessageInputType,
+    GeneralNotificationMessageInputOrigin, GeneralNotificationMessageInputStartType,
+    GeneralNotificationMessageInputType,
 };
 use crate::server::node::{
     ServerNodeLogAppendInitiateMessage, ServerNodeLogAppendResponseMessage,
@@ -477,12 +478,21 @@ impl ServerNodeTask {
         };
 
         let (input,) = message.into();
-        let (module_id, body) = input.into();
+        let (module_id, body, origin) = input.into();
 
         if let Err(error) = general_message_sender
             .send(GeneralNotificationMessage::new(
                 GeneralNotificationMessageInput::new(
-                    GeneralNotificationMessageInputImmediateType::new(module_id).into(),
+                    GeneralNotificationMessageInputImmediateType::new(
+                        module_id,
+                        origin.map(|o| {
+                            GeneralNotificationMessageInputOrigin::new(
+                                o.server_id(),
+                                o.server_client_id(),
+                            )
+                        }),
+                    )
+                    .into(),
                     body,
                 ),
             ))
@@ -502,7 +512,7 @@ impl ServerNodeTask {
         };
 
         let (input, sender) = message.into();
-        let (module_id, body) = input.into();
+        let (module_id, body, origin) = input.into();
 
         let notification_id = self.outgoing_notification_counter;
         self.outgoing_notification_counter += 1;
@@ -516,8 +526,17 @@ impl ServerNodeTask {
         if let Err(error) = general_message_sender
             .send(GeneralNotificationMessage::new(
                 GeneralNotificationMessageInput::new(
-                    GeneralNotificationMessageInputStartType::new(module_id, notification_id)
-                        .into(),
+                    GeneralNotificationMessageInputStartType::new(
+                        module_id,
+                        notification_id,
+                        origin.map(|o| {
+                            GeneralNotificationMessageInputOrigin::new(
+                                o.server_id(),
+                                o.server_client_id(),
+                            )
+                        }),
+                    )
+                    .into(),
                     body,
                 ),
             ))

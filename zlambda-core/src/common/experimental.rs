@@ -4,11 +4,11 @@ use crate::common::runtime::{select, spawn};
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use std::future::Future;
-use std::mem::*;
-use std::pin::{pin, Pin};
-use std::ptr::*;
-use std::sync::atomic::AtomicPtr;
-use tokio::sync::{mpsc, oneshot};
+//use std::mem::*;
+//use std::pin::{pin, Pin};
+//use std::ptr::*;
+//use std::sync::atomic::AtomicPtr;
+use tokio::sync::{mpsc};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,7 +83,7 @@ where
             .await;
     }
 
-    pub async fn do_asynchronous<'a, 'b, H, F>(&'b self, mut function: H)
+    pub async fn do_asynchronous<'a, 'b, H, F>(&'b self, _function: H)
     where
         H: FnOnce(&'a mut T) -> F + Send + Sync + 'static,
         F: Future<Output = ()> + Send + 'a + 'b + 'static,

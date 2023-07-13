@@ -3,7 +3,32 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use zlambda_core::common::module::ModuleId;
 use zlambda_core::common::notification::NotificationId;
-use zlambda_core::server::ServerId;
+use zlambda_core::server::{ServerClientId, ServerId};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RealTimeTaskManagerLogEntryOriginData {
+    server_id: ServerId,
+    server_client_id: ServerClientId,
+}
+
+impl RealTimeTaskManagerLogEntryOriginData {
+    pub fn new(server_id: ServerId, server_client_id: ServerClientId) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -13,6 +38,7 @@ pub struct RealTimeTaskManagerLogEntryDispatchData {
     source_server_id: ServerId,
     source_notification_id: NotificationId,
     deadline: Option<DateTime<Utc>>,
+    origin: Option<RealTimeTaskManagerLogEntryOriginData>,
 }
 
 impl From<RealTimeTaskManagerLogEntryDispatchData>
@@ -28,18 +54,40 @@ impl From<RealTimeTaskManagerLogEntryDispatchData>
     }
 }
 
+impl From<RealTimeTaskManagerLogEntryDispatchData>
+    for (
+        ModuleId,
+        ServerId,
+        NotificationId,
+        Option<DateTime<Utc>>,
+        Option<RealTimeTaskManagerLogEntryOriginData>,
+    )
+{
+    fn from(data: RealTimeTaskManagerLogEntryDispatchData) -> Self {
+        (
+            data.target_module_id,
+            data.source_server_id,
+            data.source_notification_id,
+            data.deadline,
+            data.origin,
+        )
+    }
+}
+
 impl RealTimeTaskManagerLogEntryDispatchData {
     pub fn new(
         target_module_id: ModuleId,
         source_server_id: ServerId,
         source_notification_id: NotificationId,
         deadline: Option<DateTime<Utc>>,
+        origin: Option<RealTimeTaskManagerLogEntryOriginData>,
     ) -> Self {
         Self {
             target_module_id,
             source_server_id,
             source_notification_id,
             deadline,
+            origin,
         }
     }
 
@@ -57,6 +105,10 @@ impl RealTimeTaskManagerLogEntryDispatchData {
 
     pub fn deadline(&self) -> &Option<DateTime<Utc>> {
         &self.deadline
+    }
+
+    pub fn origin(&self) -> &Option<RealTimeTaskManagerLogEntryOriginData> {
+        &self.origin
     }
 }
 
