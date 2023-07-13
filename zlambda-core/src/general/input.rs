@@ -1,6 +1,6 @@
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
-use crate::server::{LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm, ServerId};
+use crate::server::{ServerClientId, LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm, ServerId};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -617,9 +617,38 @@ impl From<GeneralNotificationMessageInputEndType> for GeneralNotificationMessage
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNotificationMessageInputOrigin {
+    server_id: ServerId,
+    server_client_id: ServerClientId,
+}
+
+impl GeneralNotificationMessageInputOrigin {
+    pub fn new(
+        server_id: ServerId,
+        server_client_id: ServerClientId,
+    ) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralNotificationMessageInput {
     r#type: GeneralNotificationMessageInputType,
     body: Bytes,
+    origin: Option<GeneralNotificationMessageInputOrigin>,
 }
 
 impl From<GeneralNotificationMessageInput> for (GeneralNotificationMessageInputType, Bytes) {
@@ -628,9 +657,15 @@ impl From<GeneralNotificationMessageInput> for (GeneralNotificationMessageInputT
     }
 }
 
+impl From<GeneralNotificationMessageInput> for (GeneralNotificationMessageInputType, Bytes, Option<GeneralNotificationMessageInputOrigin>) {
+    fn from(input: GeneralNotificationMessageInput) -> Self {
+        (input.r#type, input.body, input.origin)
+    }
+}
+
 impl GeneralNotificationMessageInput {
     pub fn new(r#type: GeneralNotificationMessageInputType, body: Bytes) -> Self {
-        Self { r#type, body }
+        Self { r#type, body, origin: None, }
     }
 
     pub fn r#type(&self) -> &GeneralNotificationMessageInputType {
@@ -639,5 +674,9 @@ impl GeneralNotificationMessageInput {
 
     pub fn body(&self) -> &Bytes {
         &self.body
+    }
+
+    pub fn origin(&self) -> &Option<GeneralNotificationMessageInputOrigin> {
+        &self.origin
     }
 }
