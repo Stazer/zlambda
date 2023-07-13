@@ -135,7 +135,36 @@ impl ServerModuleUnloadEventInput {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
+pub struct ServerModuleNotificationEventInputServerSourceOrigin {
+    server_id: ServerId,
+    server_client_id: ServerClientId,
+}
+
+impl ServerModuleNotificationEventInputServerSourceOrigin {
+    pub fn new(
+        server_id: ServerId,
+        server_client_id: ServerClientId,
+    ) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
 pub struct ServerModuleNotificationEventInputServerSource {
+    origin: Option<ServerModuleNotificationEventInputServerSourceOrigin>,
     server_id: ServerId,
 }
 
@@ -145,9 +174,19 @@ impl From<ServerModuleNotificationEventInputServerSource> for (ServerId,) {
     }
 }
 
+impl From<ServerModuleNotificationEventInputServerSource> for (Option<ServerModuleNotificationEventInputServerSourceOrigin>, ServerId) {
+    fn from(source: ServerModuleNotificationEventInputServerSource) -> Self {
+        (source.origin, source.server_id)
+    }
+}
+
 impl ServerModuleNotificationEventInputServerSource {
     pub fn new(server_id: ServerId) -> Self {
-        Self { server_id }
+        Self { origin: None, server_id }
+    }
+
+    pub fn origin(&self) -> &Option<ServerModuleNotificationEventInputServerSourceOrigin> {
+        &self.origin
     }
 
     pub fn server_id(&self) -> ServerId {
