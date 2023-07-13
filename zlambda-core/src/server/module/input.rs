@@ -141,10 +141,7 @@ pub struct ServerModuleNotificationEventInputServerSourceOrigin {
 }
 
 impl ServerModuleNotificationEventInputServerSourceOrigin {
-    pub fn new(
-        server_id: ServerId,
-        server_client_id: ServerClientId,
-    ) -> Self {
+    pub fn new(server_id: ServerId, server_client_id: ServerClientId) -> Self {
         Self {
             server_id,
             server_client_id,
@@ -174,7 +171,12 @@ impl From<ServerModuleNotificationEventInputServerSource> for (ServerId,) {
     }
 }
 
-impl From<ServerModuleNotificationEventInputServerSource> for (Option<ServerModuleNotificationEventInputServerSourceOrigin>, ServerId) {
+impl From<ServerModuleNotificationEventInputServerSource>
+    for (
+        Option<ServerModuleNotificationEventInputServerSourceOrigin>,
+        ServerId,
+    )
+{
     fn from(source: ServerModuleNotificationEventInputServerSource) -> Self {
         (source.origin, source.server_id)
     }
@@ -182,7 +184,10 @@ impl From<ServerModuleNotificationEventInputServerSource> for (Option<ServerModu
 
 impl ServerModuleNotificationEventInputServerSource {
     pub fn new(server_id: ServerId) -> Self {
-        Self { origin: None, server_id }
+        Self {
+            origin: None,
+            server_id,
+        }
     }
 
     pub fn origin(&self) -> &Option<ServerModuleNotificationEventInputServerSourceOrigin> {

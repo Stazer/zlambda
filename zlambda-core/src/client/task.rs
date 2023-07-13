@@ -1,10 +1,9 @@
 use crate::client::{
-    ClientHandle, ClientMessage, ClientModule, ClientModuleFinalizeEventInput,
+    ClientExitMessage, ClientHandle, ClientMessage, ClientModule, ClientModuleFinalizeEventInput,
     ClientModuleInitializeEventInput, ClientModuleNotificationEventInput,
     ClientModuleNotificationEventInputBody, ClientNotificationEndMessage,
     ClientNotificationImmediateMessage, ClientNotificationNextMessage,
     ClientNotificationStartMessage, ClientNotificationStartMessageOutput, NewClientError,
-    ClientExitMessage,
 };
 use crate::common::message::{
     message_queue, MessageError, MessageQueueReceiver, MessageQueueSender, MessageSocketReceiver,
@@ -17,8 +16,7 @@ use crate::common::utility::Bytes;
 use crate::general::{
     GeneralClientRegistrationRequestMessage, GeneralClientRegistrationRequestMessageInput,
     GeneralMessage, GeneralNotificationMessage, GeneralNotificationMessageInput,
-
-GeneralNotificationMessageInputEndType, GeneralNotificationMessageInputImmediateType,
+    GeneralNotificationMessageInputEndType, GeneralNotificationMessageInputImmediateType,
     GeneralNotificationMessageInputNextType, GeneralNotificationMessageInputStartType,
     GeneralNotificationMessageInputType,
 };
@@ -114,7 +112,6 @@ impl ClientTask {
             self.select().await
         }
 
-
         for (_module_id, module) in self.module_manager.iter() {
             let client_handle = self.handle();
             let module = module.clone();
@@ -165,9 +162,7 @@ impl ClientTask {
             ClientMessage::NotificationEnd(message) => {
                 self.on_client_notification_end_message(message).await
             }
-            ClientMessage::Exit(message) => {
-                self.on_client_exit(message).await
-            }
+            ClientMessage::Exit(message) => self.on_client_exit(message).await,
         }
     }
 

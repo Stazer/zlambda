@@ -1,6 +1,8 @@
 use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
-use crate::server::{ServerClientId, LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm, ServerId};
+use crate::server::{
+    LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm, ServerClientId, ServerId,
+};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -483,8 +485,34 @@ pub struct GeneralClientRegistrationResponseMessageInput;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNotificationMessageInputOrigin {
+    server_id: ServerId,
+    server_client_id: ServerClientId,
+}
+
+impl GeneralNotificationMessageInputOrigin {
+    pub fn new(server_id: ServerId, server_client_id: ServerClientId) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralNotificationMessageInputImmediateType {
     module_id: ModuleId,
+    origin: Option<GeneralNotificationMessageInputOrigin>,
 }
 
 impl From<GeneralNotificationMessageInputImmediateType> for (ModuleId,) {
@@ -493,13 +521,28 @@ impl From<GeneralNotificationMessageInputImmediateType> for (ModuleId,) {
     }
 }
 
+impl From<GeneralNotificationMessageInputImmediateType>
+    for (ModuleId, Option<GeneralNotificationMessageInputOrigin>)
+{
+    fn from(r#type: GeneralNotificationMessageInputImmediateType) -> Self {
+        (r#type.module_id, r#type.origin)
+    }
+}
+
 impl GeneralNotificationMessageInputImmediateType {
     pub fn new(module_id: ModuleId) -> Self {
-        Self { module_id }
+        Self {
+            module_id,
+            origin: None,
+        }
     }
 
     pub fn module_id(&self) -> ModuleId {
         self.module_id
+    }
+
+    pub fn origin(&self) -> &Option<GeneralNotificationMessageInputOrigin> {
+        &self.origin
     }
 }
 
@@ -509,6 +552,7 @@ impl GeneralNotificationMessageInputImmediateType {
 pub struct GeneralNotificationMessageInputStartType {
     module_id: ModuleId,
     notification_id: usize,
+    origin: Option<GeneralNotificationMessageInputOrigin>,
 }
 
 impl From<GeneralNotificationMessageInputStartType> for (ModuleId, usize) {
@@ -517,11 +561,24 @@ impl From<GeneralNotificationMessageInputStartType> for (ModuleId, usize) {
     }
 }
 
+impl From<GeneralNotificationMessageInputStartType>
+    for (
+        ModuleId,
+        usize,
+        Option<GeneralNotificationMessageInputOrigin>,
+    )
+{
+    fn from(r#type: GeneralNotificationMessageInputStartType) -> Self {
+        (r#type.module_id, r#type.notification_id, r#type.origin)
+    }
+}
+
 impl GeneralNotificationMessageInputStartType {
     pub fn new(module_id: ModuleId, notification_id: usize) -> Self {
         Self {
             module_id,
             notification_id,
+            origin: None,
         }
     }
 
@@ -531,6 +588,10 @@ impl GeneralNotificationMessageInputStartType {
 
     pub fn notification_id(&self) -> usize {
         self.notification_id
+    }
+
+    pub fn origin(&self) -> &Option<GeneralNotificationMessageInputOrigin> {
+        &self.origin
     }
 }
 
@@ -617,38 +678,9 @@ impl From<GeneralNotificationMessageInputEndType> for GeneralNotificationMessage
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GeneralNotificationMessageInputOrigin {
-    server_id: ServerId,
-    server_client_id: ServerClientId,
-}
-
-impl GeneralNotificationMessageInputOrigin {
-    pub fn new(
-        server_id: ServerId,
-        server_client_id: ServerClientId,
-    ) -> Self {
-        Self {
-            server_id,
-            server_client_id,
-        }
-    }
-
-    pub fn server_id(&self) -> ServerId {
-        self.server_id
-    }
-
-    pub fn server_client_id(&self) -> ServerClientId {
-        self.server_client_id
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralNotificationMessageInput {
     r#type: GeneralNotificationMessageInputType,
     body: Bytes,
-    origin: Option<GeneralNotificationMessageInputOrigin>,
 }
 
 impl From<GeneralNotificationMessageInput> for (GeneralNotificationMessageInputType, Bytes) {
@@ -657,15 +689,9 @@ impl From<GeneralNotificationMessageInput> for (GeneralNotificationMessageInputT
     }
 }
 
-impl From<GeneralNotificationMessageInput> for (GeneralNotificationMessageInputType, Bytes, Option<GeneralNotificationMessageInputOrigin>) {
-    fn from(input: GeneralNotificationMessageInput) -> Self {
-        (input.r#type, input.body, input.origin)
-    }
-}
-
 impl GeneralNotificationMessageInput {
     pub fn new(r#type: GeneralNotificationMessageInputType, body: Bytes) -> Self {
-        Self { r#type, body, origin: None, }
+        Self { r#type, body }
     }
 
     pub fn r#type(&self) -> &GeneralNotificationMessageInputType {
@@ -674,9 +700,5 @@ impl GeneralNotificationMessageInput {
 
     pub fn body(&self) -> &Bytes {
         &self.body
-    }
-
-    pub fn origin(&self) -> &Option<GeneralNotificationMessageInputOrigin> {
-        &self.origin
     }
 }

@@ -1,7 +1,7 @@
 use crate::client::{
-    ClientMessage, ClientNotificationEndMessageInput, ClientNotificationImmediateMessageInput,
-    ClientNotificationNextMessageInput, ClientNotificationStartMessageInput,
-    ClientExitMessageInput
+    ClientExitMessageInput, ClientMessage, ClientNotificationEndMessageInput,
+    ClientNotificationImmediateMessageInput, ClientNotificationNextMessageInput,
+    ClientNotificationStartMessageInput,
 };
 use crate::common::message::MessageQueueSender;
 use crate::common::module::ModuleId;
@@ -24,7 +24,8 @@ impl ClientHandle {
     }
 
     pub async fn exit(&self) {
-        self.client_message_sender.do_send_asynchronous(ClientExitMessageInput::new())
+        self.client_message_sender
+            .do_send_asynchronous(ClientExitMessageInput::new())
             .await;
     }
 
