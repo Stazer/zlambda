@@ -1,12 +1,12 @@
 use crate::common::message::AsynchronousMessage;
 use crate::general::{
-    GeneralClientRegistrationRequestMessageInput, GeneralClientRegistrationResponseMessageInput,
-    GeneralLogEntriesAppendInitiateMessageInput, GeneralLogEntriesAppendRequestMessageInput,
-    GeneralLogEntriesAppendResponseMessageInput, GeneralLogEntriesCommitMessageInput,
-    GeneralNodeHandshakeRequestMessageInput, GeneralNodeHandshakeResponseMessageInput,
-    GeneralNotificationMessageInput, GeneralRecoveryRequestMessageInput,
-    GeneralRecoveryResponseMessageInput, GeneralRegistrationRequestMessageInput,
-    GeneralRegistrationResponseMessageInput,
+    GeneralClientRedirectMessageInput, GeneralClientRegistrationRequestMessageInput,
+    GeneralClientRegistrationResponseMessageInput, GeneralLogEntriesAppendInitiateMessageInput,
+    GeneralLogEntriesAppendRequestMessageInput, GeneralLogEntriesAppendResponseMessageInput,
+    GeneralLogEntriesCommitMessageInput, GeneralNodeHandshakeRequestMessageInput,
+    GeneralNodeHandshakeResponseMessageInput, GeneralNotificationMessageInput,
+    GeneralRecoveryRequestMessageInput, GeneralRecoveryResponseMessageInput,
+    GeneralRegistrationRequestMessageInput, GeneralRegistrationResponseMessageInput,
 };
 use serde::{Deserialize, Serialize};
 
@@ -73,6 +73,10 @@ pub type GeneralNotificationMessage = AsynchronousMessage<GeneralNotificationMes
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type GeneralClientRedirectMessage = AsynchronousMessage<GeneralClientRedirectMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum GeneralMessage {
     RegistrationRequest(GeneralRegistrationRequestMessage),
@@ -88,6 +92,7 @@ pub enum GeneralMessage {
     ClientRegistrationRequest(GeneralClientRegistrationRequestMessage),
     ClientRegistrationResponse(GeneralClientRegistrationResponseMessage),
     Notification(GeneralNotificationMessage),
+    ClientRedirect(GeneralClientRedirectMessage),
 }
 
 impl From<GeneralRegistrationRequestMessage> for GeneralMessage {
@@ -165,5 +170,11 @@ impl From<GeneralClientRegistrationResponseMessage> for GeneralMessage {
 impl From<GeneralNotificationMessage> for GeneralMessage {
     fn from(message: GeneralNotificationMessage) -> Self {
         Self::Notification(message)
+    }
+}
+
+impl From<GeneralClientRedirectMessage> for GeneralMessage {
+    fn from(message: GeneralClientRedirectMessage) -> Self {
+        Self::ClientRedirect(message)
     }
 }

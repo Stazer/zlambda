@@ -16,7 +16,7 @@ use crate::server::client::{
     ServerClientId, ServerClientMessage, ServerClientNotificationEndMessage,
     ServerClientNotificationImmediateMessage, ServerClientNotificationNextMessage,
     ServerClientNotificationStartMessage, ServerClientNotificationStartMessageOutput,
-    ServerClientShutdownMessage,
+    ServerClientSendMessage, ServerClientShutdownMessage,
 };
 use crate::server::{
     Server, ServerClientResignationMessageInput, ServerMessage, ServerModuleGetMessageInput,
@@ -139,6 +139,7 @@ impl ServerClientTask {
                 self.on_server_client_notification_end_message(message)
                     .await
             }
+            ServerClientMessage::Send(message) => self.on_server_client_send_message(message).await,
         }
     }
 
@@ -236,6 +237,15 @@ impl ServerClientTask {
             ))
             .await
         {
+            error!("{}", error);
+        }
+    }
+
+    async fn on_server_client_send_message(&mut self, message: ServerClientSendMessage) {
+        let (input,) = message.into();
+        let (bytes,) = input.into();
+
+        if let Err(error) = self.general_message_sender.send_raw(bytes).await {
             error!("{}", error);
         }
     }

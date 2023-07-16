@@ -6,7 +6,7 @@ use crate::server::node::{
     ServerNodeNotificationNextMessageInput, ServerNodeNotificationStartMessageInput,
     ServerNodeNotificationStartMessageOutput, ServerNodeRecoveryMessageInput,
     ServerNodeRegistrationMessageInput, ServerNodeReplicationMessageInput,
-    ServerNodeShutdownMessageInput,
+    ServerNodeSendMessageInput, ServerNodeShutdownMessageInput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,6 +68,10 @@ pub type ServerNodeNotificationEndMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerNodeSendMessage = AsynchronousMessage<ServerNodeSendMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerNodeMessage {
     Shutdown(ServerNodeShutdownMessage),
@@ -82,6 +86,7 @@ pub enum ServerNodeMessage {
     NotificationStart(ServerNodeNotificationStartMessage),
     NotificationNext(ServerNodeNotificationNextMessage),
     NotificationEnd(ServerNodeNotificationEndMessage),
+    Send(ServerNodeSendMessage),
 }
 
 impl From<ServerNodeShutdownMessage> for ServerNodeMessage {
@@ -153,5 +158,11 @@ impl From<ServerNodeNotificationNextMessage> for ServerNodeMessage {
 impl From<ServerNodeNotificationEndMessage> for ServerNodeMessage {
     fn from(message: ServerNodeNotificationEndMessage) -> Self {
         Self::NotificationEnd(message)
+    }
+}
+
+impl From<ServerNodeSendMessage> for ServerNodeMessage {
+    fn from(message: ServerNodeSendMessage) -> Self {
+        Self::Send(message)
     }
 }

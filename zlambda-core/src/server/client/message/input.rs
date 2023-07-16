@@ -135,3 +135,26 @@ impl ServerClientNotificationEndMessageInput {
         &self.body
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerClientSendMessageInput {
+    bytes: Bytes,
+}
+
+impl From<ServerClientSendMessageInput> for (Bytes,) {
+    fn from(input: ServerClientSendMessageInput) -> Self {
+        (input.bytes,)
+    }
+}
+
+impl ServerClientSendMessageInput {
+    pub fn new(bytes: Bytes) -> Self {
+        Self { bytes }
+    }
+
+    pub fn bytes(&self) -> &Bytes {
+        &self.bytes
+    }
+}

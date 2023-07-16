@@ -1,3 +1,4 @@
+use crate::common::bytes::Bytes;
 use crate::common::message::{AsynchronousMessage, MessageBufferReader, MessageError};
 use crate::common::net::tcp::OwnedReadHalf;
 use crate::common::net::tcp::OwnedWriteHalf;
@@ -39,6 +40,12 @@ where
             .write_all(&to_allocvec(&T::from(message))?)
             .await
             .map(|_| ())?;
+
+        Ok(())
+    }
+
+    pub async fn send_raw(&mut self, bytes: Bytes) -> Result<(), MessageError> {
+        self.writer.write_all(&bytes).await.map(|_| ())?;
 
         Ok(())
     }

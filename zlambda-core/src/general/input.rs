@@ -703,3 +703,40 @@ impl GeneralNotificationMessageInput {
         &self.body
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralClientRedirectMessageInput {
+    server_id: ServerId,
+    server_client_id: ServerClientId,
+    body: Bytes,
+}
+
+impl From<GeneralClientRedirectMessageInput> for (ServerId, ServerClientId, Bytes) {
+    fn from(input: GeneralClientRedirectMessageInput) -> Self {
+        (input.server_id, input.server_client_id, input.body)
+    }
+}
+
+impl GeneralClientRedirectMessageInput {
+    pub fn new(server_id: ServerId, server_client_id: ServerClientId, body: Bytes) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+            body,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+
+    pub fn body(&self) -> &Bytes {
+        &self.body
+    }
+}

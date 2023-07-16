@@ -183,11 +183,11 @@ impl From<ServerModuleNotificationEventInputServerSource>
 }
 
 impl ServerModuleNotificationEventInputServerSource {
-    pub fn new(server_id: ServerId) -> Self {
-        Self {
-            origin: None,
-            server_id,
-        }
+    pub fn new(
+        origin: Option<ServerModuleNotificationEventInputServerSourceOrigin>,
+        server_id: ServerId,
+    ) -> Self {
+        Self { origin, server_id }
     }
 
     pub fn origin(&self) -> &Option<ServerModuleNotificationEventInputServerSourceOrigin> {

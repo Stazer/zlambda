@@ -24,10 +24,12 @@ use zlambda_core::common::notification::{
 use zlambda_core::common::runtime::spawn;
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::RwLock;
+use zlambda_core::common::tracing::debug;
 use zlambda_core::server::{
     LogIssuer, LogModuleIssuer, ServerId, ServerModule, ServerModuleCommitEventInput,
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventInputServerSource, ServerModuleNotificationEventInputSource,
+    ServerModuleNotificationEventInputServerSource,
+    ServerModuleNotificationEventInputServerSourceOrigin, ServerModuleNotificationEventInputSource,
     ServerModuleNotificationEventOutput, ServerModuleStartupEventInput,
     ServerModuleStartupEventOutput, ServerNotificationOrigin, ServerSystemLogEntryData,
     SERVER_SYSTEM_LOG_ID,
@@ -391,6 +393,12 @@ impl ServerModule for RealTimeTaskManager {
                         server.clone(),
                         target_module_id,
                         ServerModuleNotificationEventInputServerSource::new(
+                            origin.as_ref().map(|o| {
+                                ServerModuleNotificationEventInputServerSourceOrigin::new(
+                                    o.server_id(),
+                                    o.server_client_id(),
+                                )
+                            }),
                             instance.server().server_id().await,
                         )
                         .into(),

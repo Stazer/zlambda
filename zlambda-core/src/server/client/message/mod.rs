@@ -38,6 +38,10 @@ pub type ServerClientNotificationEndMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerClientSendMessage = AsynchronousMessage<ServerClientSendMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerClientMessage {
     Shutdown(ServerClientShutdownMessage),
@@ -45,6 +49,7 @@ pub enum ServerClientMessage {
     NotificationStart(ServerClientNotificationStartMessage),
     NotificationNext(ServerClientNotificationNextMessage),
     NotificationEnd(ServerClientNotificationEndMessage),
+    Send(ServerClientSendMessage),
 }
 
 impl From<ServerClientShutdownMessage> for ServerClientMessage {
@@ -74,5 +79,11 @@ impl From<ServerClientNotificationNextMessage> for ServerClientMessage {
 impl From<ServerClientNotificationEndMessage> for ServerClientMessage {
     fn from(message: ServerClientNotificationEndMessage) -> Self {
         Self::NotificationEnd(message)
+    }
+}
+
+impl From<ServerClientSendMessage> for ServerClientMessage {
+    fn from(message: ServerClientSendMessage) -> Self {
+        Self::Send(message)
     }
 }

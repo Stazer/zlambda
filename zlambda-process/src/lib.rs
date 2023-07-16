@@ -11,7 +11,8 @@ use zlambda_core::common::notification::{
 };
 use zlambda_core::common::runtime::{select, spawn};
 use zlambda_core::server::{
-    ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
+    ServerClientId, ServerModule, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventInputSource, ServerModuleNotificationEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,8 +20,16 @@ use zlambda_core::server::{
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum ProcessDispatcherNotificationTargetHeader {
-    Server { server_module_id: ModuleId },
-    Client { client_module_id: ModuleId },
+    LocalServer {
+        server_module_id: ModuleId,
+    },
+    LocalClient {
+        server_client_id: ServerClientId,
+        client_module_id: ModuleId,
+    },
+    Source {
+        source_module_id: ModuleId,
+    },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,7 +94,7 @@ impl ServerModule for ProcessDispatcher {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let (server, _source, notification_body_item_queue_receiver) = input.into();
+        let (server, source, notification_body_item_queue_receiver) = input.into();
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
         let header = deserializer
@@ -102,21 +111,50 @@ impl ServerModule for ProcessDispatcher {
             .spawn()
             .expect("running process");
 
-        println!("{:?}\n", _source);
-
         let (sender, receiver) = notification_body_item_queue();
 
         let mut stdout = child.stdout.take().expect("stdout handle");
         let mut stdin = child.stdin.take().expect("stdin handle");
 
+        println!("{:?}", &source);
+
         spawn(async move {
             match target {
-                ProcessDispatcherNotificationTargetHeader::Server { server_module_id } => {
-                    server.notify(server_module_id, receiver).await;
+                ProcessDispatcherNotificationTargetHeader::LocalServer { server_module_id } => {
+                    server.notify(server_module_id, receiver, None).await;
                 }
-                ProcessDispatcherNotificationTargetHeader::Client { client_module_id } => {
-                    if let Some(client) = server.local_clients().get(0.into()).await {
+                ProcessDispatcherNotificationTargetHeader::LocalClient {
+                    server_client_id,
+                    client_module_id,
+                } => {
+                    if let Some(client) = server.local_clients().get(server_client_id).await {
                         client.notify(client_module_id, receiver).await;
+                    }
+                }
+                ProcessDispatcherNotificationTargetHeader::Source { source_module_id } => {
+                    match source {
+                        ServerModuleNotificationEventInputSource::Server(server_source) => {
+                            if let Some(origin) = server_source.origin() {
+                                if let Some(origin_server) =
+                                    server.servers().get(origin.server_id()).await
+                                {
+                                    origin_server
+                                        .clients()
+                                        .get(origin.server_client_id())
+                                        .notify(source_module_id, receiver)
+                                        .await;
+                                }
+                            }
+                        }
+                        ServerModuleNotificationEventInputSource::Client(client_source) => {
+                            if let Some(client) = server
+                                .local_clients()
+                                .get(client_source.server_client_id())
+                                .await
+                            {
+                                client.notify(source_module_id, receiver).await;
+                            }
+                        }
                     }
                 }
             }

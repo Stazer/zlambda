@@ -2,7 +2,7 @@
     "program": "/bin/sh",
     "arguments": [
         "-c",
-        "echo hello && sleep 2"
+        "echo world && sleep 2"
     ],
     "source_module_id": 0
 }

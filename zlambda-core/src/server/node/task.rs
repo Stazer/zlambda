@@ -7,17 +7,17 @@ use crate::common::notification::notification_body_item_queue;
 use crate::common::runtime::{select, spawn};
 use crate::common::utility::Bytes;
 use crate::general::{
-    GeneralLogEntriesAppendInitiateMessage, GeneralLogEntriesAppendInitiateMessageInput,
-    GeneralLogEntriesAppendRequestMessage, GeneralLogEntriesAppendRequestMessageInput,
-    GeneralLogEntriesAppendResponseMessage, GeneralLogEntriesAppendResponseMessageInput,
-    GeneralLogEntriesCommitMessage, GeneralLogEntriesCommitMessageInput, GeneralMessage,
-    GeneralNodeHandshakeRequestMessage, GeneralNodeHandshakeRequestMessageInput,
-    GeneralNodeHandshakeResponseMessage, GeneralNodeHandshakeResponseMessageInput,
-    GeneralNodeHandshakeResponseMessageInputResult, GeneralNotificationMessage,
-    GeneralNotificationMessageInput, GeneralNotificationMessageInputEndType,
-    GeneralNotificationMessageInputImmediateType, GeneralNotificationMessageInputNextType,
-    GeneralNotificationMessageInputOrigin, GeneralNotificationMessageInputStartType,
-    GeneralNotificationMessageInputType,
+    GeneralClientRedirectMessage, GeneralLogEntriesAppendInitiateMessage,
+    GeneralLogEntriesAppendInitiateMessageInput, GeneralLogEntriesAppendRequestMessage,
+    GeneralLogEntriesAppendRequestMessageInput, GeneralLogEntriesAppendResponseMessage,
+    GeneralLogEntriesAppendResponseMessageInput, GeneralLogEntriesCommitMessage,
+    GeneralLogEntriesCommitMessageInput, GeneralMessage, GeneralNodeHandshakeRequestMessage,
+    GeneralNodeHandshakeRequestMessageInput, GeneralNodeHandshakeResponseMessage,
+    GeneralNodeHandshakeResponseMessageInput, GeneralNodeHandshakeResponseMessageInputResult,
+    GeneralNotificationMessage, GeneralNotificationMessageInput,
+    GeneralNotificationMessageInputEndType, GeneralNotificationMessageInputImmediateType,
+    GeneralNotificationMessageInputNextType, GeneralNotificationMessageInputOrigin,
+    GeneralNotificationMessageInputStartType, GeneralNotificationMessageInputType,
 };
 use crate::server::node::{
     ServerNodeLogAppendInitiateMessage, ServerNodeLogAppendResponseMessage,
@@ -25,7 +25,8 @@ use crate::server::node::{
     ServerNodeNotificationEndMessage, ServerNodeNotificationImmediateMessage,
     ServerNodeNotificationNextMessage, ServerNodeNotificationStartMessage,
     ServerNodeNotificationStartMessageOutput, ServerNodeRecoveryMessage,
-    ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeShutdownMessage,
+    ServerNodeRegistrationMessage, ServerNodeReplicationMessage, ServerNodeSendMessage,
+    ServerNodeShutdownMessage,
 };
 use crate::server::{
     LogEntryIssuer, LogEntryServerIssuer, Server, ServerId, ServerLeaderServerIdGetMessageInput,
@@ -33,7 +34,8 @@ use crate::server::{
     ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesCommitMessageInput,
     ServerLogEntriesRecoveryMessageInput, ServerMessage, ServerModuleGetMessageInput,
     ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
-    ServerServerIdGetMessageInput, ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
+    ServerModuleNotificationEventInputServerSourceOrigin, ServerServerIdGetMessageInput,
+    ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
 };
 use std::collections::HashMap;
 use std::future::pending;
@@ -266,6 +268,7 @@ impl ServerNodeTask {
             ServerNodeMessage::NotificationEnd(message) => {
                 self.on_server_node_notification_end_message(message).await
             }
+            ServerNodeMessage::Send(message) => self.on_server_node_send_message(message).await,
         }
     }
 
@@ -596,6 +599,20 @@ impl ServerNodeTask {
         }
     }
 
+    async fn on_server_node_send_message(&mut self, message: ServerNodeSendMessage) {
+        let general_message_sender = match &mut self.general_socket {
+            Some((sender, _)) => sender,
+            None => return,
+        };
+
+        let (input,) = message.into();
+        let (bytes,) = input.into();
+
+        if let Err(error) = general_message_sender.send_raw(bytes).await {
+            error!("{}", error);
+        }
+    }
+
     async fn on_general_message(&mut self, message: GeneralMessage) {
         match message {
             GeneralMessage::LogEntriesAppendRequest(message) => {
@@ -615,6 +632,9 @@ impl ServerNodeTask {
             }
             GeneralMessage::Notification(message) => {
                 self.on_general_notification_message(message).await
+            }
+            GeneralMessage::ClientRedirect(message) => {
+                self.on_general_client_redirect_message(message).await
             }
             message => {
                 error!(
@@ -740,8 +760,15 @@ impl ServerNodeTask {
                 };
 
                 let server = self.server.clone();
-                let server_source =
-                    ServerModuleNotificationEventInputServerSource::new(self.server_id);
+                let server_source = ServerModuleNotificationEventInputServerSource::new(
+                    r#type.origin().as_ref().map(|o| {
+                        ServerModuleNotificationEventInputServerSourceOrigin::new(
+                            o.server_id(),
+                            o.server_client_id(),
+                        )
+                    }),
+                    self.server_id,
+                );
 
                 let (sender, receiver) = notification_body_item_queue();
                 sender.do_send(body).await;
@@ -774,8 +801,15 @@ impl ServerNodeTask {
                     .insert(r#type.notification_id(), sender);
 
                 let server = self.server.clone();
-                let server_source =
-                    ServerModuleNotificationEventInputServerSource::new(self.server_id);
+                let server_source = ServerModuleNotificationEventInputServerSource::new(
+                    r#type.origin().as_ref().map(|o| {
+                        ServerModuleNotificationEventInputServerSourceOrigin::new(
+                            o.server_id(),
+                            o.server_client_id(),
+                        )
+                    }),
+                    self.server_id,
+                );
 
                 spawn(async move {
                     module
@@ -805,5 +839,18 @@ impl ServerNodeTask {
                 }
             }
         };
+    }
+
+    async fn on_general_client_redirect_message(&mut self, message: GeneralClientRedirectMessage) {
+        let (input,) = message.into();
+        let (server_id, server_client_id, bytes) = input.into();
+
+        if server_id == self.server.server_id().await {
+            if let Some(client) = self.server.local_clients().get(server_client_id).await {
+                client.send(bytes).await;
+            }
+        } else {
+            todo!()
+        }
     }
 }

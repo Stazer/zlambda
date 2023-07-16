@@ -28,7 +28,13 @@ use crate::common::net::ToSocketAddrs;
 use crate::common::notification::notification_body_item_queue;
 use crate::common::runtime::spawn;
 use crate::common::utility::Bytes;
+use crate::general::{
+    GeneralClientRedirectMessage, GeneralClientRedirectMessageInput, GeneralMessage,
+    GeneralNotificationMessage, GeneralNotificationMessageInput,
+    GeneralNotificationMessageInputImmediateType, GeneralNotificationMessageInputType,
+};
 use futures::{Stream, StreamExt};
+use postcard::to_allocvec;
 use std::fmt::Debug;
 use std::future::pending;
 use std::iter::once;
@@ -163,8 +169,12 @@ impl Server {
         ServerLocalClients::new(self)
     }
 
-    pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
-    where
+    pub async fn notify<T>(
+        &self,
+        module_id: ModuleId,
+        mut body: T,
+        origin: Option<ServerNotificationOrigin>,
+    ) where
         T: Stream<Item = Bytes> + Unpin + Send + 'static,
     {
         let output = self
@@ -178,8 +188,15 @@ impl Server {
         };
 
         let (sender, receiver) = notification_body_item_queue();
-        let server_source =
-            ServerModuleNotificationEventInputServerSource::new(self.server_id().await);
+        let server_source = ServerModuleNotificationEventInputServerSource::new(
+            origin.map(|o| {
+                ServerModuleNotificationEventInputServerSourceOrigin::new(
+                    o.server_id(),
+                    o.server_client_id(),
+                )
+            }),
+            self.server_id().await,
+        );
 
         spawn(async move {
             while let Some(body) = body.next().await {
@@ -375,6 +392,14 @@ impl<'a> ServerServersServer<'a> {
         self.id
     }
 
+    pub fn clients(&self) -> ServerServersServerClients<'_> {
+        ServerServersServerClients::new(
+            self.id,
+            self.server,
+            self.server_node_message_sender.clone(),
+        )
+    }
+
     pub async fn notify<T>(
         &self,
         module_id: ModuleId,
@@ -385,7 +410,7 @@ impl<'a> ServerServersServer<'a> {
     {
         let server_node_message_sender = match &self.server_node_message_sender {
             Some(server_node_message_sender) => server_node_message_sender,
-            None => return self.server.notify(module_id, body).await,
+            None => return self.server.notify(module_id, body, origin).await,
         };
 
         let first = match body.next().await {
@@ -447,6 +472,181 @@ impl<'a> ServerServersServer<'a> {
                 .await;
 
             previous = next;
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub struct ServerServersServerClients<'a> {
+    id: ServerId,
+    server: &'a Server,
+    server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>,
+}
+
+impl<'a> ServerServersServerClients<'a> {
+    pub(crate) fn new(
+        id: ServerId,
+        server: &'a Server,
+        server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>,
+    ) -> Self {
+        Self {
+            id,
+            server,
+            server_node_message_sender,
+        }
+    }
+
+    pub fn get(&'a self, server_client_id: ServerClientId) -> ServerServersServerClientsClient<'a> {
+        ServerServersServerClientsClient::new(
+            self.id,
+            self.server,
+            self.server_node_message_sender.clone(),
+            server_client_id,
+        )
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub struct ServerServersServerClientsClient<'a> {
+    id: ServerId,
+    server: &'a Server,
+    server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>,
+    server_client_id: ServerClientId,
+}
+
+impl<'a> ServerServersServerClientsClient<'a> {
+    pub(crate) fn new(
+        id: ServerId,
+        server: &'a Server,
+        server_node_message_sender: Option<MessageQueueSender<ServerNodeMessage>>,
+        server_client_id: ServerClientId,
+    ) -> Self {
+        Self {
+            id,
+            server,
+            server_node_message_sender,
+            server_client_id,
+        }
+    }
+
+    pub fn server_client_id(&self) -> ServerClientId {
+        self.server_client_id
+    }
+
+    pub async fn notify<T>(&self, module_id: ModuleId, mut body: T)
+    where
+        T: Stream<Item = Bytes> + Unpin + Send + 'static,
+    {
+        if let Some(server_node_message_sender) = &self.server_node_message_sender {
+            let first = match body.next().await {
+                None => return,
+                Some(first) => first,
+            };
+
+            let mut previous = match body.next().await {
+                None => {
+                    server_node_message_sender
+                        .do_send_asynchronous(ServerNodeSendMessageInput::new(
+                            Bytes::from(to_allocvec(
+                                &GeneralMessage::ClientRedirect(
+                                    GeneralClientRedirectMessage::new(
+                                        GeneralClientRedirectMessageInput::new(
+                                            self.id,
+                                            self.server_client_id,
+                                            // ouch, second allocvec
+                                            to_allocvec(
+                                                &GeneralMessage::Notification(
+                                                    GeneralNotificationMessage::new(
+                                                        GeneralNotificationMessageInput::new(
+                                                            GeneralNotificationMessageInputType::Immediate(
+                                                                GeneralNotificationMessageInputImmediateType::new(module_id, None),
+                                                            ),
+                                                            first,
+                                                        ),
+                                                    ),
+                                                ),
+                                            ).expect("data").into(),
+                                        ),
+                                    )
+                                ),
+                            ).expect("data"))
+                        ))
+                        .await;
+
+                    return;
+                }
+                Some(previous) => previous,
+            };
+
+            /*let (notification_id,) = server_node_message_sender
+            .do_send_synchronous(ServerNodeNotificationStartMessageInput::new(
+                module_id, first, None,
+            ))
+            .await
+            .into();*/
+
+            todo!()
+
+            /*server_node_message_sender
+                .do_send_asynchronous(ServerNodeSendMessageInput::new(
+                    Bytes::from(to_allocvec(
+                        &GeneralMessage::ClientRedirect(
+                            GeneralClientRedirectMessage::new(
+                                GeneralClientRedirectMessageInput::new(
+                                    self.id,
+                                    self.server_client_id,
+                                    // ouch, second allocvec
+                                    to_allocvec(
+                                        &GeneralMessage::Notification(
+                                            GeneralNotificationMessage::new(
+                                                GeneralNotificationMessageInput::new(
+                                                    GeneralNotificationMessageInputType::Immediate(
+                                                        GeneralNotificationMessageInputImmediateType::new(module_id, None),
+                                                    ),
+                                                    first,
+                                                ),
+                                            ),
+                                        ),
+                                    ).expect("data").into(),
+                                ),
+                            )
+                        ),
+                    ).expect("data"))
+                ))
+                .await;
+
+            loop {
+                let next = match body.next().await {
+                    None => {
+                        server_node_message_sender
+                            .do_send_asynchronous(ServerNodeNotificationEndMessageInput::new(
+                                notification_id,
+                                previous,
+                            ))
+                            .await;
+
+                        break;
+                    }
+                    Some(next) => next,
+                };
+
+                server_node_message_sender
+                    .do_send_asynchronous(ServerNodeNotificationNextMessageInput::new(
+                        notification_id,
+                        previous,
+                    ))
+                    .await;
+
+                previous = next;
+            }*/
+        } else {
+            if let Some(client) = self.server.local_clients().get(self.server_client_id).await {
+                client.notify(module_id, body).await;
+            }
         }
     }
 }
@@ -674,5 +874,11 @@ impl<'a> ServerLocalClientsLocalClient<'a> {
 
             previous = next;
         }
+    }
+
+    pub async fn send(&self, bytes: Bytes) {
+        self.server_client_message_sender
+            .do_send_asynchronous(ServerClientSendMessageInput::new(bytes))
+            .await;
     }
 }

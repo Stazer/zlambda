@@ -520,3 +520,26 @@ impl ServerNodeNotificationEndMessageInput {
         &self.body
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerNodeSendMessageInput {
+    bytes: Bytes,
+}
+
+impl From<ServerNodeSendMessageInput> for (Bytes,) {
+    fn from(input: ServerNodeSendMessageInput) -> Self {
+        (input.bytes,)
+    }
+}
+
+impl ServerNodeSendMessageInput {
+    pub fn new(bytes: Bytes) -> Self {
+        Self { bytes }
+    }
+
+    pub fn bytes(&self) -> &Bytes {
+        &self.bytes
+    }
+}
