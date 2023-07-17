@@ -3,6 +3,7 @@ use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::{
+    ServerNotificationRedirection,
     LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm, ServerClientId, ServerId,
 };
 
@@ -368,6 +369,7 @@ pub struct ServerNodeNotificationImmediateMessageInput {
     module_id: ModuleId,
     body: Bytes,
     origin: Option<ServerNodeNotificationOriginInput>,
+    redirection: Option<ServerNotificationRedirection>,
 }
 
 impl From<ServerNodeNotificationImmediateMessageInput> for (ModuleId, Bytes) {
@@ -389,11 +391,13 @@ impl ServerNodeNotificationImmediateMessageInput {
         module_id: ModuleId,
         body: Bytes,
         origin: Option<ServerNodeNotificationOriginInput>,
+        redirection: Option<ServerNotificationRedirection>,
     ) -> Self {
         Self {
             module_id,
             body,
             origin,
+            redirection,
         }
     }
 
@@ -408,6 +412,10 @@ impl ServerNodeNotificationImmediateMessageInput {
     pub fn origin(&self) -> &Option<ServerNodeNotificationOriginInput> {
         &self.origin
     }
+
+    pub fn redirection(&self) -> &Option<ServerNotificationRedirection> {
+        &self.redirection
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -417,6 +425,7 @@ pub struct ServerNodeNotificationStartMessageInput {
     module_id: ModuleId,
     body: Bytes,
     origin: Option<ServerNodeNotificationOriginInput>,
+    redirection: Option<ServerNotificationRedirection>,
 }
 
 impl From<ServerNodeNotificationStartMessageInput> for (ModuleId, Bytes) {
@@ -438,11 +447,13 @@ impl ServerNodeNotificationStartMessageInput {
         module_id: ModuleId,
         body: Bytes,
         origin: Option<ServerNodeNotificationOriginInput>,
+        redirection: Option<ServerNotificationRedirection>,
     ) -> Self {
         Self {
             module_id,
             body,
             origin,
+            redirection,
         }
     }
 
@@ -456,6 +467,10 @@ impl ServerNodeNotificationStartMessageInput {
 
     pub fn origin(&self) -> &Option<ServerNodeNotificationOriginInput> {
         &self.origin
+    }
+
+    pub fn redirection(&self) -> &Option<ServerNotificationRedirection> {
+        &self.redirection
     }
 }
 

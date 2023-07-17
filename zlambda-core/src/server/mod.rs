@@ -369,6 +369,34 @@ impl ServerNotificationOrigin {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug)]
+pub struct ServerNotificationRedirection {
+    server_id: ServerId,
+    server_client_id: Option<ServerClientId>,
+}
+
+impl ServerNotificationRedirection {
+    pub fn new(
+        server_id: ServerId,
+        server_client_id: Option<ServerClientId>,
+    ) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> Option<ServerClientId> {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
 pub struct ServerServersServer<'a> {
     id: ServerId,
     server: &'a Server,
@@ -430,6 +458,7 @@ impl<'a> ServerServersServer<'a> {
                                 o.server_client_id(),
                             )
                         }),
+                        None,
                     ))
                     .await;
 
@@ -445,6 +474,7 @@ impl<'a> ServerServersServer<'a> {
                 origin.map(|o| {
                     ServerNodeNotificationOriginInput::new(o.server_id(), o.server_client_id())
                 }),
+                None,
             ))
             .await
             .into();
@@ -563,7 +593,7 @@ impl<'a> ServerServersServerClientsClient<'a> {
                                                     GeneralNotificationMessage::new(
                                                         GeneralNotificationMessageInput::new(
                                                             GeneralNotificationMessageInputType::Immediate(
-                                                                GeneralNotificationMessageInputImmediateType::new(module_id, None),
+                                                                GeneralNotificationMessageInputImmediateType::new(module_id, None, None),
                                                             ),
                                                             first,
                                                         ),

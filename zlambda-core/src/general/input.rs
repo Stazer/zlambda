@@ -510,9 +510,35 @@ impl GeneralNotificationMessageInputOrigin {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneralNotificationMessageInputRedirection {
+    server_id: ServerId,
+    server_client_id: Option<ServerClientId>,
+}
+
+impl GeneralNotificationMessageInputRedirection {
+    pub fn new(server_id: ServerId, server_client_id: Option<ServerClientId>) -> Self {
+        Self {
+            server_id,
+            server_client_id,
+        }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+
+    pub fn server_client_id(&self) -> Option<ServerClientId> {
+        self.server_client_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneralNotificationMessageInputImmediateType {
     module_id: ModuleId,
     origin: Option<GeneralNotificationMessageInputOrigin>,
+    redirection: Option<GeneralNotificationMessageInputRedirection>,
 }
 
 impl From<GeneralNotificationMessageInputImmediateType> for (ModuleId,) {
@@ -530,8 +556,12 @@ impl From<GeneralNotificationMessageInputImmediateType>
 }
 
 impl GeneralNotificationMessageInputImmediateType {
-    pub fn new(module_id: ModuleId, origin: Option<GeneralNotificationMessageInputOrigin>) -> Self {
-        Self { module_id, origin }
+    pub fn new(
+        module_id: ModuleId,
+        origin: Option<GeneralNotificationMessageInputOrigin>,
+        redirection: Option<GeneralNotificationMessageInputRedirection>,
+    ) -> Self {
+        Self { module_id, origin, redirection, }
     }
 
     pub fn module_id(&self) -> ModuleId {
@@ -540,6 +570,10 @@ impl GeneralNotificationMessageInputImmediateType {
 
     pub fn origin(&self) -> &Option<GeneralNotificationMessageInputOrigin> {
         &self.origin
+    }
+
+    pub fn redirection(&self) -> &Option<GeneralNotificationMessageInputRedirection> {
+        &self.redirection
     }
 }
 
@@ -550,6 +584,7 @@ pub struct GeneralNotificationMessageInputStartType {
     module_id: ModuleId,
     notification_id: usize,
     origin: Option<GeneralNotificationMessageInputOrigin>,
+    redirection: Option<GeneralNotificationMessageInputRedirection>,
 }
 
 impl From<GeneralNotificationMessageInputStartType> for (ModuleId, usize) {
@@ -575,11 +610,13 @@ impl GeneralNotificationMessageInputStartType {
         module_id: ModuleId,
         notification_id: usize,
         origin: Option<GeneralNotificationMessageInputOrigin>,
+        redirection: Option<GeneralNotificationMessageInputRedirection>,
     ) -> Self {
         Self {
             module_id,
             notification_id,
             origin,
+            redirection,
         }
     }
 
@@ -593,6 +630,10 @@ impl GeneralNotificationMessageInputStartType {
 
     pub fn origin(&self) -> &Option<GeneralNotificationMessageInputOrigin> {
         &self.origin
+    }
+
+    pub fn redirection(&self) -> &Option<GeneralNotificationMessageInputRedirection> {
+        &self.redirection
     }
 }
 
