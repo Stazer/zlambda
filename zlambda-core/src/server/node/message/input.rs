@@ -386,6 +386,14 @@ impl From<ServerNodeNotificationImmediateMessageInput>
     }
 }
 
+impl From<ServerNodeNotificationImmediateMessageInput>
+    for (ModuleId, Bytes, Option<ServerNodeNotificationOriginInput>, Option<ServerNotificationRedirection>)
+{
+    fn from(input: ServerNodeNotificationImmediateMessageInput) -> Self {
+        (input.module_id, input.body, input.origin, input.redirection)
+    }
+}
+
 impl ServerNodeNotificationImmediateMessageInput {
     pub fn new(
         module_id: ModuleId,
@@ -439,6 +447,14 @@ impl From<ServerNodeNotificationStartMessageInput>
 {
     fn from(input: ServerNodeNotificationStartMessageInput) -> Self {
         (input.module_id, input.body, input.origin)
+    }
+}
+
+impl From<ServerNodeNotificationStartMessageInput>
+    for (ModuleId, Bytes, Option<ServerNodeNotificationOriginInput>, Option<ServerNotificationRedirection>)
+{
+    fn from(input: ServerNodeNotificationStartMessageInput) -> Self {
+        (input.module_id, input.body, input.origin, input.redirection)
     }
 }
 
