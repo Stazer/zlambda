@@ -561,7 +561,11 @@ impl GeneralNotificationMessageInputImmediateType {
         origin: Option<GeneralNotificationMessageInputOrigin>,
         redirection: Option<GeneralNotificationMessageInputRedirection>,
     ) -> Self {
-        Self { module_id, origin, redirection, }
+        Self {
+            module_id,
+            origin,
+            redirection,
+        }
     }
 
     pub fn module_id(&self) -> ModuleId {

@@ -4,7 +4,6 @@ use crate::common::message::{
 };
 use crate::common::net::TcpStream;
 use crate::common::notification::notification_body_item_queue;
-use postcard::to_allocvec;
 use crate::common::runtime::{select, spawn};
 use crate::common::utility::Bytes;
 use crate::general::{
@@ -18,8 +17,8 @@ use crate::general::{
     GeneralNotificationMessage, GeneralNotificationMessageInput,
     GeneralNotificationMessageInputEndType, GeneralNotificationMessageInputImmediateType,
     GeneralNotificationMessageInputNextType, GeneralNotificationMessageInputOrigin,
-    GeneralNotificationMessageInputStartType, GeneralNotificationMessageInputType,
-    GeneralNotificationMessageInputRedirection,
+    GeneralNotificationMessageInputRedirection, GeneralNotificationMessageInputStartType,
+    GeneralNotificationMessageInputType,
 };
 use crate::server::node::{
     ServerNodeLogAppendInitiateMessage, ServerNodeLogAppendResponseMessage,
@@ -31,19 +30,29 @@ use crate::server::node::{
     ServerNodeShutdownMessage,
 };
 use crate::server::{
-    LogEntryIssuer, LogEntryServerIssuer, Server, ServerId, ServerLeaderServerIdGetMessageInput,
-    ServerLogAppendInitiateMessageInput, ServerLogAppendRequestMessageInput,
-    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesCommitMessageInput,
-    ServerLogEntriesRecoveryMessageInput, ServerMessage, ServerModuleGetMessageInput,
-    ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
+    LogEntryIssuer, LogEntryServerIssuer, Server, ServerClientId, ServerId,
+    ServerLeaderServerIdGetMessageInput, ServerLogAppendInitiateMessageInput,
+    ServerLogAppendRequestMessageInput, ServerLogEntriesAcknowledgementMessageInput,
+    ServerLogEntriesCommitMessageInput, ServerLogEntriesRecoveryMessageInput, ServerMessage,
+    ServerModuleGetMessageInput, ServerModuleNotificationEventInput,
+    ServerModuleNotificationEventInputServerSource,
     ServerModuleNotificationEventInputServerSourceOrigin, ServerServerIdGetMessageInput,
     ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
 };
+use postcard::to_allocvec;
 use std::collections::HashMap;
 use std::future::pending;
 use std::io;
 use std::sync::Arc;
 use tracing::{debug, error, info};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+enum NotificationTarget {
+    MessageQueueSender(MessageQueueSender<Bytes>),
+    ServerClientId(ServerClientId),
+    ServerId(ServerId),
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -57,7 +66,7 @@ pub struct ServerNodeTask {
     )>,
     sender: MessageQueueSender<ServerNodeMessage>,
     receiver: MessageQueueReceiver<ServerNodeMessage>,
-    incoming_notification_senders: HashMap<usize, MessageQueueSender<Bytes>>,
+    incoming_notification_targets: HashMap<usize, NotificationTarget>,
     outgoing_notification_counter: usize,
     server: Arc<Server>,
 }
@@ -83,7 +92,7 @@ impl ServerNodeTask {
             general_socket,
             sender,
             receiver,
-            incoming_notification_senders: HashMap::default(),
+            incoming_notification_targets: HashMap::default(),
             outgoing_notification_counter: 0,
             server,
         }
@@ -763,28 +772,41 @@ impl ServerNodeTask {
 
         match r#type {
             GeneralNotificationMessageInputType::Immediate(r#type) => {
-                if r#type.redirection().as_ref().map(|r| r.server_id()) == Some(self.server.server_id().await) || r#type.redirection().is_none() {
-                    if let Some(server_client_id) = r#type.redirection().as_ref().map(|r| r.server_client_id()).flatten() {
-                        if let Some(client) = self.server.local_clients().get(server_client_id).await {
-                            client.send(
-                                Bytes::from(
-                                    to_allocvec(
-                                        &GeneralMessage::from(
-                                            GeneralNotificationMessage::new(
-                                                GeneralNotificationMessageInput::new(
-                                                    GeneralNotificationMessageInputType::Immediate(r#type),
-                                                    body,
+                if r#type.redirection().as_ref().map(|r| r.server_id())
+                    == Some(self.server.server_id().await)
+                    || r#type.redirection().is_none()
+                {
+                    if let Some(server_client_id) = r#type
+                        .redirection()
+                        .as_ref()
+                        .map(|r| r.server_client_id())
+                        .flatten()
+                    {
+                        if let Some(client) =
+                            self.server.local_clients().get(server_client_id).await
+                        {
+                            client
+                                .send(Bytes::from(
+                                    to_allocvec(&GeneralMessage::from(
+                                        GeneralNotificationMessage::new(
+                                            GeneralNotificationMessageInput::new(
+                                                GeneralNotificationMessageInputType::Immediate(
+                                                    r#type,
                                                 ),
+                                                body,
                                             ),
                                         ),
-                                    ).expect("")
-                                ),
-                            ).await;
+                                    ))
+                                    .expect(""),
+                                ))
+                                .await;
                         }
                     } else {
                         let output = self
                             .server_message_sender
-                            .do_send_synchronous(ServerModuleGetMessageInput::new(r#type.module_id()))
+                            .do_send_synchronous(ServerModuleGetMessageInput::new(
+                                r#type.module_id(),
+                            ))
                             .await;
 
                         let module = match output.into() {
@@ -818,76 +840,239 @@ impl ServerNodeTask {
                         });
                     }
                 } else {
-                    if let Some(server) = self.server.servers().get(r#type.redirection().as_ref().map(|r| r.server_id()).unwrap()).await {
-                        server.send(
-                            Bytes::from(
-                                to_allocvec(
-                                    &GeneralMessage::from(
-                                        GeneralNotificationMessage::new(
-                                            GeneralNotificationMessageInput::new(
-                                                GeneralNotificationMessageInputType::Immediate(r#type),
-                                                body,
-                                            ),
+                    if let Some(server) = self
+                        .server
+                        .servers()
+                        .get(
+                            r#type
+                                .redirection()
+                                .as_ref()
+                                .map(|r| r.server_id())
+                                .unwrap(),
+                        )
+                        .await
+                    {
+                        server
+                            .send(Bytes::from(
+                                to_allocvec(&GeneralMessage::from(
+                                    GeneralNotificationMessage::new(
+                                        GeneralNotificationMessageInput::new(
+                                            GeneralNotificationMessageInputType::Immediate(r#type),
+                                            body,
                                         ),
                                     ),
-                                ).expect("")
-                            ),
-                        ).await;
+                                ))
+                                .expect(""),
+                            ))
+                            .await;
                     }
                 }
             }
             GeneralNotificationMessageInputType::Start(r#type) => {
-                let output = self
-                    .server_message_sender
-                    .do_send_synchronous(ServerModuleGetMessageInput::new(r#type.module_id()))
-                    .await;
+                if r#type.redirection().as_ref().map(|r| r.server_id())
+                    == Some(self.server.server_id().await)
+                    || r#type.redirection().is_none()
+                {
+                    if let Some(server_client_id) = r#type
+                        .redirection()
+                        .as_ref()
+                        .map(|r| r.server_client_id())
+                        .flatten()
+                    {
+                        if let Some(client) =
+                            self.server.local_clients().get(server_client_id).await
+                        {
+                            self.incoming_notification_targets.insert(
+                                r#type.notification_id(),
+                                NotificationTarget::ServerClientId(server_client_id),
+                            );
 
-                let module = match output.into() {
-                    (None,) => return,
-                    (Some(module),) => module,
-                };
+                            client
+                                .send(Bytes::from(
+                                    to_allocvec(&GeneralMessage::from(
+                                        GeneralNotificationMessage::new(
+                                            GeneralNotificationMessageInput::new(
+                                                GeneralNotificationMessageInputType::Start(r#type),
+                                                body,
+                                            ),
+                                        ),
+                                    ))
+                                    .expect(""),
+                                ))
+                                .await;
+                        }
+                    } else {
+                        let output = self
+                            .server_message_sender
+                            .do_send_synchronous(ServerModuleGetMessageInput::new(
+                                r#type.module_id(),
+                            ))
+                            .await;
 
-                let (sender, receiver) = notification_body_item_queue();
-                sender.do_send(body).await;
-                self.incoming_notification_senders
-                    .insert(r#type.notification_id(), sender);
+                        let module = match output.into() {
+                            (None,) => return,
+                            (Some(module),) => module,
+                        };
 
-                let server = self.server.clone();
-                let server_source = ServerModuleNotificationEventInputServerSource::new(
-                    r#type.origin().as_ref().map(|o| {
-                        ServerModuleNotificationEventInputServerSourceOrigin::new(
-                            o.server_id(),
-                            o.server_client_id(),
-                        )
-                    }),
-                    self.server_id,
-                );
+                        let (sender, receiver) = notification_body_item_queue();
+                        sender.do_send(body).await;
+                        self.incoming_notification_targets.insert(
+                            r#type.notification_id(),
+                            NotificationTarget::MessageQueueSender(sender),
+                        );
 
-                spawn(async move {
-                    module
-                        .on_notification(ServerModuleNotificationEventInput::new(
-                            server,
-                            r#type.module_id(),
-                            server_source.into(),
-                            receiver,
-                        ))
-                        .await;
-                });
+                        let server = self.server.clone();
+                        let server_source = ServerModuleNotificationEventInputServerSource::new(
+                            r#type.origin().as_ref().map(|o| {
+                                ServerModuleNotificationEventInputServerSourceOrigin::new(
+                                    o.server_id(),
+                                    o.server_client_id(),
+                                )
+                            }),
+                            self.server_id,
+                        );
+
+                        spawn(async move {
+                            module
+                                .on_notification(ServerModuleNotificationEventInput::new(
+                                    server,
+                                    r#type.module_id(),
+                                    server_source.into(),
+                                    receiver,
+                                ))
+                                .await;
+                        });
+                    }
+                } else {
+                    let server_id = r#type
+                        .redirection()
+                        .as_ref()
+                        .map(|r| r.server_id())
+                        .unwrap();
+                    if let Some(server) = self.server.servers().get(server_id).await {
+                        self.incoming_notification_targets.insert(
+                            r#type.notification_id(),
+                            NotificationTarget::ServerId(server_id),
+                        );
+
+                        server
+                            .send(Bytes::from(
+                                to_allocvec(&GeneralMessage::from(
+                                    GeneralNotificationMessage::new(
+                                        GeneralNotificationMessageInput::new(
+                                            GeneralNotificationMessageInputType::Start(r#type),
+                                            body,
+                                        ),
+                                    ),
+                                ))
+                                .expect(""),
+                            ))
+                            .await;
+                    }
+                }
             }
             GeneralNotificationMessageInputType::Next(r#type) => {
-                if let Some(sender) = self
-                    .incoming_notification_senders
+                if let Some(target) = self
+                    .incoming_notification_targets
                     .get(&r#type.notification_id())
                 {
-                    sender.do_send(body).await;
+                    match target {
+                        NotificationTarget::MessageQueueSender(sender) => {
+                            sender.do_send(body).await
+                        }
+                        NotificationTarget::ServerClientId(server_client_id) => {
+                            if let Some(client) =
+                                self.server.local_clients().get(*server_client_id).await
+                            {
+                                client
+                                    .send(Bytes::from(
+                                        to_allocvec(&GeneralMessage::from(
+                                            GeneralNotificationMessage::new(
+                                                GeneralNotificationMessageInput::new(
+                                                    GeneralNotificationMessageInputType::Next(
+                                                        r#type,
+                                                    ),
+                                                    body,
+                                                ),
+                                            ),
+                                        ))
+                                        .expect(""),
+                                    ))
+                                    .await;
+                            }
+                        }
+                        NotificationTarget::ServerId(server_id) => {
+                            if let Some(client) = self.server.servers().get(*server_id).await {
+                                client
+                                    .send(Bytes::from(
+                                        to_allocvec(&GeneralMessage::from(
+                                            GeneralNotificationMessage::new(
+                                                GeneralNotificationMessageInput::new(
+                                                    GeneralNotificationMessageInputType::Next(
+                                                        r#type,
+                                                    ),
+                                                    body,
+                                                ),
+                                            ),
+                                        ))
+                                        .expect(""),
+                                    ))
+                                    .await;
+                            }
+                        }
+                    }
                 }
             }
             GeneralNotificationMessageInputType::End(r#type) => {
-                if let Some(sender) = self
-                    .incoming_notification_senders
+                if let Some(target) = self
+                    .incoming_notification_targets
                     .remove(&r#type.notification_id())
                 {
-                    sender.do_send(body).await;
+                    match target {
+                        NotificationTarget::MessageQueueSender(sender) => {
+                            sender.do_send(body).await
+                        }
+                        NotificationTarget::ServerClientId(server_client_id) => {
+                            if let Some(client) =
+                                self.server.local_clients().get(server_client_id).await
+                            {
+                                client
+                                    .send(Bytes::from(
+                                        to_allocvec(&GeneralMessage::from(
+                                            GeneralNotificationMessage::new(
+                                                GeneralNotificationMessageInput::new(
+                                                    GeneralNotificationMessageInputType::End(
+                                                        r#type,
+                                                    ),
+                                                    body,
+                                                ),
+                                            ),
+                                        ))
+                                        .expect(""),
+                                    ))
+                                    .await;
+                            }
+                        }
+                        NotificationTarget::ServerId(server_id) => {
+                            if let Some(client) = self.server.servers().get(server_id).await {
+                                client
+                                    .send(Bytes::from(
+                                        to_allocvec(&GeneralMessage::from(
+                                            GeneralNotificationMessage::new(
+                                                GeneralNotificationMessageInput::new(
+                                                    GeneralNotificationMessageInputType::End(
+                                                        r#type,
+                                                    ),
+                                                    body,
+                                                ),
+                                            ),
+                                        ))
+                                        .expect(""),
+                                    ))
+                                    .await;
+                            }
+                        }
+                    }
                 }
             }
         };

@@ -375,10 +375,7 @@ pub struct ServerNotificationRedirection {
 }
 
 impl ServerNotificationRedirection {
-    pub fn new(
-        server_id: ServerId,
-        server_client_id: Option<ServerClientId>,
-    ) -> Self {
+    pub fn new(server_id: ServerId, server_client_id: Option<ServerClientId>) -> Self {
         Self {
             server_id,
             server_client_id,
@@ -428,14 +425,11 @@ impl<'a> ServerServersServer<'a> {
         )
     }
 
-    pub async fn send(
-        &self,
-        bytes: Bytes,
-    ) {
-        self.server_node_message_sender.as_ref().expect("node")
-            .do_send_asynchronous(ServerNodeSendMessageInput::new(
-                bytes,
-            ))
+    pub async fn send(&self, bytes: Bytes) {
+        self.server_node_message_sender
+            .as_ref()
+            .expect("node")
+            .do_send_asynchronous(ServerNodeSendMessageInput::new(bytes))
             .await;
     }
 
@@ -595,7 +589,10 @@ impl<'a> ServerServersServerClientsClient<'a> {
                             module_id,
                             first,
                             None,
-                    Some(ServerNotificationRedirection::new(self.id, Some(self.server_client_id))),
+                            Some(ServerNotificationRedirection::new(
+                                self.id,
+                                Some(self.server_client_id),
+                            )),
                         ))
                         .await;
 
@@ -609,7 +606,10 @@ impl<'a> ServerServersServerClientsClient<'a> {
                     module_id,
                     first,
                     None,
-                    Some(ServerNotificationRedirection::new(self.id, Some(self.server_client_id))),
+                    Some(ServerNotificationRedirection::new(
+                        self.id,
+                        Some(self.server_client_id),
+                    )),
                 ))
                 .await
                 .into();

@@ -3,8 +3,8 @@ use crate::common::module::ModuleId;
 use crate::common::utility::Bytes;
 use crate::general::GeneralMessage;
 use crate::server::{
-    ServerNotificationRedirection,
     LogEntry, LogEntryId, LogEntryIssueId, LogId, LogTerm, ServerClientId, ServerId,
+    ServerNotificationRedirection,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -387,7 +387,12 @@ impl From<ServerNodeNotificationImmediateMessageInput>
 }
 
 impl From<ServerNodeNotificationImmediateMessageInput>
-    for (ModuleId, Bytes, Option<ServerNodeNotificationOriginInput>, Option<ServerNotificationRedirection>)
+    for (
+        ModuleId,
+        Bytes,
+        Option<ServerNodeNotificationOriginInput>,
+        Option<ServerNotificationRedirection>,
+    )
 {
     fn from(input: ServerNodeNotificationImmediateMessageInput) -> Self {
         (input.module_id, input.body, input.origin, input.redirection)
@@ -451,7 +456,12 @@ impl From<ServerNodeNotificationStartMessageInput>
 }
 
 impl From<ServerNodeNotificationStartMessageInput>
-    for (ModuleId, Bytes, Option<ServerNodeNotificationOriginInput>, Option<ServerNotificationRedirection>)
+    for (
+        ModuleId,
+        Bytes,
+        Option<ServerNodeNotificationOriginInput>,
+        Option<ServerNotificationRedirection>,
+    )
 {
     fn from(input: ServerNodeNotificationStartMessageInput) -> Self {
         (input.module_id, input.body, input.origin, input.redirection)
