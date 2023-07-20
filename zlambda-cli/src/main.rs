@@ -98,8 +98,10 @@ impl ClientModule for PrintModule {
         &self,
         mut input: ClientModuleNotificationEventInput,
     ) -> ClientModuleNotificationEventOutput {
+        let mut stdout = stdout();
+
         while let Some(bytes) = input.body_mut().receiver_mut().next().await {
-            println!("{:?}", bytes);
+            stdout.write_all(&bytes).unwrap();
         }
     }
 }
@@ -110,12 +112,14 @@ impl ServerModule for PrintModule {
         &self,
         mut input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
+        let mut stdout = stdout();
+
         while let Some(bytes) = input
             .notification_body_item_queue_receiver_mut()
             .next()
             .await
         {
-            println!("{:?}", bytes);
+            stdout.write_all(&bytes).unwrap();
         }
     }
 }
@@ -127,6 +131,8 @@ impl PrintModule {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+use std::io::{stdout, Write};
 
 #[derive(Default, Debug)]
 pub struct PrintAndExitModule {}
@@ -140,8 +146,10 @@ impl ClientModule for PrintAndExitModule {
         &self,
         mut input: ClientModuleNotificationEventInput,
     ) -> ClientModuleNotificationEventOutput {
+        let mut stdout = stdout();
+
         while let Some(bytes) = input.body_mut().receiver_mut().next().await {
-            println!("{:?}", bytes);
+            stdout.write_all(&bytes).unwrap();
         }
 
         input.client_handle().exit().await;

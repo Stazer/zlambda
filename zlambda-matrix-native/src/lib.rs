@@ -1,15 +1,22 @@
-use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use zlambda_core::common::async_trait;
 use zlambda_core::common::future::stream::StreamExt;
-use zlambda_core::common::module::{Module, ModuleId};
-use zlambda_core::common::notification::NotificationBodyItemStreamExt;
-use zlambda_core::common::bytes::BytesMut;
+use zlambda_core::common::module::{Module};
+use zlambda_core::common::notification::{
+    notification_body_item_queue,
+    NotificationBodyItemStreamExt,};
 use zlambda_core::server::{
-    ServerId, ServerModule, ServerModuleNotificationEventInput,
+    ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventInputSource, ServerModuleNotificationEventOutput,
-    ServerNotificationOrigin,
 };
+use std::ptr::copy_nonoverlapping;
+use std::slice::{from_raw_parts, from_raw_parts_mut};
+use zlambda_core::common::runtime::{spawn};
+use zlambda_core::common::bytes::{Bytes, BytesMut};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+const MATRIX_DIMENSION_SIZE: usize = 128;
+const MATRIX_ELEMENT_COUNT: usize = MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,70 +34,90 @@ impl ServerModule for MatrixCalculator {
     ) -> ServerModuleNotificationEventOutput {
         let (server, source, notification_body_item_queue_receiver) = input.into();
 
-        let origin = match source {
-            ServerModuleNotificationEventInputSource::Server(server) => {
-                if let Some(origin) = server.origin() {
-                    Some(ServerNotificationOrigin::new(
-                        origin.server_id(),
-                        origin.server_client_id(),
-                    ))
-                } else {
-                    None
-                }
-            }
-            ServerModuleNotificationEventInputSource::Client(client) => Some(
-                ServerNotificationOrigin::new(server.server_id().await, client.server_client_id()),
-            ),
-        };
-
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
 
-        //let mut data = BytesMut::with_capacity(128 * 128 * 3);
-
-        let mut data: [u8; 128 * 128 * 3] = [0; 128 * 128 * 3];
+        //let mut storage = BytesMut::zeroed(MATRIX_ELEMENT_COUNT * 3);
+        let mut data = BytesMut::zeroed(MATRIX_ELEMENT_COUNT * 3);//): [u8; MATRIX_ELEMENT_COUNT * 3] = [0; MATRIX_ELEMENT_COUNT * 3];
         let mut written = 0;
 
-        while let Some(bytes) = deserializer.next().await {
-            //data[written..].copy_from_slice(&bytes);
+        while let Some(mut bytes) = deserializer.next().await {
+            if written == 0 {
+                // Split body item type header
+                let _ = bytes.split_to(14);
+            }
+
+            unsafe {
+                copy_nonoverlapping(bytes.as_ptr(), data.as_mut_ptr().add(written), bytes.len());
+            }
+
             written += bytes.len();
         }
 
-        println!("hello {}", written);
-
-        /*let left = unsafe { from_raw_parts(data, MATRIX_SIZE * MATRIX_SIZE) };
+        let left = unsafe { from_raw_parts(data.as_mut_ptr(), MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE) };
         let right = unsafe {
             from_raw_parts(
-                data.add(MATRIX_SIZE * MATRIX_SIZE),
-                MATRIX_SIZE * MATRIX_SIZE,
+                data.as_mut_ptr().add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE),
+                MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE,
             )
         };
         let result = unsafe {
             from_raw_parts_mut(
-                data.add(MATRIX_SIZE * MATRIX_SIZE * 2),
-                MATRIX_SIZE * MATRIX_SIZE,
+                data.as_mut_ptr().add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 2),
+                MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE,
             )
         };
 
-        for i in 0..MATRIX_SIZE {
-            for j in 0..MATRIX_SIZE {
-                let mut value = 0;
+        for i in 0..MATRIX_DIMENSION_SIZE {
+            for j in 0..MATRIX_DIMENSION_SIZE {
+                let mut value: usize = 0;
 
-                for k in 0..MATRIX_SIZE {
+                for k in 0..MATRIX_DIMENSION_SIZE {
                     let (left_value, right_value) = match (
-                        left.get(i * MATRIX_SIZE + k),
-                        right.get(k * MATRIX_SIZE + j),
+                        left.get(i * MATRIX_DIMENSION_SIZE + k),
+                        right.get(k * MATRIX_DIMENSION_SIZE + j),
                     ) {
                         (Some(left_value), Some(right_value)) => (left_value, right_value),
                         (_, _) => return,
                     };
 
-                    value += left_value * right_value;
+                    value += (*left_value as usize) * (*right_value as usize);
                 }
 
-                if let Some(old_value) = result.get_mut(i * MATRIX_SIZE + j) {
-                    *old_value = value;
+                if let Some(old_value) = result.get_mut(i * MATRIX_DIMENSION_SIZE + j) {
+                    *old_value = value as u8;
                 }
             }
-        }*/
+        }
+
+        let (sender, receiver) = notification_body_item_queue();
+
+        spawn(async move {
+            match source {
+                ServerModuleNotificationEventInputSource::Server(server_source) => {
+                    if let Some(origin) = server_source.origin() {
+                        if let Some(origin_server) =
+                            server.servers().get(origin.server_id()).await
+                        {
+                            origin_server
+                                .clients()
+                                .get(origin.server_client_id())
+                                .notify(0.into(), receiver)
+                                .await;
+                        }
+                    }
+                }
+                ServerModuleNotificationEventInputSource::Client(client_source) => {
+                    if let Some(client) = server
+                        .local_clients()
+                        .get(client_source.server_client_id())
+                        .await
+                    {
+                        client.notify(0.into(), receiver).await;
+                    }
+                }
+            }
+        });
+
+        sender.do_send(data.freeze()).await;
     }
 }
