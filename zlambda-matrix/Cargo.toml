@@ -1,7 +1,0 @@
-[package]
-name = "zlambda-matrix"
-version = "0.0.0"
-edition = "2021"
-
-[dependencies]
-num-traits = { version = "*", default-features = false }

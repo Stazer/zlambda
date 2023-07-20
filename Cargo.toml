@@ -14,6 +14,6 @@ exclude = [
     "zlambda-ebpf-matrix",
     "zlambda-ebpf",
     "zlambda-ebpf-loader",
-    "zlambda-matrix",
-    "zlambda-matrix-converter",
+    #"zlambda-matrix",
+    #"zlambda-matrix-converter",
 ]
