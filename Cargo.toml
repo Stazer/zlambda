@@ -8,12 +8,11 @@ members = [
     "zlambda-realtime-task",
     "zlambda-wasm",
     "zlambda-wasm-matrix",
+    "zlambda-matrix-native",
 ]
 
 exclude = [
     "zlambda-ebpf-matrix",
     "zlambda-ebpf",
     "zlambda-ebpf-loader",
-    #"zlambda-matrix",
-    #"zlambda-matrix-converter",
 ]

@@ -2,6 +2,6 @@
 
 for i in `seq 0 99`
 do
-  dd if=/dev/random of=datasets/matrix${i} count=16384 > /dev/null 2> /dev/null
+  dd if=/dev/random of=datasets/matrix${i} count=16384 bs=1 > /dev/null 2> /dev/null
   echo ${i}
 done

@@ -11,6 +11,7 @@ tracing-subscriber = { version = "0", features = ["fmt"] }
 zlambda-core = { path = "../zlambda-core" }
 zlambda-dynamic = { path = "../zlambda-dynamic" }
 #zlambda-ebpf-loader = { path = "../zlambda-ebpf-loader" }
+zlambda-matrix-native = { path = "../zlambda-matrix-native" }
 zlambda-process = { path = "../zlambda-process" }
 zlambda-realtime-task = { path = "../zlambda-realtime-task" }
 zlambda-router = { path = "../zlambda-router" }
