@@ -187,8 +187,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .add_module(LocalRoundRobinRouter::default())
                 .add_module(DynamicLibraryManager::default())
                 .add_module(ImmediateWasmExecutor::default())
-                //.add_module(zlambda_ebpf_loader::EbpfLoader::default())
                 .add_module(MatrixCalculator::default())
+                //.add_module(zlambda_ebpf_loader::EbpfLoader::default())
                 .build(
                     listener_address,
                     match command {

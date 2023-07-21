@@ -1,0 +1,5 @@
+{
+    "program": "target/release/zlambda-matrix-process",
+    "arguments": [],
+    "source_module_id": 0
+}

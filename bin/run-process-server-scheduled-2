@@ -1,0 +1,3 @@
+#!/bin/sh
+
+RUST_LOG='debug' cargo run --bin zlambda-cli client notify 2 payloads/process-server-scheduled-0.json payloads/process-server-scheduled-1.json datasets/matrix0 datasets/matrix1 > results/process-server-scheduled-2/result-0-1

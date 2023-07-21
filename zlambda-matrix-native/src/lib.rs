@@ -11,7 +11,7 @@ use zlambda_core::server::{
 use std::ptr::copy_nonoverlapping;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 use zlambda_core::common::runtime::{spawn};
-use zlambda_core::common::bytes::{Bytes, BytesMut};
+use zlambda_core::common::bytes::{BytesMut};
 use zlambda_matrix::{
     MATRIX_DIMENSION_SIZE,
     MATRIX_ELEMENT_COUNT,

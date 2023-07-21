@@ -1,0 +1,3 @@
+#!/bin/sh
+
+cat datasets/matrix0 datasets/matrix1 | cargo run --release --bin zlambda-matrix-process > results/process-cli/result-0-1
