@@ -24,7 +24,6 @@ use zlambda_core::common::notification::{
 use zlambda_core::common::runtime::spawn;
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::RwLock;
-use zlambda_core::common::tracing::debug;
 use zlambda_core::server::{
     LogIssuer, LogModuleIssuer, ServerId, ServerModule, ServerModuleCommitEventInput,
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,

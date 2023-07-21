@@ -1,12 +1,11 @@
 [package]
 name = "zlambda-wasm"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+rand = "*"
 wasmer = { version = "4", features = [ "llvm" ], default-features = false }
 wasmer-compiler-llvm = "4"
 zlambda-core = { path = "../zlambda-core" }
-rand = "*"
+zlambda-matrix = { path = "../zlambda-matrix" }

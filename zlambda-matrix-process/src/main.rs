@@ -1,11 +1,8 @@
 use bytes::BytesMut;
-use zlambda_matrix::{
-    MATRIX_DIMENSION_SIZE,
-    MATRIX_ELEMENT_COUNT,
-};
-use std::slice::{from_raw_parts, from_raw_parts_mut};
-use std::io::{Read, Write, stdin, stdout};
 use std::error::Error;
+use std::io::{stdin, stdout, Read, Write};
+use std::slice::{from_raw_parts, from_raw_parts_mut};
+use zlambda_matrix::{MATRIX_DIMENSION_SIZE, MATRIX_ELEMENT_COUNT};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,16 +18,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         })?;
     }
 
-    let left = unsafe { from_raw_parts(data.as_mut_ptr(), MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE) };
+    let left = unsafe {
+        from_raw_parts(
+            data.as_mut_ptr(),
+            MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE,
+        )
+    };
     let right = unsafe {
         from_raw_parts(
-            data.as_mut_ptr().add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE),
+            data.as_mut_ptr()
+                .add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE),
             MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE,
         )
     };
     let result = unsafe {
         from_raw_parts_mut(
-            data.as_mut_ptr().add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 2),
+            data.as_mut_ptr()
+                .add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 2),
             MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE,
         )
     };

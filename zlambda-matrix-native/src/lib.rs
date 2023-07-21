@@ -1,21 +1,18 @@
-use zlambda_core::common::async_trait;
-use zlambda_core::common::future::stream::StreamExt;
-use zlambda_core::common::module::{Module};
-use zlambda_core::common::notification::{
-    notification_body_item_queue,
-    NotificationBodyItemStreamExt,};
-use zlambda_core::server::{
-    ServerModule, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventInputSource, ServerModuleNotificationEventOutput,
-};
 use std::ptr::copy_nonoverlapping;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
-use zlambda_core::common::runtime::{spawn};
-use zlambda_core::common::bytes::{BytesMut};
-use zlambda_matrix::{
-    MATRIX_DIMENSION_SIZE,
-    MATRIX_ELEMENT_COUNT,
+use zlambda_core::common::async_trait;
+use zlambda_core::common::bytes::BytesMut;
+use zlambda_core::common::future::stream::StreamExt;
+use zlambda_core::common::module::Module;
+use zlambda_core::common::notification::{
+    notification_body_item_queue, NotificationBodyItemStreamExt,
 };
+use zlambda_core::common::runtime::spawn;
+use zlambda_core::server::{
+    ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventInputSource,
+    ServerModuleNotificationEventOutput,
+};
+use zlambda_matrix::{MATRIX_DIMENSION_SIZE, MATRIX_ELEMENT_COUNT};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -51,16 +48,23 @@ impl ServerModule for MatrixCalculator {
             written += bytes.len();
         }
 
-        let left = unsafe { from_raw_parts(data.as_mut_ptr(), MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE) };
+        let left = unsafe {
+            from_raw_parts(
+                data.as_mut_ptr(),
+                MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE,
+            )
+        };
         let right = unsafe {
             from_raw_parts(
-                data.as_mut_ptr().add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE),
+                data.as_mut_ptr()
+                    .add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE),
                 MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE,
             )
         };
         let result = unsafe {
             from_raw_parts_mut(
-                data.as_mut_ptr().add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 2),
+                data.as_mut_ptr()
+                    .add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 2),
                 MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE,
             )
         };
@@ -93,8 +97,7 @@ impl ServerModule for MatrixCalculator {
             match source {
                 ServerModuleNotificationEventInputSource::Server(server_source) => {
                     if let Some(origin) = server_source.origin() {
-                        if let Some(origin_server) =
-                            server.servers().get(origin.server_id()).await
+                        if let Some(origin_server) = server.servers().get(origin.server_id()).await
                         {
                             origin_server
                                 .clients()
