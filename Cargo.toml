@@ -3,16 +3,18 @@ members = [
     "zlambda-cli",
     "zlambda-core",
     "zlambda-dynamic",
+    "zlambda-matrix",
+    "zlambda-matrix-native",
+    "zlambda-matrix-process",
     "zlambda-process",
-    "zlambda-router",
     "zlambda-realtime-task",
+    "zlambda-router",
     "zlambda-wasm",
     "zlambda-wasm-matrix",
-    "zlambda-matrix-native",
 ]
 
 exclude = [
-    "zlambda-ebpf-matrix",
     "zlambda-ebpf",
     "zlambda-ebpf-loader",
+    "zlambda-ebpf-matrix",
 ]

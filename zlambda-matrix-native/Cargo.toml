@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 zlambda-core = { path = "../zlambda-core" }
+zlambda-matrix = { path = "../zlambda-matrix" }
 
 [lib]
 crate-type   = ["rlib", "cdylib"]

@@ -1,0 +1,8 @@
+[package]
+name = "zlambda-matrix-process"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+bytes = "*"
+zlambda-matrix = { path = "../zlambda-matrix" }

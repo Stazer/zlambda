@@ -12,11 +12,10 @@ use std::ptr::copy_nonoverlapping;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 use zlambda_core::common::runtime::{spawn};
 use zlambda_core::common::bytes::{Bytes, BytesMut};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-const MATRIX_DIMENSION_SIZE: usize = 128;
-const MATRIX_ELEMENT_COUNT: usize = MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE;
+use zlambda_matrix::{
+    MATRIX_DIMENSION_SIZE,
+    MATRIX_ELEMENT_COUNT,
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,8 +35,7 @@ impl ServerModule for MatrixCalculator {
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
 
-        //let mut storage = BytesMut::zeroed(MATRIX_ELEMENT_COUNT * 3);
-        let mut data = BytesMut::zeroed(MATRIX_ELEMENT_COUNT * 3);//): [u8; MATRIX_ELEMENT_COUNT * 3] = [0; MATRIX_ELEMENT_COUNT * 3];
+        let mut data = BytesMut::zeroed(MATRIX_ELEMENT_COUNT * 3);
         let mut written = 0;
 
         while let Some(mut bytes) = deserializer.next().await {
