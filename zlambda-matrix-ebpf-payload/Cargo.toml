@@ -1,12 +1,13 @@
 [package]
-name = "zlambda-ebpf-matrix"
+name = "zlambda-matrix-ebpf-payload"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
 aya-bpf = { git = "https://github.com/aya-rs/aya", branch = "main" }
 aya-log-ebpf = { git = "https://github.com/aya-rs/aya", branch = "main" }
-zlambda-ebpf = { path = "../zlambda-ebpf" }
+zlambda-matrix = { path = "../zlambda-matrix" }
+zlambda-matrix-ebpf = { path = "../zlambda-matrix-ebpf" }
 network-types = "0.0.4"
 
 [profile.dev]

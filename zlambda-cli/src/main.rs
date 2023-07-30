@@ -21,10 +21,10 @@ use zlambda_core::server::{
 };
 use zlambda_dynamic::DynamicLibraryManager;
 use zlambda_matrix_native::MatrixCalculator;
+use zlambda_matrix_wasm_module::ImmediateWasmExecutor;
 use zlambda_process::ProcessDispatcher;
 use zlambda_realtime_task::RealTimeTaskManager;
 use zlambda_router::round_robin::{GlobalRoundRobinRouter, LocalRoundRobinRouter};
-use zlambda_wasm::ImmediateWasmExecutor;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

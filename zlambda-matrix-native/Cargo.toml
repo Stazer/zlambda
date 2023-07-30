@@ -4,6 +4,7 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+byteorder = { version = "*", features = ["i128"] }
 serde = { version = "1", features = ["derive"] }
 zlambda-core = { path = "../zlambda-core" }
 zlambda-matrix = { path = "../zlambda-matrix" }

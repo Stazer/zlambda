@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cd zlambda-matrix-wasm-payload
+wasm-pack build --release

@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cargo install wasm-pack
+cargo install wasm-opt
+cargo install bpf-linker

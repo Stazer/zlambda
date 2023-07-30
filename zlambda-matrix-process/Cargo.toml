@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 bytes = "*"
+byteorder = { version = "*", features = [ "i128" ] }
 zlambda-matrix = { path = "../zlambda-matrix" }

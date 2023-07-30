@@ -1,12 +1,16 @@
+use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::BytesMut;
 use std::error::Error;
 use std::io::{stdin, stdout, Read, Write};
 use std::slice::{from_raw_parts, from_raw_parts_mut};
+use std::time::Instant;
 use zlambda_matrix::{MATRIX_DIMENSION_SIZE, MATRIX_ELEMENT_COUNT};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let program_begin = Instant::now();
+
     let mut stdin = stdin();
 
     let mut data = BytesMut::zeroed(MATRIX_ELEMENT_COUNT * 3);
@@ -39,6 +43,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     };
 
+    let calculation_begin = Instant::now();
+
     for i in 0..MATRIX_DIMENSION_SIZE {
         for j in 0..MATRIX_DIMENSION_SIZE {
             let mut value: usize = 0;
@@ -61,8 +67,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    let calculation_end = calculation_begin.elapsed().as_nanos();
+
     let mut stdout = stdout();
     stdout.write_all(&data)?;
+
+    stdout.write_u128::<LittleEndian>(calculation_end)?;
+    stdout.write_u128::<LittleEndian>(program_begin.elapsed().as_nanos())?;
 
     Ok(())
 }

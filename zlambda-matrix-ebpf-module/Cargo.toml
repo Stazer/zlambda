@@ -1,14 +1,16 @@
 [package]
-name = "zlambda-ebpf-loader"
+name = "zlambda-matrix-ebpf-module"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+zlambda-core = { path = "../zlambda-core" }
+zlambda-matrix-ebpf = { path = "../zlambda-matrix-ebpf" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
 aya = { git = "https://github.com/aya-rs/aya", branch = "main" }
 aya-log = { git = "https://github.com/aya-rs/aya", branch = "main" }
-zlambda-ebpf = { path = "../zlambda-ebpf" }
-zlambda-core = { path = "../zlambda-core" }
 
 [lib]
 crate-type = ["rlib", "cdylib"]

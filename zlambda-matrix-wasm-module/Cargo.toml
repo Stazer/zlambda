@@ -1,11 +1,13 @@
 [package]
-name = "zlambda-wasm"
+name = "zlambda-matrix-wasm-module"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+byteorder = { version = "*", features = [ "i128" ] }
 rand = "*"
 wasmer = { version = "4", features = [ "llvm" ], default-features = false }
 wasmer-compiler-llvm = "4"
 zlambda-core = { path = "../zlambda-core" }
 zlambda-matrix = { path = "../zlambda-matrix" }
+zlambda-matrix-wasm-payload = { path = "../zlambda-matrix-wasm-payload" }

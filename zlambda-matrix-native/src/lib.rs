@@ -1,5 +1,8 @@
+use byteorder::{ByteOrder, LittleEndian};
+use std::mem::size_of;
 use std::ptr::copy_nonoverlapping;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
+use std::time::Instant;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::bytes::BytesMut;
 use zlambda_core::common::future::stream::StreamExt;
@@ -28,11 +31,13 @@ impl ServerModule for MatrixCalculator {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
+        let program_begin = Instant::now();
+
         let (server, source, notification_body_item_queue_receiver) = input.into();
 
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
 
-        let mut data = BytesMut::zeroed(MATRIX_ELEMENT_COUNT * 3);
+        let mut data = BytesMut::zeroed(MATRIX_ELEMENT_COUNT * 3 + size_of::<u128>() * 2);
         let mut written = 0;
 
         while let Some(mut bytes) = deserializer.next().await {
@@ -68,6 +73,15 @@ impl ServerModule for MatrixCalculator {
                 MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE,
             )
         };
+        let times = unsafe {
+            from_raw_parts_mut(
+                data.as_mut_ptr()
+                    .add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 3),
+                size_of::<u128>() * 2,
+            )
+        };
+
+        let calculation_begin = Instant::now();
 
         for i in 0..MATRIX_DIMENSION_SIZE {
             for j in 0..MATRIX_DIMENSION_SIZE {
@@ -90,6 +104,8 @@ impl ServerModule for MatrixCalculator {
                 }
             }
         }
+
+        let calculation_end = calculation_begin.elapsed().as_nanos();
 
         let (sender, receiver) = notification_body_item_queue();
 
@@ -118,6 +134,9 @@ impl ServerModule for MatrixCalculator {
                 }
             }
         });
+
+        LittleEndian::write_u128(times, calculation_end);
+        LittleEndian::write_u128(times, program_begin.elapsed().as_nanos());
 
         sender.do_send(data.freeze()).await;
     }

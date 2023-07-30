@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cd zlambda-matrix-ebpf-payload
+cargo build --release --target=bpfel-unknown-none -Z build-std=core

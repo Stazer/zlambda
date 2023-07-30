@@ -1,5 +1,5 @@
 [package]
-name = "zlambda-ebpf"
+name = "zlambda-matrix-ebpf"
 version = "0.0.0"
 edition = "2021"
 

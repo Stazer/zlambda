@@ -1,20 +1,22 @@
+use byteorder::{ByteOrder, LittleEndian};
+use std::mem::size_of;
+use std::time::Instant;
 use wasmer::{imports, Instance, Module, Store, Value};
 use wasmer_compiler_llvm::LLVM;
 use zlambda_core::common::async_trait;
-use zlambda_core::common::future::stream::StreamExt;
-use zlambda_core::common::runtime::spawn;
-use zlambda_core::common::module::Module as CommonModule;
 use zlambda_core::common::bytes::BytesMut;
+use std::slice::{from_raw_parts_mut};
+use zlambda_core::common::future::stream::StreamExt;
+use zlambda_core::common::module::Module as CommonModule;
 use zlambda_core::common::notification::{
     notification_body_item_queue, NotificationBodyItemStreamExt,
 };
+use zlambda_core::common::runtime::spawn;
 use zlambda_core::server::{
-    ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
-    ServerModuleNotificationEventInputSource,
+    ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventInputSource,
+    ServerModuleNotificationEventOutput,
 };
-use zlambda_matrix::{
-    MATRIX_ELEMENT_COUNT,
-};
+use zlambda_matrix::{MATRIX_DIMENSION_SIZE, MATRIX_ELEMENT_COUNT};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,13 +32,17 @@ impl ServerModule for ImmediateWasmExecutor {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
+        let program_begin = Instant::now();
+
         let (server, source, notification_body_item_queue_receiver) = input.into();
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
 
         let mut store = Store::new(LLVM::default());
         let module = Module::new(
             &store,
-            include_bytes!("../../target/wasm32-unknown-unknown/release/zlambda_wasm_matrix.wasm"),
+            include_bytes!(
+                "../../target/wasm32-unknown-unknown/release/zlambda_matrix_wasm_payload.wasm"
+            ),
         )
         .expect("");
 
@@ -58,14 +64,24 @@ impl ServerModule for ImmediateWasmExecutor {
         }
 
         let main = instance.exports.get_function("main").expect("");
+        let calculation_begin = Instant::now();
         main.call(&mut store, &[Value::I32(1)]).expect("");
+        let calculation_end = calculation_begin.elapsed().as_nanos();
 
         let memory = instance.exports.get_memory("memory").unwrap();
-        let mut result = BytesMut::zeroed(MATRIX_ELEMENT_COUNT);
+        let mut result = BytesMut::zeroed(MATRIX_ELEMENT_COUNT + size_of::<u128>() * 2);
         memory
             .view(&store)
             .read((1 + 2 * MATRIX_ELEMENT_COUNT) as _, &mut result)
             .unwrap();
+
+        let times = unsafe {
+            from_raw_parts_mut(
+                result.as_mut_ptr()
+                    .add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 3),
+                size_of::<u128>() * 2,
+            )
+        };
 
         let (sender, receiver) = notification_body_item_queue();
 
@@ -94,6 +110,9 @@ impl ServerModule for ImmediateWasmExecutor {
                 }
             }
         });
+
+        LittleEndian::write_u128(times, calculation_end);
+        LittleEndian::write_u128(times, program_begin.elapsed().as_nanos());
 
         sender.do_send(result.freeze()).await;
     }

@@ -40,3 +40,5 @@ Cargo.lock
 !/results/process-server/.keep
 /results/wasm-scheduled-1
 !/results/wasm-scheduled-1/.keep
+/zlambda-matrix-ebpf-module/target
+/zlambda-matrix-ebpf/target
