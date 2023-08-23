@@ -1,0 +1,8 @@
+#!/usr/bin/env ruby
+
+require_relative 'configuration'
+require 'pathname'
+
+available_datasets.each do |dataset|
+  Pathname.new(dataset).unlink
+end

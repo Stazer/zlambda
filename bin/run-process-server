@@ -1,3 +1,0 @@
-#!/bin/sh
-
-RUST_LOG='debug' cargo run --bin zlambda-cli client notify 1 payloads/process-server.json datasets/matrix0 datasets/matrix1 > results/process-server/result-0-1

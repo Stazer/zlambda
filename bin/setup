@@ -1,5 +1,5 @@
-#!/bin/sh
+#!/usr/bin/env ruby
 
-cargo install wasm-pack
-cargo install wasm-opt
-cargo install bpf-linker
+system("cargo install wasm-pack")
+system("cargo install wasm-opt")
+system("cargo install bpf-linker")

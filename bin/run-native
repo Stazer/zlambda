@@ -1,3 +1,0 @@
-#!/bin/sh
-
-RUST_LOG='debug' cargo run --bin zlambda-cli client notify 7 datasets/matrix0 datasets/matrix1 > results/native/result-0-1

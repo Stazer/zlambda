@@ -1,3 +1,0 @@
-#!/bin/sh
-
-find results -type f | grep -v .keep | sort | xargs ls -lh

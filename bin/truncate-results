@@ -1,3 +1,8 @@
-#!/bin/sh
+#!/usr/bin/env ruby
 
-find results -type f | grep -v .keep | xargs rm
+require_relative 'configuration'
+require 'fileutils'
+
+available_results.each do |result|
+  FileUtils.rm_rf(result)
+end

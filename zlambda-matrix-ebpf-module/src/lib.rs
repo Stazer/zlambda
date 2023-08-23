@@ -77,7 +77,7 @@ mod linux {
                     return;
                 }
 
-                let program = match self.bpf.program_mut("main") {
+                let program = match self.bpf.program_mut("xdp_main") {
                     Some(program) => program,
                     None => {
                         error!("Binary does not include a main program");

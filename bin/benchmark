@@ -1,0 +1,226 @@
+#!/usr/bin/env ruby
+
+require 'pathname'
+require 'securerandom'
+require_relative 'configuration'
+require 'fileutils'
+
+class RandomServerChooser
+  def initialize(servers)
+    @servers = servers
+    @randomizer = Random.new
+  end
+
+  def next
+    @servers[@randomizer.rand(@servers.length)]
+  end
+end
+
+class RoundRobinServerChooser
+  def initialize(servers)
+    @servers = servers
+    @counter = 0
+  end
+
+  def next
+    item = @servers[@counter % @servers.length]
+    @counter += 1
+
+    item
+  end
+end
+
+class Target
+  def name
+    self
+      .class
+      .name
+      .gsub(/Target/, '')
+      .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
+      .gsub(/([a-z\d])([A-Z])/, '\1_\2')
+      .downcase
+  end
+end
+
+class EbpfTarget < Target
+  def command(server_address, left_dataset_path, right_dataset_path, result_path)
+    "sh -c '#{$cargo_prefix} cargo run #{$cargo_flags} --bin zlambda-cli ebpf #{server_address} < #{left_dataset_path} < #{right_dataset_path} 2> /dev/null > #{result_path}'"
+  end
+end
+
+class EbpfRandomTarget < EbpfTarget
+  def server_chooser
+    RandomServerChooser.new($ebpf_socket_addresses)
+  end
+end
+
+class EbpfRoundRobinTarget < EbpfTarget
+  def server_chooser
+    RoundRobinServerChooser.new($ebpf_socket_addresses)
+  end
+end
+
+TARGETS = [
+  EbpfRandomTarget,
+  EbpfRoundRobinTarget,
+]
+
+class Executor
+  def run(datasets, target)
+    server_chooser = target.server_chooser
+    results_path = "#{$results_path}/#{target.name}"
+
+    FileUtils.mkdir_p(results_path)
+
+    datasets.each do |left_dataset_path|
+      datasets.each do |right_dataset_path|
+        left_dataset_basename = Pathname.new(left_dataset_path).basename
+        right_dataset_basename = Pathname.new(right_dataset_path).basename
+
+        execute(target.command(server_chooser.next, left_dataset_path, right_dataset_path, "#{results_path}/#{left_dataset_basename}x#{right_dataset_basename}"))
+      end
+    end
+  end
+end
+
+class SequentialExecutor < Executor
+  def execute(command)
+    print("#{command}\n")
+    system(command)
+  end
+end
+
+class ParallelExecutor < Executor
+end
+
+SequentialExecutor.new.run(available_datasets, EbpfRoundRobinTarget.new)
+
+# Sequential
+#sequential(datasets, -> { $servers[0] })
+
+=begin
+####################################################################################################
+
+wasm_unscheduled_command()
+{
+    SERVER_ADDRESS=$1
+    LEFT_MATRIX_PATH=$2
+    RIGHT_MATRIX_PATH=$3
+    RESULT_PATH=$4
+
+    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 6 ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
+}
+
+wasm_scheduled_command()
+{
+    SERVER_ADDRESS=$1
+    LEFT_MATRIX_PATH=$2
+    RIGHT_MATRIX_PATH=$3
+    RESULT_PATH=$4
+
+    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 2 payloads/wasm-scheduled.json ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
+}
+
+native_unscheduled_command()
+{
+    SERVER_ADDRESS=$1
+    LEFT_MATRIX_PATH=$2
+    RIGHT_MATRIX_PATH=$3
+    RESULT_PATH=$4
+
+    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 7 ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
+}
+
+native_scheduled_command()
+{
+    SERVER_ADDRESS=$1
+    LEFT_MATRIX_PATH=$2
+    RIGHT_MATRIX_PATH=$3
+    RESULT_PATH=$4
+
+    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 2 payloads/native-scheduled.json ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
+}
+
+process_cli_command()
+{
+    SERVER_ADDRESS=$1
+    LEFT_MATRIX_PATH=$2
+    RIGHT_MATRIX_PATH=$3
+    RESULT_PATH=$4
+
+    sh -c "cat ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} | ${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-matrix-process 2> /dev/null > ${RESULT_PATH}"
+}
+
+process_server_unscheduled_command()
+{
+    SERVER_ADDRESS=$1
+    LEFT_MATRIX_PATH=$2
+    RIGHT_MATRIX_PATH=$3
+    RESULT_PATH=$4
+
+    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 1 payloads/process-server.json ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
+}
+
+process_server_scheduled_command()
+{
+    SERVER_ADDRESS=$1
+    LEFT_MATRIX_PATH=$2
+    RIGHT_MATRIX_PATH=$3
+    RESULT_PATH=$4
+
+    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 2 payloads/process-server-scheduled-0.json payloads/process-server-scheduled-1.json ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}" 2>> ${MEASUREMENT_PATH}
+}
+
+ebpf_command()
+{
+    SERVER_ADDRESS=$1
+    LEFT_MATRIX_PATH=$2
+    RIGHT_MATRIX_PATH=$3
+    RESULT_PATH=$4
+
+    sh -c "${CARGO_PREFIX} cargo run --release --bin zlambda-cli ebpf ${SERVER_ADDRESS} < ${LEFT_MATRIX_PATH} < ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
+}
+
+####################################################################################################
+
+sequential()
+{
+    COMMAND=$1
+    FIRST=$2
+    LAST=$3
+
+    for i in `seq ${FIRST} ${LAST}`
+    do
+        for j in `seq ${FIRST} ${LAST}`
+        do
+            eval "${COMMAND} ${i} ${j}"
+        done
+    done
+}
+
+parallel()
+{
+    echo ''
+}
+
+####################################################################################################
+
+echo "`dd if=/dev/random bs=1 count=1 2> /dev/null | od -tu1`"
+
+exit 0
+
+for i in `seq ${DATASET_BENCHMARK_FIRST} ${DATASET_BENCHMARK_LAST}`
+do
+    for j in `seq ${DATASET_BENCHMARK_FIRST} ${DATASET_BENCHMARK_LAST}`
+    do
+        LEFT_MATRIX_PATH="${DATASET_PATH}${i}"
+        RIGHT_MATRIX_PATH="${DATASET_PATH}${j}"
+        RESULT_MATRIX_PATH="${RESULTS_PATH}/${BENCHMARK_NAME}/${i}x${j}"
+        MEASUREMENT_PATH="${MEASUREMENTS_PATH}/${BENCHMARK_NAME}"
+        SERVER_ADDRESS="127.0.0.1:8000"
+
+        wasm_unscheduled_command "$SERVER_ADDRESS" "$LEFT_MATRIX_PATH" "$RIGHT_MATRIX_PATH" "$RESULT_MATRIX_PATH" "$MEASUREMENT_PATH"
+    done
+done
+
+=end

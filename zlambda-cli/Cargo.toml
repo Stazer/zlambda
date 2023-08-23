@@ -4,6 +4,7 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+byteorder = { version = "*", features = [ "i128" ] }
 clap = { version = "4", features = ["derive"] }
 console-subscriber = { version = "*" }
 tokio = { version = "1", features = ["full"] }
@@ -12,6 +13,7 @@ zlambda-core = { path = "../zlambda-core" }
 zlambda-dynamic = { path = "../zlambda-dynamic" }
 zlambda-matrix-ebpf-module = { path = "../zlambda-matrix-ebpf-module" }
 zlambda-matrix-native = { path = "../zlambda-matrix-native" }
+zlambda-matrix = { path = "../zlambda-matrix" }
 zlambda-matrix-wasm-module = { path = "../zlambda-matrix-wasm-module" }
 zlambda-process = { path = "../zlambda-process" }
 zlambda-realtime-task = { path = "../zlambda-realtime-task" }

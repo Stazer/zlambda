@@ -4,15 +4,16 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-use aya_bpf::bindings::xdp_action::{XDP_ABORTED, XDP_PASS, XDP_TX};
+use aya_bpf::bindings::xdp_action::{XDP_ABORTED, XDP_PASS, XDP_TX, XDP_REDIRECT};
 use aya_bpf::macros::xdp;
 use aya_bpf::programs::XdpContext;
 use aya_log_ebpf::{error, info};
-use aya_bpf::helpers::{bpf_xdp_adjust_tail, bpf_ktime_get_ns};
-use core::hint::unreachable_unchecked;
+use aya_bpf::helpers::{bpf_xdp_adjust_tail, bpf_ktime_get_ns, bpf_xdp_get_buff_len};
+use core::hint::{black_box, unreachable_unchecked};
 use core::mem::{size_of, swap};
 use core::panic::PanicInfo;
 use core::num::TryFromIntError;
+use core::slice::{from_raw_parts_mut, from_raw_parts};
 use network_types::eth::{EthHdr, EtherType};
 use network_types::ip::{IpProto, Ipv4Hdr};
 use network_types::udp::UdpHdr;
@@ -21,66 +22,14 @@ use zlambda_matrix::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-mod matrix;
-pub use matrix::*;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-fn maybe_optimize<T>(value: T) -> T {
-    value
-    //black_box(value)
+#[inline(always)]
+fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> *const T {
+    (ctx.data() + offset) as *const T
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-impl<T> Access<T> for XdpContext {
-    fn access(&self, index: usize) -> Option<&T> {
-        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
-            return None;
-        }
-
-        Some(unsafe { &*((self.data() + index) as *const T) })
-    }
-}
-
-impl<T> AccessMut<T> for XdpContext {
-    fn access_mut(&mut self, index: usize) -> Option<&mut T> {
-        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
-            return None;
-        }
-
-        Some(unsafe { &mut *((self.data() + index) as *mut T) })
-    }
-}
-
-impl<'a, T> AccessMut<T> for &'a XdpContext {
-    fn access_mut(&mut self, index: usize) -> Option<&mut T> {
-        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
-            return None;
-        }
-
-        Some(unsafe { &mut *((self.data() + index) as *mut T) })
-    }
-}
-
-impl<T> Mutate<T> for XdpContext {
-    fn mutate(&mut self, index: usize, value: T) {
-        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
-            return
-        }
-
-        *unsafe { &mut *((self.data() + index) as *mut T) } = value;
-    }
-}
-
-impl<'a, T> Mutate<T> for &'a XdpContext {
-    fn mutate(&mut self, index: usize, value: T) {
-        if maybe_optimize(maybe_optimize(self.data()) + index + size_of::<T>()) > maybe_optimize(self.data_end()) {
-            return
-        }
-
-        *unsafe { &mut *((self.data() + index) as *mut T) } = value
-    }
+#[inline(always)]
+fn ptr_mut_at<T>(ctx: &XdpContext, offset: usize) -> *mut T {
+    (ctx.data() + offset) as *mut T
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,6 +37,12 @@ impl<'a, T> Mutate<T> for &'a XdpContext {
 pub enum MainError {
     UnexpectedData,
     TryFromIntError(TryFromIntError),
+}
+
+impl From<()> for MainError {
+    fn from(_error: ()) -> Self {
+        Self::UnexpectedData
+    }
 }
 
 impl From<MainError> for &str {
@@ -107,153 +62,170 @@ impl From<TryFromIntError> for MainError {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[xdp(name = "main")]
-pub fn main(mut context: XdpContext) -> u32 {
-    match do_main(&mut context) {
-        Err(_error) => XDP_ABORTED,
-        Ok(result) => result,
-    }
+#[xdp]
+pub fn xdp_main(context: XdpContext) -> u32 {
+    unsafe { xdp_main_unsafe(context) }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+unsafe fn xdp_main_unsafe(context: XdpContext) -> u32 {
+    let program_begin = bpf_ktime_get_ns() as u128;
 
-fn do_main(context: &mut XdpContext) -> Result<u32, MainError> {
-    let program_begin = unsafe { bpf_ktime_get_ns() } as u128;
-
-    if !matches!(
-        (<XdpContext as Access<EthHdr>>::access(context, 0).ok_or(MainError::UnexpectedData)?)
-            .ether_type,
-        EtherType::Ipv4
-    ) {
-        return Ok(XDP_PASS);
+    if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN > context.data_end() {
+        return XDP_PASS;
     }
 
-    if !matches!(
-        <XdpContext as Access<Ipv4Hdr>>::access(context, EthHdr::LEN)
-            .ok_or(MainError::UnexpectedData)?
-            .proto,
-        IpProto::Udp
-    ) {
-        return Ok(XDP_PASS);
+    let ethhdr = ptr_at::<EthHdr>(&context, 0);
+
+    if !matches!((*ethhdr).ether_type, EtherType::Ipv4) {
+        return XDP_PASS;
     }
 
-    if !matches!(
-        u16::from_be(
-            <XdpContext as Access<UdpHdr>>::access(context, EthHdr::LEN + Ipv4Hdr::LEN)
-                .ok_or(MainError::UnexpectedData)?
-                .dest,
-        ),
-        EBPF_UDP_PORT,
-    ) {
-        return Ok(XDP_PASS);
+    let ipv4hdr = ptr_at::<Ipv4Hdr>(&context, EthHdr::LEN);
+
+    if !matches!((*ipv4hdr).proto, IpProto::Udp) {
+        return XDP_PASS;
     }
 
-    let (context, dimension) = {
-        let mut reader = AccessReader::new(
-            Offset::new(
-                context,
-                EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN,
-            ),
-        );
+    let udphdr = ptr_at::<UdpHdr>(&context, EthHdr::LEN + Ipv4Hdr::LEN);
 
-        let dimension =
-            MatrixDimension::read(&mut reader).ok_or(MainError::UnexpectedData)?;
+    if !matches!(u16::from_be((*udphdr).dest), EBPF_UDP_PORT) {
+        return XDP_PASS;
+    }
 
-        (reader.into_inner().into_inner(), dimension)
-    };
+    if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 3 * MATRIX_SIZE + 2 * size_of::<u128>() > context.data_end() {
+        return XDP_PASS;
+    }
 
-    let matrix_size = dimension.element_count();
+    let calculation_begin = bpf_ktime_get_ns() as u128;
 
-    error!(context, "{}", EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN);
+    for i in 0..MATRIX_DIMENSION_SIZE {
+        for j in 0..MATRIX_DIMENSION_SIZE {
+            let mut value = 0;
 
-    unsafe {
-        bpf_xdp_adjust_tail(context.ctx, MATRIX_SIZE as i32 + 2 * size_of::<u128>() as i32)
-    };
+            for k in 0..MATRIX_DIMENSION_SIZE {
+                if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 3 * MATRIX_SIZE + 2 * size_of::<u128>() > context.data_end() {
+                    return XDP_PASS;
+                }
 
-    let calculation_elapsed = {
-        let context: &XdpContext = context;
+                let left_value = *ptr_at::<u8>(
+                    &context,
+                    EthHdr::LEN
+                        + Ipv4Hdr::LEN
+                        + UdpHdr::LEN
+                        + (i * MATRIX_DIMENSION_SIZE + k)
+                );
 
-        let left = Matrix::<_, MatrixItem>::new(
-            Offset::new(
-                context,
-                EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN,
-            ),
-            dimension.flip(),
-        );
+                if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 3 * MATRIX_SIZE + 2 * size_of::<u128>() > context.data_end() {
+                    return XDP_PASS;
+                }
 
-        let right = Matrix::<_, MatrixItem>::new(
-            Offset::new(
-                context,
-                EthHdr::LEN
-                    + Ipv4Hdr::LEN
-                    + UdpHdr::LEN
-                    + MATRIX_SIZE
-            ),
-            dimension.clone(),
-        );
+                let right_value = *ptr_at::<u8>(
+                    &context,
+                    EthHdr::LEN
+                        + Ipv4Hdr::LEN
+                        + UdpHdr::LEN
+                        + MATRIX_SIZE
+                        + (k * MATRIX_DIMENSION_SIZE + j)
+                );
 
-        let mut result = Matrix::<_, u8>::new(
-            Offset::new(
-                context,
+                value += left_value * right_value;
+            }
+
+            if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 3 * MATRIX_SIZE + 2 * size_of::<u128>() > context.data_end() {
+                return XDP_PASS;
+            }
+
+            let result_value = ptr_mut_at::<u8>(
+                &context,
                 EthHdr::LEN
                     + Ipv4Hdr::LEN
                     + UdpHdr::LEN
                     + 2 * MATRIX_SIZE
-            ),
-            dimension,
+                    + (i * MATRIX_DIMENSION_SIZE + j)
+            );
+
+            *result_value = value;
+        }
+    }
+
+    let calculation_end = bpf_ktime_get_ns() as u128;
+
+    if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 3 * MATRIX_SIZE + 2 * size_of::<u128>() > context.data_end() {
+        return XDP_PASS;
+    }
+
+    {
+        let udp_header = ptr_mut_at::<UdpHdr>(
+            &context,
+            EthHdr::LEN + Ipv4Hdr::LEN,
         );
 
-        let calculation_begin = unsafe { bpf_ktime_get_ns() } as u128;
+        swap(&mut (*udp_header).source, &mut (*udp_header).dest);
+        (*udp_header).check = 0; // ignore checksum calculation :)
+    }
 
-        left.multiply(&right, &mut result);
-
-        (unsafe { bpf_ktime_get_ns() } as u128) - calculation_begin
-    };
-
-    {
-        let udp_header =
-            <XdpContext as AccessMut<UdpHdr>>::access_mut(context, EthHdr::LEN + Ipv4Hdr::LEN)
-                .ok_or(MainError::UnexpectedData)?;
-        swap(&mut udp_header.source, &mut udp_header.dest);
-        udp_header.check = 0; // ignore checksum calculation :)
-        udp_header.len = u16::from_ne_bytes((u16::from_be_bytes(udp_header.len.to_ne_bytes()) + u16::try_from(matrix_size)?).to_be_bytes());
+    if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 3 * MATRIX_SIZE + 2 * size_of::<u128>() > context.data_end() {
+        return XDP_PASS;
     }
 
     {
-        let ip_header = <XdpContext as AccessMut<Ipv4Hdr>>::access_mut(context, EthHdr::LEN)
-            .ok_or(MainError::UnexpectedData)?;
-        swap(&mut ip_header.src_addr, &mut ip_header.dst_addr);
-        ip_header.tot_len = u16::from_ne_bytes((u16::from_be_bytes(ip_header.tot_len.to_ne_bytes()) + u16::try_from(matrix_size)?).to_be_bytes());
-    }
-
-    {
-        let ethernet_header = <XdpContext as AccessMut<EthHdr>>::access_mut(context, 0)
-            .ok_or(MainError::UnexpectedData)?;
-        swap(&mut ethernet_header.src_addr, &mut ethernet_header.dst_addr);
-    }
-
-    {
-        let mut times = <XdpContext as AccessMut<u128>>::access_mut(context,
-                EthHdr::LEN
-                    + Ipv4Hdr::LEN
-                    + UdpHdr::LEN
-                    + 3 * MATRIX_SIZE
+        let ip_header = ptr_mut_at::<Ipv4Hdr>(
+            &context,
+            EthHdr::LEN,
         );
 
-        **times.as_mut().unwrap() = calculation_elapsed;
-
-        let mut times = <XdpContext as AccessMut<u128>>::access_mut(context,
-                EthHdr::LEN
-                    + Ipv4Hdr::LEN
-                    + UdpHdr::LEN
-                    + 3 * MATRIX_SIZE
-                    + size_of::<u128>(),
-        );
-
-        **times.as_mut().unwrap() = (unsafe { bpf_ktime_get_ns() } as u128) - program_begin;
+        swap(&mut (*ip_header).src_addr, &mut (*ip_header).dst_addr);
     }
 
-    Ok(XDP_TX)
+    if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 3 * MATRIX_SIZE + 2 * size_of::<u128>() > context.data_end() {
+        return XDP_PASS;
+    }
+
+    {
+        let ethernet_header = ptr_mut_at::<EthHdr>(
+            &context,
+            0,
+        );
+
+        swap(&mut (*ethernet_header).src_addr, &mut (*ethernet_header).dst_addr);
+    }
+
+    if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 3 * MATRIX_SIZE + 2 * size_of::<u128>() > context.data_end() {
+        return XDP_PASS;
+    }
+
+    {
+        let calculation = ptr_mut_at::<u128>(
+            &context,
+            EthHdr::LEN
+                + Ipv4Hdr::LEN
+                + UdpHdr::LEN
+                + 3 * MATRIX_SIZE
+        );
+
+        *calculation = calculation_end - calculation_begin;
+    }
+
+    if context.data() + EthHdr::LEN + Ipv4Hdr::LEN + UdpHdr::LEN + 3 * MATRIX_SIZE + 2 * size_of::<u128>() > context.data_end() {
+        return XDP_PASS;
+    }
+
+    {
+        let program = ptr_mut_at::<u128>(
+            &context,
+            EthHdr::LEN
+                + Ipv4Hdr::LEN
+                + UdpHdr::LEN
+                + 3 * MATRIX_SIZE
+                + size_of::<u128>(),
+        );
+
+        *program = bpf_ktime_get_ns() as u128 - program_begin;
+    }
+
+    error!(&context, "Success");
+
+    XDP_TX
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

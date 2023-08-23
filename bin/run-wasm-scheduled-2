@@ -1,3 +1,0 @@
-#!/bin/sh
-
-RUST_LOG='debug' cargo run --bin zlambda-cli client notify 2 payloads/wasm-scheduled.json datasets/matrix0 datasets/matrix1 > results/wasm-scheduled-2/result-0-1

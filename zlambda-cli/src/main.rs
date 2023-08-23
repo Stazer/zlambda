@@ -5,13 +5,19 @@
 use clap::{Args, Parser, Subcommand};
 use std::error::Error;
 use std::path::Path;
+use std::time::Instant;
+use byteorder::{ByteOrder, LittleEndian};
 use zlambda_core::client::{
     ClientModule, ClientModuleNotificationEventInput, ClientModuleNotificationEventOutput,
     ClientTask,
 };
 use zlambda_core::common::async_trait;
 use zlambda_core::common::fs::read;
+use zlambda_core::common::io::{AsyncWriteExt, stdout, stdin, AsyncReadExt};
 use zlambda_core::common::future::stream::{empty, StreamExt};
+use zlambda_core::common::net::UdpSocket;
+use zlambda_core::common::runtime::spawn;
+use std::mem::size_of;
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::common::utility::Bytes;
@@ -22,9 +28,12 @@ use zlambda_core::server::{
 use zlambda_dynamic::DynamicLibraryManager;
 use zlambda_matrix_native::MatrixCalculator;
 use zlambda_matrix_wasm_module::ImmediateWasmExecutor;
+use std::sync::Arc;
 use zlambda_process::ProcessDispatcher;
 use zlambda_realtime_task::RealTimeTaskManager;
 use zlambda_router::round_robin::{GlobalRoundRobinRouter, LocalRoundRobinRouter};
+use zlambda_matrix_ebpf_module::EbpfLoader;
+use zlambda_matrix::MATRIX_SIZE;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -60,6 +69,10 @@ enum MainCommand {
         address: String,
         #[clap(subcommand)]
         command: ClientCommand,
+    },
+    Ebpf {
+        #[clap(default_value = "127.0.0.1:10200")]
+        address: String,
     },
 }
 
@@ -101,7 +114,7 @@ impl ClientModule for PrintModule {
         let mut stdout = stdout();
 
         while let Some(bytes) = input.body_mut().receiver_mut().next().await {
-            stdout.write_all(&bytes).unwrap();
+            stdout.write_all(&bytes).await.unwrap();
         }
     }
 }
@@ -119,7 +132,7 @@ impl ServerModule for PrintModule {
             .next()
             .await
         {
-            stdout.write_all(&bytes).unwrap();
+            stdout.write_all(&bytes).await.unwrap();
         }
     }
 }
@@ -131,8 +144,6 @@ impl PrintModule {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-use std::io::{stdout, Write};
 
 #[derive(Default, Debug)]
 pub struct PrintAndExitModule {}
@@ -149,7 +160,7 @@ impl ClientModule for PrintAndExitModule {
         let mut stdout = stdout();
 
         while let Some(bytes) = input.body_mut().receiver_mut().next().await {
-            stdout.write_all(&bytes).unwrap();
+            stdout.write_all(&bytes).await.unwrap();
         }
 
         input.client_handle().exit().await;
@@ -166,6 +177,8 @@ impl PrintAndExitModule {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let program_begin = Instant::now();
+
     let arguments = MainArguments::parse();
 
     match arguments.command {
@@ -188,7 +201,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .add_module(DynamicLibraryManager::default())
                 .add_module(ImmediateWasmExecutor::default())
                 .add_module(MatrixCalculator::default())
-                //.add_module(zlambda_ebpf_loader::EbpfLoader::default())
+                .add_module(EbpfLoader::default())
                 .build(
                     listener_address,
                     match command {
@@ -235,7 +248,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
 
-            client_task.run().await
+            client_task.run().await;
+
+            let mut buffer: [u8; size_of::<u128>()] = [0; size_of::<u128>()];
+            LittleEndian::write_u128(&mut buffer, program_begin.elapsed().as_nanos());
+            stdout().write_all(&buffer).await?;
+        }
+        MainCommand::Ebpf { address } => {
+            let socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+            socket.connect(address).await?;
+            let receiver = socket.clone();
+            let sender = socket;
+
+            spawn(async move {
+                let mut buffer: [u8; 3 * MATRIX_SIZE + 2 * size_of::<u128>()] = [0; 3 * MATRIX_SIZE + 2 * size_of::<u128>()];
+                stdin().read(&mut buffer).await.expect("Success");
+                sender.send(&buffer).await.expect("Success");
+            });
+
+            let mut buffer: [u8; 3 * MATRIX_SIZE + 3 * size_of::<u128>()] = [0; 3 * MATRIX_SIZE + 3 * size_of::<u128>()];
+            LittleEndian::write_u128(&mut buffer[3 * MATRIX_SIZE + 2 * size_of::<u128>()..], program_begin.elapsed().as_nanos());
+            stdout().write_all(&buffer).await?;
         }
     };
 

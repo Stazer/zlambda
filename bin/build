@@ -1,7 +1,5 @@
 #!/bin/sh
 
-bin/build-wasm
-
-cargo build --release
-
 bin/build-ebpf
+bin/build-wasm
+bin/build-cargo
