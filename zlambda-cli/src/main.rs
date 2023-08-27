@@ -17,6 +17,7 @@ use zlambda_core::common::io::{AsyncWriteExt, stdout, stdin, AsyncReadExt};
 use zlambda_core::common::future::stream::{empty, StreamExt};
 use zlambda_core::common::net::UdpSocket;
 use zlambda_core::common::runtime::spawn;
+use zlambda_core::common::process::Command;
 use std::mem::size_of;
 use zlambda_core::common::module::{Module, ModuleId};
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
@@ -74,6 +75,7 @@ enum MainCommand {
         #[clap(default_value = "127.0.0.1:10200")]
         address: String,
     },
+    Matrix { },
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -267,8 +269,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
             });
 
             let mut buffer: [u8; 3 * MATRIX_SIZE + 3 * size_of::<u128>()] = [0; 3 * MATRIX_SIZE + 3 * size_of::<u128>()];
+            receiver.recv(&mut buffer).await?;
             LittleEndian::write_u128(&mut buffer[3 * MATRIX_SIZE + 2 * size_of::<u128>()..], program_begin.elapsed().as_nanos());
             stdout().write_all(&buffer).await?;
+        }
+        MainCommand::Matrix {  } => {
+            Command::new("target/release/zlambda-matrix-process").spawn()?.wait().await?;
+
+            let mut buffer: [u8; size_of::<u128>()] = [0; size_of::<u128>()];
+            LittleEndian::write_u128(&mut buffer, program_begin.elapsed().as_nanos());
+            let mut stdout = stdout();
+            stdout.write_all(&buffer).await?;
+            stdout.flush().await?;
         }
     };
 

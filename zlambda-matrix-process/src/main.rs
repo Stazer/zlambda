@@ -70,10 +70,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let calculation_end = calculation_begin.elapsed().as_nanos();
 
     let mut stdout = stdout();
-    stdout.write_all(&data)?;
+    stdout.write_all(result)?;
 
     stdout.write_u128::<LittleEndian>(calculation_end)?;
     stdout.write_u128::<LittleEndian>(program_begin.elapsed().as_nanos())?;
+
+    stdout.flush()?;
 
     Ok(())
 }

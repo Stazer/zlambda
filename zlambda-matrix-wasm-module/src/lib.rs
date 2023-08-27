@@ -16,7 +16,7 @@ use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventInputSource,
     ServerModuleNotificationEventOutput,
 };
-use zlambda_matrix::{MATRIX_DIMENSION_SIZE, MATRIX_ELEMENT_COUNT};
+use zlambda_matrix::{MATRIX_SIZE};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -57,8 +57,8 @@ impl ServerModule for ImmediateWasmExecutor {
                 let _ = bytes.split_to(14);
             }
 
-            let memory = instance.exports.get_memory("memory").unwrap();
-            memory.view(&store).write(1 + written, &bytes).unwrap();
+            let memory = instance.exports.get_memory("memory").expect("");
+            memory.view(&store).write(1 + written, &bytes).expect("-");
 
             written += bytes.len() as u64;
         }
@@ -68,18 +68,26 @@ impl ServerModule for ImmediateWasmExecutor {
         main.call(&mut store, &[Value::I32(1)]).expect("");
         let calculation_end = calculation_begin.elapsed().as_nanos();
 
-        let memory = instance.exports.get_memory("memory").unwrap();
-        let mut result = BytesMut::zeroed(MATRIX_ELEMENT_COUNT + size_of::<u128>() * 2);
+        let memory = instance.exports.get_memory("memory").expect("");
+        let mut result = BytesMut::zeroed(MATRIX_SIZE + size_of::<u128>() * 2);
         memory
             .view(&store)
-            .read((1 + 2 * MATRIX_ELEMENT_COUNT) as _, &mut result)
-            .unwrap();
+            .read((1 + 2 * MATRIX_SIZE) as _, &mut result[0..MATRIX_SIZE])
+            .expect("");
 
         let times = unsafe {
             from_raw_parts_mut(
                 result.as_mut_ptr()
-                    .add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 3),
+                    .add(MATRIX_SIZE),
                 size_of::<u128>() * 2,
+            )
+        };
+
+        let times2 = unsafe {
+            from_raw_parts_mut(
+                result.as_mut_ptr()
+                    .add(MATRIX_SIZE + size_of::<u128>()),
+                size_of::<u128>(),
             )
         };
 
@@ -111,8 +119,13 @@ impl ServerModule for ImmediateWasmExecutor {
             }
         });
 
+        let program_end = program_begin.elapsed().as_nanos();
+
         LittleEndian::write_u128(times, calculation_end);
-        LittleEndian::write_u128(times, program_begin.elapsed().as_nanos());
+        LittleEndian::write_u128(times2, program_end);
+
+        println!("{} {:X?}", calculation_end, calculation_end);
+        println!("{} {:X?}", program_end, program_end);
 
         sender.do_send(result.freeze()).await;
     }

@@ -116,8 +116,6 @@ impl ServerModule for ProcessDispatcher {
         let mut stdout = child.stdout.take().expect("stdout handle");
         let mut stdin = child.stdin.take().expect("stdin handle");
 
-        println!("{:?}", &source);
-
         spawn(async move {
             match target {
                 ProcessDispatcherNotificationTargetHeader::LocalServer { server_module_id } => {

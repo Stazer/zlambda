@@ -3,6 +3,6 @@
 require_relative 'configuration'
 require 'fileutils'
 
-available_results.each do |result|
-  FileUtils.rm_rf(result)
+available_result_names.each do |result|
+  FileUtils.rm_rf("#{$results_path}/#{result}")
 end

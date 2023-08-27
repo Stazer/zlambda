@@ -15,7 +15,7 @@ use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventInputSource,
     ServerModuleNotificationEventOutput,
 };
-use zlambda_matrix::{MATRIX_DIMENSION_SIZE, MATRIX_ELEMENT_COUNT};
+use zlambda_matrix::{MATRIX_SIZE, MATRIX_DIMENSION_SIZE, MATRIX_ELEMENT_COUNT};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -77,7 +77,14 @@ impl ServerModule for MatrixCalculator {
             from_raw_parts_mut(
                 data.as_mut_ptr()
                     .add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 3),
-                size_of::<u128>() * 2,
+                size_of::<u128>(),
+            )
+        };
+        let times2 = unsafe {
+            from_raw_parts_mut(
+                data.as_mut_ptr()
+                    .add(MATRIX_DIMENSION_SIZE * MATRIX_DIMENSION_SIZE * 3 + size_of::<u128>()),
+                size_of::<u128>(),
             )
         };
 
@@ -136,8 +143,9 @@ impl ServerModule for MatrixCalculator {
         });
 
         LittleEndian::write_u128(times, calculation_end);
-        LittleEndian::write_u128(times, program_begin.elapsed().as_nanos());
+        LittleEndian::write_u128(times2, program_begin.elapsed().as_nanos());
 
-        sender.do_send(data.freeze()).await;
+        let mut data = data.freeze();
+        sender.do_send(data.split_off(MATRIX_SIZE * 2)).await;
     }
 }

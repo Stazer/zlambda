@@ -4,8 +4,16 @@ require 'pathname'
 require 'securerandom'
 require_relative 'configuration'
 require 'fileutils'
+require 'concurrent/executor/fixed_thread_pool'
+require 'debug'
 
-class RandomServerChooser
+class ServerChooser
+  def servers
+    []
+  end
+end
+
+class RandomServerChooser < ServerChooser
   def initialize(servers)
     @servers = servers
     @randomizer = Random.new
@@ -14,9 +22,19 @@ class RandomServerChooser
   def next
     @servers[@randomizer.rand(@servers.length)]
   end
+
+  def servers
+    @servers
+  end
 end
 
-class RoundRobinServerChooser
+class NoneServerChooser < ServerChooser
+  def next
+    nil
+  end
+end
+
+class RoundRobinServerChooser < ServerChooser
   def initialize(servers)
     @servers = servers
     @counter = 0
@@ -28,47 +46,31 @@ class RoundRobinServerChooser
 
     item
   end
-end
 
-class Target
-  def name
-    self
-      .class
-      .name
-      .gsub(/Target/, '')
-      .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
-      .gsub(/([a-z\d])([A-Z])/, '\1_\2')
-      .downcase
+  def servers
+    @servers
   end
 end
 
-class EbpfTarget < Target
-  def command(server_address, left_dataset_path, right_dataset_path, result_path)
-    "sh -c '#{$cargo_prefix} cargo run #{$cargo_flags} --bin zlambda-cli ebpf #{server_address} < #{left_dataset_path} < #{right_dataset_path} 2> /dev/null > #{result_path}'"
+class StaticServerChooser < ServerChooser
+  def initialize(server)
+    @server = server
+  end
+
+  def next
+    @server
+  end
+
+  def servers
+    [@server]
   end
 end
-
-class EbpfRandomTarget < EbpfTarget
-  def server_chooser
-    RandomServerChooser.new($ebpf_socket_addresses)
-  end
-end
-
-class EbpfRoundRobinTarget < EbpfTarget
-  def server_chooser
-    RoundRobinServerChooser.new($ebpf_socket_addresses)
-  end
-end
-
-TARGETS = [
-  EbpfRandomTarget,
-  EbpfRoundRobinTarget,
-]
 
 class Executor
-  def run(datasets, target)
-    server_chooser = target.server_chooser
-    results_path = "#{$results_path}/#{target.name}"
+  def run(name, datasets, target, server_chooser)
+    before_run
+
+    results_path = "#{$results_path}/#{name}"
 
     FileUtils.mkdir_p(results_path)
 
@@ -77,10 +79,22 @@ class Executor
         left_dataset_basename = Pathname.new(left_dataset_path).basename
         right_dataset_basename = Pathname.new(right_dataset_path).basename
 
-        execute(target.command(server_chooser.next, left_dataset_path, right_dataset_path, "#{results_path}/#{left_dataset_basename}x#{right_dataset_basename}"))
+        command = target.command(
+          server_chooser.next,
+          left_dataset_path,
+          right_dataset_path,
+          "#{results_path}/#{left_dataset_basename}x#{right_dataset_basename}",
+        )
+
+        execute(command)
       end
     end
+
+    after_run
   end
+
+  def before_run; end
+  def after_run; end
 end
 
 class SequentialExecutor < Executor
@@ -91,136 +105,208 @@ class SequentialExecutor < Executor
 end
 
 class ParallelExecutor < Executor
+  def execute(command)
+    @pool << proc do
+      print("#{command}\n")
+      system(command)
+    end
+  end
+
+  def before_run
+    @pool = Concurrent::FixedThreadPool.new($parallel_execution_threads)
+  end
+
+  def after_run
+    #while true
+    #  break if @pool.queue_length == 0
+    #end
+
+    @pool.wait_for_termination
+
+    @pool = nil
+  end
 end
 
-SequentialExecutor.new.run(available_datasets, EbpfRoundRobinTarget.new)
+class Target
+end
 
-# Sequential
-#sequential(datasets, -> { $servers[0] })
+class NativeTarget < Target
+end
 
-=begin
-####################################################################################################
+class NativeUnscheduledTarget < NativeTarget
+  def command(server_address, left_dataset_path, right_dataset_path, result_path)
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} notify 7 #{left_dataset_path} #{right_dataset_path} 2> /dev/null > #{result_path}'"
+  end
+end
 
-wasm_unscheduled_command()
-{
-    SERVER_ADDRESS=$1
-    LEFT_MATRIX_PATH=$2
-    RIGHT_MATRIX_PATH=$3
-    RESULT_PATH=$4
+class NativeScheduledTarget < NativeTarget
+  def command(server_address, left_dataset_path, right_dataset_path, result_path)
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} notify 2 payloads/native-scheduled.json #{left_dataset_path} #{right_dataset_path} 2> /dev/null > #{result_path}'"
+  end
+end
 
-    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 6 ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
-}
+class WasmTarget < Target
+end
 
-wasm_scheduled_command()
-{
-    SERVER_ADDRESS=$1
-    LEFT_MATRIX_PATH=$2
-    RIGHT_MATRIX_PATH=$3
-    RESULT_PATH=$4
+class WasmUnscheduledTarget < WasmTarget
+  def command(server_address, left_dataset_path, right_dataset_path, result_path)
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} notify 6 #{left_dataset_path} #{right_dataset_path} 2> /dev/null > #{result_path}'"
+  end
+end
 
-    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 2 payloads/wasm-scheduled.json ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
-}
+class WasmScheduledTarget < WasmTarget
+  def command(server_address, left_dataset_path, right_dataset_path, result_path)
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} notify 2 payloads/wasm-scheduled.json #{left_dataset_path} #{right_dataset_path} 2> /dev/null > #{result_path}'"
+  end
+end
 
-native_unscheduled_command()
-{
-    SERVER_ADDRESS=$1
-    LEFT_MATRIX_PATH=$2
-    RIGHT_MATRIX_PATH=$3
-    RESULT_PATH=$4
+class EbpfTarget < Target
+  def command(server_address, left_dataset_path, right_dataset_path, result_path)
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} ebpf #{server_address} < #{left_dataset_path} < #{right_dataset_path} 2> /dev/null > #{result_path}'"
+  end
+end
 
-    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 7 ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
-}
+class ProcessTarget < Target
+end
 
-native_scheduled_command()
-{
-    SERVER_ADDRESS=$1
-    LEFT_MATRIX_PATH=$2
-    RIGHT_MATRIX_PATH=$3
-    RESULT_PATH=$4
+class ProcessCliTarget < Target
+  def command(_server_address, left_dataset_path, right_dataset_path, result_path)
+    "cat #{left_dataset_path} #{right_dataset_path} | sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} matrix' 2> /dev/null > #{result_path}"
+  end
+end
 
-    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 2 payloads/native-scheduled.json ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
-}
+class ProcessServerTarget < ProcessTarget
+end
 
-process_cli_command()
-{
-    SERVER_ADDRESS=$1
-    LEFT_MATRIX_PATH=$2
-    RIGHT_MATRIX_PATH=$3
-    RESULT_PATH=$4
+class ProcessServerUnscheduledTarget < ProcessServerTarget
+  def command(server_address, left_dataset_path, right_dataset_path, result_path)
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} notify 1 payloads/process-server.json #{left_dataset_path} #{right_dataset_path} 2> /dev/null > #{result_path}'"
+  end
+end
 
-    sh -c "cat ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} | ${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-matrix-process 2> /dev/null > ${RESULT_PATH}"
-}
+class ProcessServerScheduledTarget < ProcessServerTarget
+  def command(server_address, left_dataset_path, right_dataset_path, result_path)
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} notify 2 payloads/process-server-scheduled-0.json payloads/process-server-scheduled-1.json #{left_dataset_path} #{right_dataset_path} 2> /dev/null > #{result_path}'"
+  end
+end
 
-process_server_unscheduled_command()
-{
-    SERVER_ADDRESS=$1
-    LEFT_MATRIX_PATH=$2
-    RIGHT_MATRIX_PATH=$3
-    RESULT_PATH=$4
+class Benchmark
+  attr_reader :name
 
-    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 1 payloads/process-server.json ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
-}
+  def initialize(name, target, server_chooser)
+    @name = name
+    @target = target
+    @server_chooser = server_chooser
+  end
 
-process_server_scheduled_command()
-{
-    SERVER_ADDRESS=$1
-    LEFT_MATRIX_PATH=$2
-    RIGHT_MATRIX_PATH=$3
-    RESULT_PATH=$4
+  def run(executor, datasets)
+    executor.run(@name, datasets, @target, @server_chooser)
+  end
 
-    sh -c "${CARGO_PREFIX} cargo run ${CARGO_FLAGS} --bin zlambda-cli client ${SERVER_ADDRESS} notify 2 payloads/process-server-scheduled-0.json payloads/process-server-scheduled-1.json ${LEFT_MATRIX_PATH} ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}" 2>> ${MEASUREMENT_PATH}
-}
+  def server_commands
+    [
+      "#{$zlambda_cli_path} server 0.0.0.0:#{$server_addresses[0].split(':')[1]} leader",
+      *$server_addresses[1..]
+         .map.with_index { |x, i| "#{$zlambda_cli_path} server 0.0.0.0:#{x.split(':')[1]} follower #{$server_addresses[0]} #{i + 1}" }
+    ].join("\n")
+  end
+end
 
-ebpf_command()
-{
-    SERVER_ADDRESS=$1
-    LEFT_MATRIX_PATH=$2
-    RIGHT_MATRIX_PATH=$3
-    RESULT_PATH=$4
+BENCHMARKS = [
+  Benchmark.new('native-unscheduled', NativeUnscheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('native-scheduled1', NativeScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('native-scheduled2-rnd', NativeScheduledTarget.new, RandomServerChooser.new($server_addresses[0..1])),
+  Benchmark.new('native-scheduled2-rr', NativeScheduledTarget.new, RoundRobinServerChooser.new($server_addresses[0..1])),
+  Benchmark.new('native-scheduled2-lo', NativeScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('native-scheduled2-fo', NativeScheduledTarget.new, StaticServerChooser.new($server_addresses[1])),
+  Benchmark.new('native-scheduled3-rnd', NativeScheduledTarget.new, RandomServerChooser.new($server_addresses[0..2])),
+  Benchmark.new('native-scheduled3-rr', NativeScheduledTarget.new, RoundRobinServerChooser.new($server_addresses[0..2])),
+  Benchmark.new('native-scheduled3-lo', NativeScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('native-scheduled3-fo', NativeScheduledTarget.new, StaticServerChooser.new($server_addresses[1])),
 
-    sh -c "${CARGO_PREFIX} cargo run --release --bin zlambda-cli ebpf ${SERVER_ADDRESS} < ${LEFT_MATRIX_PATH} < ${RIGHT_MATRIX_PATH} 2> /dev/null > ${RESULT_PATH}"
-}
+  Benchmark.new('process-cli', ProcessCliTarget.new, NoneServerChooser.new),
+  Benchmark.new('process-server-unscheduled', ProcessServerUnscheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('process-server-scheduled1', ProcessServerScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('process-server-scheduled2-rnd', ProcessServerScheduledTarget.new, RandomServerChooser.new($server_addresses[0..1])),
+  Benchmark.new('process-server-scheduled2-rr', ProcessServerScheduledTarget.new, RoundRobinServerChooser.new($server_addresses[0..1])),
+  Benchmark.new('process-server-scheduled2-lo', ProcessServerScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('process-server-scheduled2-fo', ProcessServerScheduledTarget.new, StaticServerChooser.new($server_addresses[1])),
+  Benchmark.new('process-server-scheduled3-rnd', ProcessServerScheduledTarget.new, RandomServerChooser.new($server_addresses[0..2])),
+  Benchmark.new('process-server-scheduled3-rr', ProcessServerScheduledTarget.new, RoundRobinServerChooser.new($server_addresses[0..2])),
+  Benchmark.new('process-server-scheduled3-lo', ProcessServerScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('process-server-scheduled3-fo', ProcessServerScheduledTarget.new, StaticServerChooser.new($server_addresses[1])),
 
-####################################################################################################
+  Benchmark.new('wasm-unscheduled', WasmUnscheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('wasm-scheduled1', WasmScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('wasm-scheduled2-rnd', WasmScheduledTarget.new, RandomServerChooser.new($server_addresses[0..1])),
+  Benchmark.new('wasm-scheduled2-rr', WasmScheduledTarget.new, RoundRobinServerChooser.new($server_addresses[0..1])),
+  Benchmark.new('wasm-scheduled2-lo', WasmScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('wasm-scheduled2-fo', WasmScheduledTarget.new, StaticServerChooser.new($server_addresses[1])),
+  Benchmark.new('wasm-scheduled3-rnd', WasmScheduledTarget.new, RandomServerChooser.new($server_addresses[0..2])),
+  Benchmark.new('wasm-scheduled3-rr', WasmScheduledTarget.new, RoundRobinServerChooser.new($server_addresses[0..2])),
+  Benchmark.new('wasm-scheduled3-lo', WasmScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
+  Benchmark.new('wasm-scheduled3-fo', WasmScheduledTarget.new, StaticServerChooser.new($server_addresses[1])),
 
-sequential()
-{
-    COMMAND=$1
-    FIRST=$2
-    LAST=$3
+  Benchmark.new('ebpf-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses)),
+  Benchmark.new('ebpf-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses)),
+]
 
-    for i in `seq ${FIRST} ${LAST}`
-    do
-        for j in `seq ${FIRST} ${LAST}`
-        do
-            eval "${COMMAND} ${i} ${j}"
-        done
-    done
-}
+BENCHMARK_BY_NAME = Hash[BENCHMARKS.map { |x| [x.name, x] }]
 
-parallel()
-{
-    echo ''
-}
+def convert_times(time)
+  ["#{time}ns,", "#{time / 1000.0}μs", "#{time / 1_000_000.0}ms", "#{time / 1_000_000_000.0}s"]
+end
 
-####################################################################################################
+def calculate(result_name)
+  measurement_names = available_result_measurement_names(result_name)
 
-echo "`dd if=/dev/random bs=1 count=1 2> /dev/null | od -tu1`"
+  measurements = measurement_names.map do |measurement|
+    File.open("#{$results_path}/#{result_name}/#{measurement}", 'rb') do |file|
+      file.seek(-3 * 16, IO::SEEK_END)
 
-exit 0
+      bytes = file.read(3 * 16)
 
-for i in `seq ${DATASET_BENCHMARK_FIRST} ${DATASET_BENCHMARK_LAST}`
-do
-    for j in `seq ${DATASET_BENCHMARK_FIRST} ${DATASET_BENCHMARK_LAST}`
-    do
-        LEFT_MATRIX_PATH="${DATASET_PATH}${i}"
-        RIGHT_MATRIX_PATH="${DATASET_PATH}${j}"
-        RESULT_MATRIX_PATH="${RESULTS_PATH}/${BENCHMARK_NAME}/${i}x${j}"
-        MEASUREMENT_PATH="${MEASUREMENTS_PATH}/${BENCHMARK_NAME}"
-        SERVER_ADDRESS="127.0.0.1:8000"
+      calculation_time = bytes[0..15].unpack("C*").map { |x| '%02X' % x }.reverse.join.to_i(16)
+      program_time = bytes[16..31].unpack("C*").map { |x| '%02X' % x }.reverse.join.to_i(16)
+      total_time = bytes[32..47].unpack("C*").map { |x| '%02X' % x }.reverse.join.to_i(16)
 
-        wasm_unscheduled_command "$SERVER_ADDRESS" "$LEFT_MATRIX_PATH" "$RIGHT_MATRIX_PATH" "$RESULT_MATRIX_PATH" "$MEASUREMENT_PATH"
-    done
-done
+      if calculation_time > program_time || calculation_time > total_time || program_time > total_time
+        puts "Something unexpected happened. Running debug shell..."
+        binding.break
+      end
 
-=end
+      [
+        calculation_time.to_f,
+        program_time.to_f,
+        total_time.to_f,
+      ]
+    end
+  end
+
+  averages = measurements.reduce({ calculation: 0.0, program: 0.0, total: 0.0 }) do |carry, item|
+    Hash[
+      [:calculation, :program, :total].map.with_index do |type, index|
+        [type, carry[type] + (item[index] / measurements.length)]
+      end
+    ]
+  end
+
+  variances = measurements.reduce({ calculation: 0.0, program: 0.0, total: 0.0 }) do |carry, item|
+    Hash[
+      [:calculation, :program, :total].map.with_index do |type, index|
+        [
+          type,
+          carry[type] + (item[index] - averages[type])**2 / (measurements.length - 1)
+        ]
+      end
+    ]
+  end
+
+  deviations = Hash[variances.map { |key, variance| [key, Math.sqrt(variance)] }]
+
+  {
+    averages: averages,
+    variances: variances,
+    deviations: deviations,
+  }
+end
