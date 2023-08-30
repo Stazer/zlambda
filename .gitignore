@@ -18,5 +18,8 @@ Cargo.lock
 /results/*
 !/results/*/.keep
 
+/calculations/*
+!/calculations/*/.keep
+
 /zlambda-matrix-ebpf-module/target
 /zlambda-matrix-ebpf/target

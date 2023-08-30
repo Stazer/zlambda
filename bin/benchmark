@@ -6,6 +6,7 @@ require_relative 'configuration'
 require 'fileutils'
 require 'concurrent/executor/fixed_thread_pool'
 require 'debug'
+require 'json'
 
 class ServerChooser
   def servers
@@ -311,7 +312,13 @@ def calculate(result_name)
   }
 end
 
-BENCHMARK_BY_NAME['wasm-scheduled1'].run(
-  SequentialExecutor.new,
-  available_datasets,
-)
+def run(name)
+  BENCHMARK_BY_NAME[name].run(
+    SequentialExecutor.new,
+    available_datasets,
+  )
+
+  File.write("#{$calculations_path}/#{name}.json", JSON.dump(calculate(name)))
+end
+
+run('process-server-unscheduled')

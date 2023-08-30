@@ -5,6 +5,7 @@ $dataset_size = $matrix_size
 $dataset_count = 10
 $results_path = 'results'
 $datasets_path = 'datasets'
+$calculations_path = 'calculations'
 $zlambda_cli_prefix = 'RUST_LOG="trace"'
 $zlambda_cli_path = 'target/release/zlambda-cli'
 $zlambda_matrix_process_path = 'target/release/zlambda-matrix-process'
