@@ -310,3 +310,8 @@ def calculate(result_name)
     deviations: deviations,
   }
 end
+
+BENCHMARK_BY_NAME['wasm-scheduled1'].run(
+  SequentialExecutor.new,
+  available_datasets,
+)

@@ -124,9 +124,6 @@ impl ServerModule for ImmediateWasmExecutor {
         LittleEndian::write_u128(times, calculation_end);
         LittleEndian::write_u128(times2, program_end);
 
-        println!("{} {:X?}", calculation_end, calculation_end);
-        println!("{} {:X?}", program_end, program_end);
-
         sender.do_send(result.freeze()).await;
     }
 }

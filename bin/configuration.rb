@@ -10,7 +10,7 @@ $zlambda_cli_path = 'target/release/zlambda-cli'
 $zlambda_matrix_process_path = 'target/release/zlambda-matrix-process'
 $leader_server_address =
 $server_addresses = [
-  '127.0.0.1:8000',
+  '192.168.8.2:8000',
   #'127.0.0.1:8001',
   #'127.0.0.1:8002',
 ]
