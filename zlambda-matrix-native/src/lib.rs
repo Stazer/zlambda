@@ -95,20 +95,15 @@ impl ServerModule for MatrixCalculator {
                 let mut value: usize = 0;
 
                 for k in 0..MATRIX_DIMENSION_SIZE {
-                    let (left_value, right_value) = match (
-                        left.get(i * MATRIX_DIMENSION_SIZE + k),
-                        right.get(k * MATRIX_DIMENSION_SIZE + j),
-                    ) {
-                        (Some(left_value), Some(right_value)) => (left_value, right_value),
-                        (_, _) => return,
-                    };
+                    let (left_value, right_value) = (
+                        left.get(i * MATRIX_DIMENSION_SIZE + k).unwrap(),
+                        right.get(k * MATRIX_DIMENSION_SIZE + j).unwrap(),
+                    );
 
                     value += (*left_value as usize) * (*right_value as usize);
                 }
 
-                if let Some(old_value) = result.get_mut(i * MATRIX_DIMENSION_SIZE + j) {
-                    *old_value = value as u8;
-                }
+                *result.get_mut(i * MATRIX_DIMENSION_SIZE + j).unwrap() = value as u8;
             }
         }
 

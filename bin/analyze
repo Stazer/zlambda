@@ -27,7 +27,7 @@ available_calculation_names.each do |calculation_name|
       data['deviations']['calculation'],
       data['deviations']['program'],
       data['deviations']['total'],
-    ].map { |x| "#{x}ns" }
+    ].map { |x| "#{x}" }
   ]
 
   puts(csv.join(';'))
