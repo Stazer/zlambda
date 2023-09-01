@@ -179,7 +179,7 @@ impl ServerModule for RealTimeTaskManager {
                         .await;
                 }
                 RealTimeTaskManagerLogEntryData::Schedule(data) => {
-                    let (source_server_id, source_notification_id, origin) = {
+                    let (source_server_id, source_notification_id, origin, target_module_id) = {
                         let mut tasks = instance.tasks().write().await;
                         let task = tasks.get_mut(usize::from(data.task_id())).expect("");
                         task.set_state(RealTimeTaskState::Scheduled(
@@ -192,6 +192,7 @@ impl ServerModule for RealTimeTaskManager {
                             task.origin().as_ref().map(|o| {
                                 ServerNotificationOrigin::new(o.server_id(), o.server_client_id())
                             }),
+                            task.target_module_id(),
                         )
                     };
 
@@ -223,7 +224,7 @@ impl ServerModule for RealTimeTaskManager {
                         spawn(async move {
                             let bytes = serialize_to_bytes(
                                 &RealTimeTaskManagerNotificationHeader::Execute(
-                                    RealTimeTaskManagerExecuteNotificationHeader::new(task_id),
+                                    RealTimeTaskManagerExecuteNotificationHeader::new(task_id, target_module_id),
                                 ),
                             )
                             .expect("")
@@ -352,17 +353,10 @@ impl ServerModule for RealTimeTaskManager {
                     .await;
             }
             RealTimeTaskManagerNotificationHeader::Execute(header) => {
-                let (target_module_id,) = {
-                    let tasks = instance.tasks().read().await;
-                    let task = tasks.get(usize::from(header.task_id())).expect("");
-
-                    (task.target_module_id(),)
-                };
-
                 let module = instance
                     .server()
                     .modules()
-                    .get(target_module_id)
+                    .get(header.target_module_id())
                     .await
                     .expect("");
 
@@ -390,7 +384,7 @@ impl ServerModule for RealTimeTaskManager {
                 module
                     .on_notification(ServerModuleNotificationEventInput::new(
                         server.clone(),
-                        target_module_id,
+                        header.target_module_id(),
                         ServerModuleNotificationEventInputServerSource::new(
                             origin.as_ref().map(|o| {
                                 ServerModuleNotificationEventInputServerSourceOrigin::new(

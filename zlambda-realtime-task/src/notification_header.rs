@@ -39,6 +39,7 @@ impl RealTimeTaskManagerDispatchNotificationHeader {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RealTimeTaskManagerExecuteNotificationHeader {
     task_id: RealTimeTaskId,
+    target_module_id: ModuleId,
 }
 
 impl From<RealTimeTaskManagerExecuteNotificationHeader> for (RealTimeTaskId,) {
@@ -47,13 +48,23 @@ impl From<RealTimeTaskManagerExecuteNotificationHeader> for (RealTimeTaskId,) {
     }
 }
 
+impl From<RealTimeTaskManagerExecuteNotificationHeader> for (RealTimeTaskId, ModuleId) {
+    fn from(header: RealTimeTaskManagerExecuteNotificationHeader) -> Self {
+        (header.task_id, header.target_module_id)
+    }
+}
+
 impl RealTimeTaskManagerExecuteNotificationHeader {
-    pub fn new(task_id: RealTimeTaskId) -> Self {
-        Self { task_id }
+    pub fn new(task_id: RealTimeTaskId, target_module_id: ModuleId) -> Self {
+        Self { task_id, target_module_id }
     }
 
     pub fn task_id(&self) -> RealTimeTaskId {
         self.task_id
+    }
+
+    pub fn target_module_id(&self) -> ModuleId {
+        self.target_module_id
     }
 }
 
