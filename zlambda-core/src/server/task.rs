@@ -1452,7 +1452,7 @@ impl ServerTask {
         }
 
         if server_id >= self.server_node_message_senders.len() {
-            self.server_socket_addresses
+            self.server_node_message_senders
                 .resize_with(server_id + 1, || None);
         }
 
