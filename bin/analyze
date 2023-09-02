@@ -19,7 +19,7 @@ available_calculation_names.each do |calculation_name|
   data = JSON.load(File.read("#{$calculations_path}/#{calculation_name}"))
 
   csv = [
-    calculation_name,
+    calculation_name.gsub('.json', ''),
     [
       data['averages']['calculation'],
       data['averages']['program'],
