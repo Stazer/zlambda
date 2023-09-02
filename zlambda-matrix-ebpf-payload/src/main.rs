@@ -223,8 +223,6 @@ unsafe fn xdp_main_unsafe(context: XdpContext) -> u32 {
         *program = bpf_ktime_get_ns() as u128 - program_begin;
     }
 
-    error!(&context, "Success");
-
     XDP_TX
 }
 

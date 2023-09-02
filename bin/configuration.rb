@@ -11,16 +11,16 @@ $zlambda_cli_path = 'target/release/zlambda-cli'
 $zlambda_matrix_process_path = 'target/release/zlambda-matrix-process'
 $leader_server_address =
 $server_addresses = [
-  '192.168.8.2:8000',
-  #'127.0.0.1:8001',
-  #'127.0.0.1:8002',
+  '192.168.8.11:8000',
+  '192.168.8.12:8000',
+  '192.168.8.13:8000',
 ]
 $ebpf_socket_addresses = [
-  '192.168.8.2:10200',
-  #'192.168.8.3:10200',
-  #'192.168.8.4:10200',
+  '192.168.8.11:10500',
+  '192.168.8.12:10500',
+  '192.168.8.13:10500',
 ]
-$parallel_execution_threads = 4
+$parallel_execution_threads = 8
 
 def available_datasets
   Dir.glob("#{$datasets_path}/*")
@@ -34,4 +34,8 @@ def available_result_measurement_names(result_name)
   path = "#{$results_path}/#{result_name}/"
 
   Dir.glob("#{path}*").map { |x| x.gsub("#{path}", '') }
+end
+
+def available_calculation_names
+  Dir.glob("#{$calculations_path}/*").map { |x| x.gsub("#{$calculations_path}/", '') }
 end

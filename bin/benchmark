@@ -248,8 +248,11 @@ BENCHMARKS = [
   Benchmark.new('wasm-scheduled3-lo', WasmScheduledTarget.new, StaticServerChooser.new($server_addresses[0])),
   Benchmark.new('wasm-scheduled3-fo', WasmScheduledTarget.new, StaticServerChooser.new($server_addresses[1])),
 
-  Benchmark.new('ebpf-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses)),
-  Benchmark.new('ebpf-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses)),
+  Benchmark.new('ebpf', EbpfTarget.new, StaticServerChooser.new($ebpf_socket_addresses[0])),
+  Benchmark.new('ebpf2-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses[0..2])),
+  Benchmark.new('ebpf2-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses[0..2])),
+  Benchmark.new('ebpf3-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses)),
+  Benchmark.new('ebpf3-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses)),
 ]
 
 BENCHMARK_BY_NAME = Hash[BENCHMARKS.map { |x| [x.name, x] }]
@@ -320,5 +323,3 @@ def run(name)
 
   File.write("#{$calculations_path}/#{name}.json", JSON.dump(calculate(name)))
 end
-
-run('process-server-unscheduled')
