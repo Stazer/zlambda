@@ -249,10 +249,10 @@ BENCHMARKS = [
   Benchmark.new('wasm-scheduled3-fo', WasmScheduledTarget.new, StaticServerChooser.new($server_addresses[1])),
 
   Benchmark.new('ebpf', EbpfTarget.new, StaticServerChooser.new($ebpf_socket_addresses[0])),
-  Benchmark.new('ebpf2-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses[0..2])),
-  Benchmark.new('ebpf2-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses[0..2])),
-  Benchmark.new('ebpf3-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses)),
-  Benchmark.new('ebpf3-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses)),
+  Benchmark.new('ebpf2-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses[0..1])),
+  Benchmark.new('ebpf2-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses[0..1])),
+  Benchmark.new('ebpf3-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses[0..2])),
+  Benchmark.new('ebpf3-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses[0..2])),
 ]
 
 BENCHMARK_BY_NAME = Hash[BENCHMARKS.map { |x| [x.name, x] }]
