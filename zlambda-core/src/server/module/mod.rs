@@ -51,4 +51,16 @@ pub trait ServerModule: Module {
         _event: ServerModulePromotionEventInput,
     ) -> ServerModulePromotionEventOutput {
     }
+
+    async fn on_server_connect(
+        &self,
+        _event: ServerModuleServerConnectEventInput,
+    ) -> ServerModuleServerConnectEventOutput {
+    }
+
+    async fn on_server_disconnect(
+        &self,
+        _event: ServerModuleServerDisconnectEventInput,
+    ) -> ServerModuleServerDisconnectEventOutput {
+    }
 }

@@ -441,3 +441,59 @@ impl ServerModulePromotionEventInput {
         &self.server
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub struct ServerModuleServerConnectEventInput {
+    server: Arc<Server>,
+    server_id: ServerId,
+}
+
+impl From<ServerModuleServerConnectEventInput> for (Arc<Server>, ServerId) {
+    fn from(input: ServerModuleServerConnectEventInput) -> Self {
+        (input.server, input.server_id)
+    }
+}
+
+impl ServerModuleServerConnectEventInput {
+    pub fn new(server: Arc<Server>, server_id: ServerId) -> Self {
+        Self { server, server_id }
+    }
+
+    pub fn server(&self) -> &Arc<Server> {
+        &self.server
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Debug)]
+pub struct ServerModuleServerDisconnectEventInput {
+    server: Arc<Server>,
+    server_id: ServerId,
+}
+
+impl From<ServerModuleServerDisconnectEventInput> for (Arc<Server>, ServerId) {
+    fn from(input: ServerModuleServerDisconnectEventInput) -> Self {
+        (input.server, input.server_id)
+    }
+}
+
+impl ServerModuleServerDisconnectEventInput {
+    pub fn new(server: Arc<Server>, server_id: ServerId) -> Self {
+        Self { server, server_id }
+    }
+
+    pub fn server(&self) -> &Arc<Server> {
+        &self.server
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}

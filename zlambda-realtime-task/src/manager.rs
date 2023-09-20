@@ -3,9 +3,9 @@ use crate::{
     RealTimeTaskFinishedState, RealTimeTaskId, RealTimeTaskManagerExecuteNotificationHeader,
     RealTimeTaskManagerInstance, RealTimeTaskManagerLogEntryData,
     RealTimeTaskManagerLogEntryDispatchData, RealTimeTaskManagerLogEntryFinishData,
-    RealTimeTaskManagerLogEntryOriginData, RealTimeTaskManagerLogEntryRunData,
-    RealTimeTaskManagerNotificationHeader, RealTimeTaskOrigin, RealTimeTaskRunningState,
-    RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
+    RealTimeTaskManagerLogEntryOriginData, RealTimeTaskManagerLogEntryRescheduleData,
+    RealTimeTaskManagerLogEntryRunData, RealTimeTaskManagerNotificationHeader, RealTimeTaskOrigin,
+    RealTimeTaskRunningState, RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
     RealTimeTaskSchedulingTaskRescheduleMessageInput, RealTimeTaskSchedulingTaskState,
     RealTimeTaskState,
 };
@@ -29,7 +29,9 @@ use zlambda_core::server::{
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventInputServerSource,
     ServerModuleNotificationEventInputServerSourceOrigin, ServerModuleNotificationEventInputSource,
-    ServerModuleNotificationEventOutput, ServerModuleStartupEventInput,
+    ServerModuleNotificationEventOutput, ServerModuleServerConnectEventInput,
+    ServerModuleServerConnectEventOutput, ServerModuleServerDisconnectEventInput,
+    ServerModuleServerDisconnectEventOutput, ServerModuleStartupEventInput,
     ServerModuleStartupEventOutput, ServerNotificationOrigin, ServerSystemLogEntryData,
     SERVER_SYSTEM_LOG_ID,
 };
@@ -224,7 +226,10 @@ impl ServerModule for RealTimeTaskManager {
                         spawn(async move {
                             let bytes = serialize_to_bytes(
                                 &RealTimeTaskManagerNotificationHeader::Execute(
-                                    RealTimeTaskManagerExecuteNotificationHeader::new(task_id, target_module_id),
+                                    RealTimeTaskManagerExecuteNotificationHeader::new(
+                                        task_id,
+                                        target_module_id,
+                                    ),
                                 ),
                             )
                             .expect("")
@@ -251,6 +256,35 @@ impl ServerModule for RealTimeTaskManager {
                                 .await;
                         });
                     }
+                }
+                RealTimeTaskManagerLogEntryData::Reschedule(data) => {
+                    let (task_id, deadline) = {
+                        let mut tasks = instance.tasks().write().await;
+                        let task = tasks.get_mut(usize::from(data.task_id())).expect("");
+                        task.set_state(RealTimeTaskState::Dispatched(
+                            RealTimeTaskDispatchedState::new(),
+                        ));
+
+                        let task_data = (task.id(), *task.deadline());
+
+                        task_data
+                    };
+
+                    {
+                        let mut deadline_dispatched_sorted_tasks =
+                            instance.deadline_sorted_tasks().write().await;
+
+                        deadline_dispatched_sorted_tasks.push(Reverse(
+                            DeadlineSortableRealTimeTask::new(task_id, deadline),
+                        ));
+                    }
+
+                    instance
+                        .sender()
+                        .do_send_asynchronous(
+                            RealTimeTaskSchedulingTaskRescheduleMessageInput::new(),
+                        )
+                        .await;
                 }
                 RealTimeTaskManagerLogEntryData::Run(data) => {
                     let mut tasks = instance.tasks().write().await;
@@ -412,6 +446,82 @@ impl ServerModule for RealTimeTaskManager {
                     )
                     .await;
             }
+        }
+    }
+
+    async fn on_server_connect(
+        &self,
+        input: ServerModuleServerConnectEventInput,
+    ) -> ServerModuleServerConnectEventOutput {
+        let current_server_id = input.server().server_id().await;
+        let connected_server_id = input.server_id();
+
+        let instance = {
+            let instances = self.instances.read().await;
+            instances.get(&current_server_id).expect("").clone()
+        };
+
+        {
+            let mut disconnected_servers = instance.disconnected_servers().write().await;
+            disconnected_servers.remove(&connected_server_id);
+        }
+    }
+
+    async fn on_server_disconnect(
+        &self,
+        input: ServerModuleServerDisconnectEventInput,
+    ) -> ServerModuleServerDisconnectEventOutput {
+        let disconnected_server_id = input.server_id();
+        let current_server_id = input.server().server_id().await;
+        let leader_server_id = input.server().leader_server_id().await;
+
+        if current_server_id != leader_server_id {
+            return;
+        }
+
+        let instance = {
+            let instances = self.instances.read().await;
+            instances.get(&current_server_id).expect("").clone()
+        };
+
+        {
+            let mut disconnected_servers = instance.disconnected_servers().write().await;
+            disconnected_servers.insert(disconnected_server_id);
+        }
+
+        let rescheduling_task_ids = {
+            let tasks = instance.tasks().read().await;
+
+            tasks
+                .iter()
+                .filter(|task| match &task.state {
+                    RealTimeTaskState::Dispatched(_) => false,
+                    RealTimeTaskState::Scheduled(scheduled) => {
+                        scheduled.target_server_id() == disconnected_server_id
+                    }
+                    RealTimeTaskState::Running(running) => {
+                        running.target_server_id() == disconnected_server_id
+                    }
+                    RealTimeTaskState::Finished(_) => false,
+                })
+                .map(|task| task.id())
+                .collect::<Vec<_>>()
+        };
+
+        for rescheduling_task_id in rescheduling_task_ids {
+            input
+                .server()
+                .logs()
+                .get(instance.log_id())
+                .entries()
+                .commit(
+                    serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Reschedule(
+                        RealTimeTaskManagerLogEntryRescheduleData::new(rescheduling_task_id),
+                    ))
+                    .expect("")
+                    .freeze(),
+                )
+                .await;
         }
     }
 }

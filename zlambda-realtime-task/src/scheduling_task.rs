@@ -6,7 +6,7 @@ use crate::{
 };
 use chrono::Utc;
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use zlambda_core::common::message::{message_queue, MessageQueueReceiver, MessageQueueSender};
@@ -52,6 +52,7 @@ impl RealTimeTaskSchedulingTask {
                 RwLock::new(HashMap::default()),
                 sender,
                 server,
+                RwLock::new(HashSet::default()),
             )),
         }
     }
@@ -195,6 +196,7 @@ impl RealTimeTaskSchedulingTask {
     async fn schedule(&self, task_id: RealTimeTaskId) {
         let minimum = {
             let occupations = self.instance.occupations().read().await;
+            let disconnected_servers = self.instance.disconnected_servers().read().await;
 
             let mut minimum = None;
 
@@ -205,6 +207,7 @@ impl RealTimeTaskSchedulingTask {
                 .iter()
                 .await
                 .map(|server| server.id())
+                .filter(|server| !disconnected_servers.contains(server))
             {
                 let tasks = match occupations.get(&server_id) {
                     Some(tasks) => tasks,

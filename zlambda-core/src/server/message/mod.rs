@@ -150,6 +150,14 @@ pub type ServerClientGetMessage =
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+pub type ServerConnectMessage = AsynchronousMessage<ServerConnectMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub type ServerDisconnectMessage = AsynchronousMessage<ServerDisconnectMessageInput>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug)]
 pub enum ServerMessage {
     Ping,
@@ -180,6 +188,8 @@ pub enum ServerMessage {
     LogCreate(ServerLogCreateMessage),
     CommitLogCreate(ServerCommitLogCreateMessage),
     ServerClientGet(ServerClientGetMessage),
+    ServerConnect(ServerConnectMessage),
+    ServerDisconnect(ServerDisconnectMessage),
 }
 
 impl From<ServerSocketAcceptMessage> for ServerMessage {
@@ -341,5 +351,17 @@ impl From<ServerCommitLogCreateMessage> for ServerMessage {
 impl From<ServerClientGetMessage> for ServerMessage {
     fn from(message: ServerClientGetMessage) -> Self {
         Self::ServerClientGet(message)
+    }
+}
+
+impl From<ServerConnectMessage> for ServerMessage {
+    fn from(message: ServerConnectMessage) -> Self {
+        Self::ServerConnect(message)
+    }
+}
+
+impl From<ServerDisconnectMessage> for ServerMessage {
+    fn from(message: ServerDisconnectMessage) -> Self {
+        Self::ServerDisconnect(message)
     }
 }

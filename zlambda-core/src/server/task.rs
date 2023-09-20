@@ -28,19 +28,21 @@ use crate::server::{
     ServerClientRegistrationMessage, ServerClientResignationMessage, ServerCommitCommitMessage,
     ServerCommitCommitMessageInput, ServerCommitLogCreateMessage,
     ServerCommitLogCreateMessageInput, ServerCommitMessage, ServerCommitRegistrationMessage,
-    ServerCommitRegistrationMessageInput, ServerId, ServerLeaderServerIdGetMessage,
-    ServerLeaderServerIdGetMessageOutput, ServerLogAppendInitiateMessage,
-    ServerLogAppendInitiateMessageOutput, ServerLogAppendRequestMessage, ServerLogCreateMessage,
-    ServerLogCreateMessageOutput, ServerLogEntriesAcknowledgementMessage,
-    ServerLogEntriesCommitMessage, ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput,
-    ServerLogEntriesRecoveryMessage, ServerLogEntriesReplicationMessage,
-    ServerLogEntriesReplicationMessageOutput, ServerMessage, ServerModule,
-    ServerModuleCommitEventInput, ServerModuleGetMessage, ServerModuleGetMessageOutput,
-    ServerModuleLoadMessage, ServerModuleLoadMessageOutput, ServerModuleShutdownEventInput,
-    ServerModuleStartupEventInput, ServerModuleUnloadMessage, ServerModuleUnloadMessageOutput,
-    ServerNodeMessage, ServerNodeReplicationMessage, ServerNodeReplicationMessageInput,
-    ServerNodeTask, ServerRecoveryMessage, ServerRecoveryMessageNotALeaderOutput,
-    ServerRecoveryMessageOutput, ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
+    ServerCommitRegistrationMessageInput, ServerConnectMessage, ServerDisconnectMessage, ServerId,
+    ServerLeaderServerIdGetMessage, ServerLeaderServerIdGetMessageOutput,
+    ServerLogAppendInitiateMessage, ServerLogAppendInitiateMessageOutput,
+    ServerLogAppendRequestMessage, ServerLogCreateMessage, ServerLogCreateMessageOutput,
+    ServerLogEntriesAcknowledgementMessage, ServerLogEntriesCommitMessage,
+    ServerLogEntriesGetMessage, ServerLogEntriesGetMessageOutput, ServerLogEntriesRecoveryMessage,
+    ServerLogEntriesReplicationMessage, ServerLogEntriesReplicationMessageOutput, ServerMessage,
+    ServerModule, ServerModuleCommitEventInput, ServerModuleGetMessage,
+    ServerModuleGetMessageOutput, ServerModuleLoadMessage, ServerModuleLoadMessageOutput,
+    ServerModuleServerConnectEventInput, ServerModuleServerDisconnectEventInput,
+    ServerModuleShutdownEventInput, ServerModuleStartupEventInput, ServerModuleUnloadMessage,
+    ServerModuleUnloadMessageOutput, ServerNodeMessage, ServerNodeReplicationMessage,
+    ServerNodeReplicationMessageInput, ServerNodeTask, ServerRecoveryMessage,
+    ServerRecoveryMessageNotALeaderOutput, ServerRecoveryMessageOutput,
+    ServerRecoveryMessageSuccessOutput, ServerRegistrationMessage,
     ServerRegistrationMessageNotALeaderOutput, ServerRegistrationMessageSuccessOutput,
     ServerServerIdGetMessage, ServerServerIdGetMessageOutput,
     ServerServerNodeMessageSenderGetAllMessage, ServerServerNodeMessageSenderGetAllMessageOutput,
@@ -534,6 +536,10 @@ impl ServerTask {
             }
             ServerMessage::ServerClientGet(message) => {
                 self.on_server_client_get_message(message).await
+            }
+            ServerMessage::ServerConnect(message) => self.on_server_connect_message(message).await,
+            ServerMessage::ServerDisconnect(message) => {
+                self.on_server_disconnect_message(message).await
             }
         }
     }
@@ -1215,6 +1221,44 @@ impl ServerTask {
                 },
             ))
             .await;
+    }
+
+    async fn on_server_connect_message(&mut self, message: ServerConnectMessage) {
+        let (input,) = message.into();
+
+        for (_module_id, module) in self.module_manager.iter() {
+            let module = module.clone();
+            let sender = self.sender.clone();
+            let server_id = input.server_id();
+
+            spawn(async move {
+                module
+                    .on_server_connect(ServerModuleServerConnectEventInput::new(
+                        Arc::new(Server::from(sender)),
+                        server_id,
+                    ))
+                    .await;
+            });
+        }
+    }
+
+    async fn on_server_disconnect_message(&mut self, message: ServerDisconnectMessage) {
+        let (input,) = message.into();
+
+        for (_module_id, module) in self.module_manager.iter() {
+            let module = module.clone();
+            let sender = self.sender.clone();
+            let server_id = input.server_id();
+
+            spawn(async move {
+                module
+                    .on_server_disconnect(ServerModuleServerDisconnectEventInput::new(
+                        Arc::new(Server::from(sender)),
+                        server_id,
+                    ))
+                    .await;
+            });
+        }
     }
 
     async fn replicate(

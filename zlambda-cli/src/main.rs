@@ -2,39 +2,39 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+use byteorder::{ByteOrder, LittleEndian};
 use clap::{Args, Parser, Subcommand};
 use std::error::Error;
+use std::mem::size_of;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Instant;
-use byteorder::{ByteOrder, LittleEndian};
 use zlambda_core::client::{
     ClientModule, ClientModuleNotificationEventInput, ClientModuleNotificationEventOutput,
     ClientTask,
 };
 use zlambda_core::common::async_trait;
 use zlambda_core::common::fs::read;
-use zlambda_core::common::io::{AsyncWriteExt, stdout, stdin, AsyncReadExt};
 use zlambda_core::common::future::stream::{empty, StreamExt};
-use zlambda_core::common::net::UdpSocket;
-use zlambda_core::common::runtime::spawn;
-use zlambda_core::common::process::Command;
-use std::mem::size_of;
+use zlambda_core::common::io::{stdin, stdout, AsyncReadExt, AsyncWriteExt};
 use zlambda_core::common::module::{Module, ModuleId};
+use zlambda_core::common::net::UdpSocket;
 use zlambda_core::common::notification::NotificationBodyItemStreamExt;
+use zlambda_core::common::process::Command;
+use zlambda_core::common::runtime::spawn;
 use zlambda_core::common::utility::Bytes;
 use zlambda_core::server::{
     ServerBuilder, ServerId, ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
 use zlambda_dynamic::DynamicLibraryManager;
+use zlambda_matrix::MATRIX_SIZE;
+use zlambda_matrix_ebpf_module::EbpfLoader;
 use zlambda_matrix_native::MatrixCalculator;
 use zlambda_matrix_wasm_module::ImmediateWasmExecutor;
-use std::sync::Arc;
 use zlambda_process::ProcessDispatcher;
 use zlambda_realtime_task::RealTimeTaskManager;
 use zlambda_router::round_robin::{GlobalRoundRobinRouter, LocalRoundRobinRouter};
-use zlambda_matrix_ebpf_module::EbpfLoader;
-use zlambda_matrix::MATRIX_SIZE;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -75,7 +75,7 @@ enum MainCommand {
         #[clap(default_value = "127.0.0.1:10200")]
         address: String,
     },
-    Matrix { },
+    Matrix {},
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -263,18 +263,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let sender = socket;
 
             spawn(async move {
-                let mut buffer: [u8; 3 * MATRIX_SIZE + 2 * size_of::<u128>()] = [0; 3 * MATRIX_SIZE + 2 * size_of::<u128>()];
+                let mut buffer: [u8; 3 * MATRIX_SIZE + 2 * size_of::<u128>()] =
+                    [0; 3 * MATRIX_SIZE + 2 * size_of::<u128>()];
                 stdin().read(&mut buffer).await.expect("Success");
                 sender.send(&buffer).await.expect("Success");
             });
 
-            let mut buffer: [u8; 3 * MATRIX_SIZE + 3 * size_of::<u128>()] = [0; 3 * MATRIX_SIZE + 3 * size_of::<u128>()];
+            let mut buffer: [u8; 3 * MATRIX_SIZE + 3 * size_of::<u128>()] =
+                [0; 3 * MATRIX_SIZE + 3 * size_of::<u128>()];
             receiver.recv(&mut buffer).await?;
-            LittleEndian::write_u128(&mut buffer[3 * MATRIX_SIZE + 2 * size_of::<u128>()..], program_begin.elapsed().as_nanos());
+            LittleEndian::write_u128(
+                &mut buffer[3 * MATRIX_SIZE + 2 * size_of::<u128>()..],
+                program_begin.elapsed().as_nanos(),
+            );
             stdout().write_all(&buffer).await?;
         }
-        MainCommand::Matrix {  } => {
-            Command::new("target/release/zlambda-matrix-process").spawn()?.wait().await?;
+        MainCommand::Matrix {} => {
+            Command::new("target/release/zlambda-matrix-process")
+                .spawn()?
+                .wait()
+                .await?;
 
             let mut buffer: [u8; size_of::<u128>()] = [0; size_of::<u128>()];
             LittleEndian::write_u128(&mut buffer, program_begin.elapsed().as_nanos());

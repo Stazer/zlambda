@@ -146,6 +146,29 @@ impl RealTimeTaskManagerLogEntryScheduleData {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct RealTimeTaskManagerLogEntryRescheduleData {
+    task_id: RealTimeTaskId,
+}
+
+impl From<RealTimeTaskManagerLogEntryRescheduleData> for (RealTimeTaskId,) {
+    fn from(data: RealTimeTaskManagerLogEntryRescheduleData) -> Self {
+        (data.task_id,)
+    }
+}
+
+impl RealTimeTaskManagerLogEntryRescheduleData {
+    pub fn new(task_id: RealTimeTaskId) -> Self {
+        Self { task_id }
+    }
+
+    pub fn task_id(&self) -> RealTimeTaskId {
+        self.task_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct RealTimeTaskManagerLogEntryRunData {
     task_id: RealTimeTaskId,
 }
@@ -195,6 +218,7 @@ impl RealTimeTaskManagerLogEntryFinishData {
 pub enum RealTimeTaskManagerLogEntryData {
     Dispatch(RealTimeTaskManagerLogEntryDispatchData),
     Schedule(RealTimeTaskManagerLogEntryScheduleData),
+    Reschedule(RealTimeTaskManagerLogEntryRescheduleData),
     Run(RealTimeTaskManagerLogEntryRunData),
     Finish(RealTimeTaskManagerLogEntryFinishData),
 }
@@ -208,6 +232,12 @@ impl From<RealTimeTaskManagerLogEntryDispatchData> for RealTimeTaskManagerLogEnt
 impl From<RealTimeTaskManagerLogEntryScheduleData> for RealTimeTaskManagerLogEntryData {
     fn from(data: RealTimeTaskManagerLogEntryScheduleData) -> Self {
         RealTimeTaskManagerLogEntryData::Schedule(data)
+    }
+}
+
+impl From<RealTimeTaskManagerLogEntryRescheduleData> for RealTimeTaskManagerLogEntryData {
+    fn from(data: RealTimeTaskManagerLogEntryRescheduleData) -> Self {
+        RealTimeTaskManagerLogEntryData::Reschedule(data)
     }
 }
 

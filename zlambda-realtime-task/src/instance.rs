@@ -30,6 +30,7 @@ pub struct RealTimeTaskManagerInstance {
     occupations: RwLock<HashMap<ServerId, HashSet<RealTimeTaskId>>>,
     sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
     server: Arc<Server>,
+    disconnected_servers: RwLock<HashSet<ServerId>>,
 }
 
 impl RealTimeTaskManagerInstance {
@@ -47,6 +48,7 @@ impl RealTimeTaskManagerInstance {
         occupations: RwLock<HashMap<ServerId, HashSet<RealTimeTaskId>>>,
         sender: MessageQueueSender<RealTimeTaskSchedulingTaskMessage>,
         server: Arc<Server>,
+        disconnected_servers: RwLock<HashSet<ServerId>>,
     ) -> Self {
         Self {
             local_counter,
@@ -57,6 +59,7 @@ impl RealTimeTaskManagerInstance {
             occupations,
             sender,
             server,
+            disconnected_servers,
         }
     }
 
@@ -99,5 +102,9 @@ impl RealTimeTaskManagerInstance {
 
     pub fn server(&self) -> &Arc<Server> {
         &self.server
+    }
+
+    pub fn disconnected_servers(&self) -> &RwLock<HashSet<ServerId>> {
+        &self.disconnected_servers
     }
 }

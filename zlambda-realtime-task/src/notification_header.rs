@@ -56,7 +56,10 @@ impl From<RealTimeTaskManagerExecuteNotificationHeader> for (RealTimeTaskId, Mod
 
 impl RealTimeTaskManagerExecuteNotificationHeader {
     pub fn new(task_id: RealTimeTaskId, target_module_id: ModuleId) -> Self {
-        Self { task_id, target_module_id }
+        Self {
+            task_id,
+            target_module_id,
+        }
     }
 
     pub fn task_id(&self) -> RealTimeTaskId {

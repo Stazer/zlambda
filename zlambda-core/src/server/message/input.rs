@@ -737,3 +737,49 @@ impl ServerClientGetMessageInput {
         self.server_client_id
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerConnectMessageInput {
+    server_id: ServerId,
+}
+
+impl From<ServerConnectMessageInput> for (ServerId,) {
+    fn from(input: ServerConnectMessageInput) -> Self {
+        (input.server_id,)
+    }
+}
+
+impl ServerConnectMessageInput {
+    pub fn new(server_id: ServerId) -> Self {
+        Self { server_id }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ServerDisconnectMessageInput {
+    server_id: ServerId,
+}
+
+impl From<ServerDisconnectMessageInput> for (ServerId,) {
+    fn from(input: ServerDisconnectMessageInput) -> Self {
+        (input.server_id,)
+    }
+}
+
+impl ServerDisconnectMessageInput {
+    pub fn new(server_id: ServerId) -> Self {
+        Self { server_id }
+    }
+
+    pub fn server_id(&self) -> ServerId {
+        self.server_id
+    }
+}
