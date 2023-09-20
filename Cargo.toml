@@ -13,6 +13,7 @@ members = [
     "zlambda-process",
     "zlambda-realtime-task",
     "zlambda-router",
+    "zlambda-sleep",
 ]
 
 exclude = [

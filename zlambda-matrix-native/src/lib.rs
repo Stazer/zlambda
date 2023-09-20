@@ -15,7 +15,7 @@ use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventInputSource,
     ServerModuleNotificationEventOutput,
 };
-use zlambda_matrix::{MATRIX_SIZE, MATRIX_DIMENSION_SIZE, MATRIX_ELEMENT_COUNT};
+use zlambda_matrix::{MATRIX_DIMENSION_SIZE, MATRIX_ELEMENT_COUNT, MATRIX_SIZE};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

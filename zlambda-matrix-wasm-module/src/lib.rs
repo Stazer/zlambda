@@ -1,11 +1,11 @@
 use byteorder::{ByteOrder, LittleEndian};
 use std::mem::size_of;
+use std::slice::from_raw_parts_mut;
 use std::time::Instant;
 use wasmer::{imports, Instance, Module, Store, Value};
 use wasmer_compiler_llvm::LLVM;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::bytes::BytesMut;
-use std::slice::{from_raw_parts_mut};
 use zlambda_core::common::future::stream::StreamExt;
 use zlambda_core::common::module::Module as CommonModule;
 use zlambda_core::common::notification::{
@@ -16,7 +16,7 @@ use zlambda_core::server::{
     ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventInputSource,
     ServerModuleNotificationEventOutput,
 };
-use zlambda_matrix::{MATRIX_SIZE};
+use zlambda_matrix::MATRIX_SIZE;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,17 +76,12 @@ impl ServerModule for ImmediateWasmExecutor {
             .expect("");
 
         let times = unsafe {
-            from_raw_parts_mut(
-                result.as_mut_ptr()
-                    .add(MATRIX_SIZE),
-                size_of::<u128>() * 2,
-            )
+            from_raw_parts_mut(result.as_mut_ptr().add(MATRIX_SIZE), size_of::<u128>() * 2)
         };
 
         let times2 = unsafe {
             from_raw_parts_mut(
-                result.as_mut_ptr()
-                    .add(MATRIX_SIZE + size_of::<u128>()),
+                result.as_mut_ptr().add(MATRIX_SIZE + size_of::<u128>()),
                 size_of::<u128>(),
             )
         };
