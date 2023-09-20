@@ -16,6 +16,7 @@ use std::sync::Arc;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
 use zlambda_core::common::future::stream::StreamExt;
+use zlambda_core::common::bytes::BytesMut;
 use zlambda_core::common::module::Module;
 use zlambda_core::common::notification::{
     notification_body_item_queue, NotificationBodyItemStreamExt, NotificationBodyItemType,
@@ -155,6 +156,7 @@ impl ServerModule for RealTimeTaskManager {
                             data.origin().as_ref().map(|o| {
                                 RealTimeTaskOrigin::new(o.server_id(), o.server_client_id())
                             }),
+                            BytesMut::default(),
                         );
 
                         let task_data = (task.id(), *task.deadline());
@@ -285,6 +287,11 @@ impl ServerModule for RealTimeTaskManager {
                             RealTimeTaskSchedulingTaskRescheduleMessageInput::new(),
                         )
                         .await;
+                }
+                RealTimeTaskManagerLogEntryData::Persist(data) => {
+                    let mut tasks = instance.tasks().write().await;
+                    let task = tasks.get_mut(usize::from(data.task_id())).expect("");
+                    task.notification_mut().extend(data.bytes());
                 }
                 RealTimeTaskManagerLogEntryData::Run(data) => {
                     let mut tasks = instance.tasks().write().await;

@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use zlambda_core::common::module::ModuleId;
 use zlambda_core::common::notification::NotificationId;
+use zlambda_core::common::bytes::Bytes;
 use zlambda_core::server::{ServerClientId, ServerId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -169,6 +170,34 @@ impl RealTimeTaskManagerLogEntryRescheduleData {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct RealTimeTaskManagerLogEntryPersistData {
+    task_id: RealTimeTaskId,
+    bytes: Bytes,
+}
+
+impl From<RealTimeTaskManagerLogEntryPersistData> for (RealTimeTaskId, Bytes) {
+    fn from(data: RealTimeTaskManagerLogEntryPersistData) -> Self {
+        (data.task_id, data.bytes)
+    }
+}
+
+impl RealTimeTaskManagerLogEntryPersistData {
+    pub fn new(task_id: RealTimeTaskId, bytes: Bytes) -> Self {
+        Self { task_id, bytes, }
+    }
+
+    pub fn task_id(&self) -> RealTimeTaskId {
+        self.task_id
+    }
+
+    pub fn bytes(&self) -> &Bytes {
+        &self.bytes
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct RealTimeTaskManagerLogEntryRunData {
     task_id: RealTimeTaskId,
 }
@@ -219,6 +248,7 @@ pub enum RealTimeTaskManagerLogEntryData {
     Dispatch(RealTimeTaskManagerLogEntryDispatchData),
     Schedule(RealTimeTaskManagerLogEntryScheduleData),
     Reschedule(RealTimeTaskManagerLogEntryRescheduleData),
+    Persist(RealTimeTaskManagerLogEntryPersistData),
     Run(RealTimeTaskManagerLogEntryRunData),
     Finish(RealTimeTaskManagerLogEntryFinishData),
 }
