@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use zlambda_core::client::{
     ClientModule, ClientModuleNotificationEventInput, ClientModuleNotificationEventOutput,
-    ClientTask,
+    ClientTask, ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput,
 };
 use zlambda_core::common::async_trait;
 use zlambda_core::common::fs::read;
@@ -71,6 +71,8 @@ enum MainCommand {
         address: String,
         #[clap(subcommand)]
         command: ClientCommand,
+        #[arg(short, long, default_value = "false")]
+        exit: bool,
     },
     Ebpf {
         #[clap(default_value = "127.0.0.1:10200")]
@@ -141,6 +143,30 @@ impl ServerModule for PrintModule {
 }
 
 impl PrintModule {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Default, Debug)]
+pub struct ExitModule {}
+
+#[async_trait]
+impl Module for ExitModule {}
+
+#[async_trait]
+impl ClientModule for ExitModule {
+    async fn on_initialize(
+        &self,
+        input: ClientModuleInitializeEventInput,
+    ) -> ClientModuleInitializeEventOutput {
+        input.client_handle().exit().await;
+    }
+}
+
+impl ExitModule {
     pub fn new() -> Self {
         Self {}
     }
@@ -220,12 +246,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .wait()
                 .await;
         }
-        MainCommand::Client { address, command } => {
+        MainCommand::Client { address, command, exit } => {
+            let mut modules = Vec::new();
+
+            if exit {
+                modules.push(Box::<dyn ClientModule>::from(Box::new(
+                    ExitModule::default(),
+                )));
+            } else {
+                modules.push(Box::<dyn ClientModule>::from(Box::new(
+                    PrintAndExitModule::default(),
+                )));
+            }
+
             let client_task = ClientTask::new(
                 address,
-                vec![Box::<dyn ClientModule>::from(Box::new(
-                    PrintAndExitModule::default(),
-                ))]
+                modules
                 .into_iter(),
             )
             .await?;
@@ -253,6 +289,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             client_task.run().await;
+
+            if exit {
+                return Ok(());
+            }
 
             let mut buffer: [u8; size_of::<u128>()] = [0; size_of::<u128>()];
             LittleEndian::write_u128(&mut buffer, program_begin.elapsed().as_nanos());

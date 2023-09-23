@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::{self, Formatter, Display};
 use zlambda_core::server::ServerId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,6 +94,17 @@ pub enum RealTimeTaskState {
     Scheduled(RealTimeTaskScheduledState),
     Running(RealTimeTaskRunningState),
     Finished(RealTimeTaskFinishedState),
+}
+
+impl Display for RealTimeTaskState {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Dispatched(_) => write!(formatter, "dispatched"),
+            Self::Scheduled(_) => write!(formatter, "scheduled"),
+            Self::Running(_) => write!(formatter, "running"),
+            Self::Finished(_) => write!(formatter, "finished"),
+        }
+    }
 }
 
 impl From<RealTimeTaskDispatchedState> for RealTimeTaskState {

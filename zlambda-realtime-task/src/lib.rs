@@ -30,6 +30,7 @@ use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use zlambda_core::common::module::ModuleId;
 use zlambda_core::common::bytes::BytesMut;
 use zlambda_core::common::notification::NotificationId;
+use zlambda_core::common::tracing::debug;
 use zlambda_core::server::{ServerClientId, ServerId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,6 +108,7 @@ impl RealTimeTask {
     }
 
     pub fn set_state(&mut self, state: RealTimeTaskState) {
+        debug!("Task {}: {} -> {}", self.id, self.state, state);
         self.state = state
     }
 

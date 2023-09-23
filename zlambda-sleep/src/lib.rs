@@ -1,13 +1,22 @@
+use std::time::Duration;
+use serde::Deserialize;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::module::Module as CommonModule;
+use zlambda_core::common::time::sleep;
 use zlambda_core::common::notification::{
-    notification_body_item_queue, NotificationBodyItemStreamExt,
+    NotificationBodyItemStreamExt,
 };
-use zlambda_core::common::runtime::spawn;
 use zlambda_core::server::{
-    ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventInputSource,
+    ServerModule, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventOutput,
 };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, Deserialize)]
+struct NotificationHeader {
+    seconds: u64,
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,7 +32,14 @@ impl ServerModule for SleepModule {
         &self,
         input: ServerModuleNotificationEventInput,
     ) -> ServerModuleNotificationEventOutput {
-        let (server, source, notification_body_item_queue_receiver) = input.into();
+        let (_server, _source, notification_body_item_queue_receiver) = input.into();
         let mut deserializer = notification_body_item_queue_receiver.deserializer();
+
+        let header = deserializer
+            .deserialize::<NotificationHeader>()
+            .await
+            .unwrap();
+
+        sleep(Duration::from_secs(header.seconds)).await;
     }
 }
