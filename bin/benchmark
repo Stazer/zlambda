@@ -202,7 +202,7 @@ end
 
 class WaitAndCreateStandalone < WaitAndCreate
   def command(server_address, _left_dataset_path, _right_dataset_path, _result_path)
-    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} -e notify 9 payloads/process-wait-and-create-standalone.json 2> /dev/null'"
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} -e notify 1 payloads/process-wait-and-create-standalone.json 2> /dev/null'"
   end
 end
 
@@ -342,7 +342,7 @@ def run(name)
   File.write("#{$calculations_path}/#{name}.json", JSON.dump(calculate(name)))
 end
 
-BENCHMARK_BY_NAME['wait-and-create-cluster'].run(
+BENCHMARK_BY_NAME['wait-and-create-standalone'].run(
   SequentialExecutor.new,
   (0..4).map { |x| x.to_s }.to_a,
 )
