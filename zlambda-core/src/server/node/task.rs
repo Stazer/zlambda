@@ -37,7 +37,8 @@ use crate::server::{
     ServerModuleGetMessageInput, ServerModuleNotificationEventInput,
     ServerModuleNotificationEventInputServerSource,
     ServerModuleNotificationEventInputServerSourceOrigin, ServerServerIdGetMessageInput,
-    ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
+    ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID, ServerDisconnectMessageInput,
+    ServerConnectMessageInput,
 };
 use postcard::to_allocvec;
 use std::collections::HashMap;
@@ -121,11 +122,25 @@ impl ServerNodeTask {
                             Err(error) => {
                                 self.general_socket = None;
                                 error!("{}", error);
-                                info!("Server {} connection lost", self.server_id)
+                                info!("Server {} connection lost", self.server_id);
+
+                                self
+                                    .server_message_sender
+                                    .do_send_asynchronous(ServerDisconnectMessageInput::new(
+                                        self.server_id,
+                                    ))
+                                    .await;
                             }
                             Ok(None) => {
                                 self.general_socket = None;
-                                info!("Server {} connection lost", self.server_id)
+                                info!("Server {} connection lost", self.server_id);
+
+                                self
+                                    .server_message_sender
+                                    .do_send_asynchronous(ServerDisconnectMessageInput::new(
+                                        self.server_id,
+                                    ))
+                                    .await;
                             }
                             Ok(Some(message)) => {
                                 self.on_general_message(message).await
@@ -372,6 +387,13 @@ impl ServerNodeTask {
         self.general_socket = Some((sender, receiver));
 
         info!("Server {} recovered", self.server_id);
+
+        self
+            .server_message_sender
+            .do_send_asynchronous(ServerConnectMessageInput::new(
+                self.server_id,
+            ))
+            .await;
     }
 
     async fn on_server_node_node_handshake_message(

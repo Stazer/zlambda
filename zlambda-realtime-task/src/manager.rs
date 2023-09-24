@@ -7,7 +7,7 @@ use crate::{
     RealTimeTaskManagerLogEntryRunData, RealTimeTaskManagerNotificationHeader, RealTimeTaskOrigin,
     RealTimeTaskRunningState, RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
     RealTimeTaskSchedulingTaskRescheduleMessageInput, RealTimeTaskSchedulingTaskState,
-    RealTimeTaskState,
+    RealTimeTaskState, RealTimeTaskManagerLogEntryPersistData,
 };
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
@@ -16,6 +16,7 @@ use std::sync::Arc;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
 use zlambda_core::common::future::stream::StreamExt;
+use zlambda_core::common::tracing::debug;
 use zlambda_core::common::bytes::BytesMut;
 use zlambda_core::common::module::Module;
 use zlambda_core::common::notification::{
@@ -183,7 +184,7 @@ impl ServerModule for RealTimeTaskManager {
                         .await;
                 }
                 RealTimeTaskManagerLogEntryData::Schedule(data) => {
-                    let (source_server_id, source_notification_id, origin, target_module_id) = {
+                    let (source_server_id, source_notification_id, origin, target_module_id, notification_data) = {
                         let mut tasks = instance.tasks().write().await;
                         let task = tasks.get_mut(usize::from(data.task_id())).expect("");
                         task.set_state(RealTimeTaskState::Scheduled(
@@ -197,6 +198,7 @@ impl ServerModule for RealTimeTaskManager {
                                 ServerNotificationOrigin::new(o.server_id(), o.server_client_id())
                             }),
                             task.target_module_id(),
+                            task.notification().clone().freeze(),
                         )
                     };
 
@@ -216,14 +218,16 @@ impl ServerModule for RealTimeTaskManager {
                     }
 
                     if source_server_id == instance.server().server_id().await {
-                        let mut incoming_receiver = {
+                        let incoming_receiver = {
                             let mut receivers = instance.receivers().write().await;
-                            receivers.remove(&source_notification_id).expect("")
+                            receivers.remove(&source_notification_id)
                         };
 
                         let (sender, receiver) = notification_body_item_queue();
 
                         let task_id = data.task_id();
+
+                        let instance2 = instance.clone();
 
                         spawn(async move {
                             let bytes = serialize_to_bytes(
@@ -234,16 +238,36 @@ impl ServerModule for RealTimeTaskManager {
                                     ),
                                 ),
                             )
-                            .expect("")
-                            .freeze();
+                                .expect("")
+                                .freeze();
 
                             let data = serialize_to_bytes(&NotificationBodyItemType::Binary(bytes))
                                 .expect("");
 
                             sender.do_send(data).await;
 
-                            while let Some(item) = incoming_receiver.next().await {
-                                sender.do_send(item).await;
+                            if let Some(mut incoming_receiver) = incoming_receiver {
+                                while let Some(item) = incoming_receiver.next().await {
+                                    sender.do_send(item.clone()).await;
+
+                                    instance2
+                                        .server()
+                                        .logs()
+                                        .get(instance2.log_id())
+                                        .entries()
+                                        .commit(
+                                            serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Persist(
+                                                RealTimeTaskManagerLogEntryPersistData::new(
+                                                    task_id,
+                                                    item,
+                                                ),
+                                            ))
+                                                .unwrap().freeze()
+                                        )
+                                        .await;
+                                }
+                            } else {
+                                sender.do_send(notification_data).await;
                             }
                         });
 
@@ -492,6 +516,13 @@ impl ServerModule for RealTimeTaskManager {
         };
 
         {
+            let mut occupations = instance.occupations().write().await;
+            if let Some(bucket) = occupations.get_mut(&disconnected_server_id) {
+                bucket.clear();
+            }
+        }
+
+        {
             let mut disconnected_servers = instance.disconnected_servers().write().await;
             disconnected_servers.insert(disconnected_server_id);
         }
@@ -514,6 +545,8 @@ impl ServerModule for RealTimeTaskManager {
                 .map(|task| task.id())
                 .collect::<Vec<_>>()
         };
+
+        debug!("Reschedule tasks {:?} of disconnected server {}", &rescheduling_task_ids, disconnected_server_id);
 
         for rescheduling_task_id in rescheduling_task_ids {
             input
