@@ -34,6 +34,7 @@ use zlambda_matrix_native::MatrixCalculator;
 use zlambda_matrix_wasm_module::ImmediateWasmExecutor;
 use zlambda_process::ProcessDispatcher;
 use zlambda_realtime_task::RealTimeTaskManager;
+use zlambda_realtime_task2::RealTimeTaskManager as RealTimeTaskManager2;
 use zlambda_router::round_robin::{GlobalRoundRobinRouter, LocalRoundRobinRouter};
 use zlambda_sleep::SleepModule;
 
@@ -232,6 +233,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .add_module(MatrixCalculator::default())
                 .add_module(EbpfLoader::default())
                 .add_module(SleepModule::default())
+                .add_module(RealTimeTaskManager2::default())
                 .build(
                     listener_address,
                     match command {

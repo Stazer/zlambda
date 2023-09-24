@@ -1,0 +1,12 @@
+[package]
+name = "zlambda-realtime-task2"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "0.4", features = ["clock", "serde", "std"] }
+serde = { version = "1", features = ["derive"] }
+zlambda-core = { path = "../zlambda-core" }
+
+[lib]
+crate-type = ["rlib", "cdylib"]

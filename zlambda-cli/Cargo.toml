@@ -17,5 +17,6 @@ zlambda-matrix-native = { path = "../zlambda-matrix-native" }
 zlambda-matrix-wasm-module = { path = "../zlambda-matrix-wasm-module" }
 zlambda-process = { path = "../zlambda-process" }
 zlambda-realtime-task = { path = "../zlambda-realtime-task" }
+zlambda-realtime-task2 = { path = "../zlambda-realtime-task2" }
 zlambda-router = { path = "../zlambda-router" }
 zlambda-sleep = { path = "../zlambda-sleep" }

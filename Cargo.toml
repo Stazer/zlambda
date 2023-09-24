@@ -12,6 +12,7 @@ members = [
     "zlambda-matrix-wasm-payload",
     "zlambda-process",
     "zlambda-realtime-task",
+    "zlambda-realtime-task2",
     "zlambda-router",
     "zlambda-sleep",
 ]
