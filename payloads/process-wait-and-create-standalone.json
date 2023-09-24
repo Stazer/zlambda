@@ -1,0 +1,8 @@
+{
+    "program": "/usr/local/bin/zsh",
+    "arguments": [
+        "-c",
+        "sleep 30 && touch ~/zlambda/results/wait-and-create-standalone/$RANDOM"
+    ],
+    "source_module_id": 0
+}

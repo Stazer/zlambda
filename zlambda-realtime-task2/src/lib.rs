@@ -120,6 +120,10 @@ impl RealTimeTask {
         self.source_server_id
     }
 
+    pub fn set_source_server_id(&mut self, source_server_id: ServerId) {
+        self.source_server_id = source_server_id
+    }
+
     pub fn source_notification_id(&self) -> NotificationId {
         self.source_notification_id
     }

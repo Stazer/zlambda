@@ -191,6 +191,21 @@ class ProcessServerScheduledTarget < ProcessServerTarget
   end
 end
 
+class WaitAndCreate < Target
+end
+
+class WaitAndCreateCluster < WaitAndCreate
+  def command(server_address, _left_dataset_path, _right_dataset_path, _result_path)
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} -e notify 9 payloads/schedule-wait-and-create-cluster.json payloads/process-wait-and-create-cluster.json 2> /dev/null'"
+  end
+end
+
+class WaitAndCreateStandalone < WaitAndCreate
+  def command(server_address, _left_dataset_path, _right_dataset_path, _result_path)
+    "sh -c '#{$zlambda_cli_prefix} #{$zlambda_cli_path} client #{server_address} -e notify 9 payloads/process-wait-and-create-standalone.json 2> /dev/null'"
+  end
+end
+
 class Benchmark
   attr_reader :name
 
@@ -253,6 +268,9 @@ BENCHMARKS = [
   Benchmark.new('ebpf2-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses[0..1])),
   Benchmark.new('ebpf3-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses[0..2])),
   Benchmark.new('ebpf3-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses[0..2])),
+
+  Benchmark.new('wait-and-create-cluster', WaitAndCreateCluster.new, RoundRobinServerChooser.new($server_addresses[0..1])),
+  Benchmark.new('wait-and-create-standalone', WaitAndCreateStandalone.new, RoundRobinServerChooser.new($server_addresses[0..1])),
 ]
 
 BENCHMARK_BY_NAME = Hash[BENCHMARKS.map { |x| [x.name, x] }]
@@ -323,3 +341,8 @@ def run(name)
 
   File.write("#{$calculations_path}/#{name}.json", JSON.dump(calculate(name)))
 end
+
+BENCHMARK_BY_NAME['wait-and-create-cluster'].run(
+  SequentialExecutor.new,
+  (0..1).map { |x| x.to_s }.to_a,
+)

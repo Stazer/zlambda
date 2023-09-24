@@ -227,6 +227,8 @@ impl ServerModule for RealTimeTaskManager {
 
                         let task_id = data.task_id();
 
+                        println!("YEP");
+
                         spawn(async move {
                             let bytes = serialize_to_bytes(
                                 &RealTimeTaskManagerNotificationHeader::Execute(
@@ -243,7 +245,9 @@ impl ServerModule for RealTimeTaskManager {
                                 .expect("");
 
                             sender.do_send(data).await;
+                            println!("SEND DATA");
                             sender.do_send(notification_data).await;
+                            println!("DATA SENT");
                         });
 
                         spawn(async move {
@@ -259,12 +263,16 @@ impl ServerModule for RealTimeTaskManager {
                     }
                 }
                 RealTimeTaskManagerLogEntryData::Reschedule(data) => {
+                    let leader_server_id = input.server().leader_server_id().await;
+
                     let (task_id, deadline) = {
                         let mut tasks = instance.tasks().write().await;
                         let task = tasks.get_mut(usize::from(data.task_id())).expect("");
                         task.set_state(RealTimeTaskState::Dispatched(
                             RealTimeTaskDispatchedState::new(),
                         ));
+
+                        task.set_source_server_id(leader_server_id);
 
                         let task_data = (task.id(), *task.deadline());
 

@@ -11,10 +11,15 @@ $zlambda_cli_path = 'target/release/zlambda-cli'
 $zlambda_matrix_process_path = 'target/release/zlambda-matrix-process'
 $leader_server_address =
 $server_addresses = [
-  '192.168.8.11:8000',
-  '192.168.8.12:8000',
-  '192.168.8.13:8000',
+  '127.0.0.1:8000',
+  '127.0.0.1:8001',
+  '127.0.0.1:8002',
 ]
+#$server_addresses = [
+#  '192.168.8.11:8000',
+#  '192.168.8.12:8000',
+#  '192.168.8.13:8000',
+#]
 $ebpf_socket_addresses = [
   '192.168.8.11:10200',
   '192.168.8.12:10200',
