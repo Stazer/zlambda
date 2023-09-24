@@ -3,21 +3,21 @@ use crate::{
     RealTimeTaskFinishedState, RealTimeTaskId, RealTimeTaskManagerExecuteNotificationHeader,
     RealTimeTaskManagerInstance, RealTimeTaskManagerLogEntryData,
     RealTimeTaskManagerLogEntryDispatchData, RealTimeTaskManagerLogEntryFinishData,
-    RealTimeTaskManagerLogEntryOriginData, RealTimeTaskManagerLogEntryRescheduleData,
-    RealTimeTaskManagerLogEntryRunData, RealTimeTaskManagerNotificationHeader, RealTimeTaskOrigin,
-    RealTimeTaskRunningState, RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
+    RealTimeTaskManagerLogEntryOriginData, RealTimeTaskManagerLogEntryPersistData,
+    RealTimeTaskManagerLogEntryRescheduleData, RealTimeTaskManagerLogEntryRunData,
+    RealTimeTaskManagerNotificationHeader, RealTimeTaskOrigin, RealTimeTaskRunningState,
+    RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
     RealTimeTaskSchedulingTaskRescheduleMessageInput, RealTimeTaskSchedulingTaskState,
-    RealTimeTaskState, RealTimeTaskManagerLogEntryPersistData,
+    RealTimeTaskState,
 };
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use zlambda_core::common::async_trait;
+use zlambda_core::common::bytes::BytesMut;
 use zlambda_core::common::deserialize::deserialize_from_bytes;
 use zlambda_core::common::future::stream::StreamExt;
-use zlambda_core::common::tracing::debug;
-use zlambda_core::common::bytes::BytesMut;
 use zlambda_core::common::module::Module;
 use zlambda_core::common::notification::{
     notification_body_item_queue, NotificationBodyItemStreamExt, NotificationBodyItemType,
@@ -26,6 +26,7 @@ use zlambda_core::common::notification::{
 use zlambda_core::common::runtime::spawn;
 use zlambda_core::common::serialize::serialize_to_bytes;
 use zlambda_core::common::sync::RwLock;
+use zlambda_core::common::tracing::debug;
 use zlambda_core::server::{
     LogIssuer, LogModuleIssuer, ServerId, ServerModule, ServerModuleCommitEventInput,
     ServerModuleCommitEventOutput, ServerModuleNotificationEventInput,
@@ -184,7 +185,13 @@ impl ServerModule for RealTimeTaskManager {
                         .await;
                 }
                 RealTimeTaskManagerLogEntryData::Schedule(data) => {
-                    let (source_server_id, source_notification_id, origin, target_module_id, notification_data) = {
+                    let (
+                        source_server_id,
+                        source_notification_id,
+                        origin,
+                        target_module_id,
+                        notification_data,
+                    ) = {
                         let mut tasks = instance.tasks().write().await;
                         let task = tasks.get_mut(usize::from(data.task_id())).expect("");
                         task.set_state(RealTimeTaskState::Scheduled(
@@ -238,8 +245,8 @@ impl ServerModule for RealTimeTaskManager {
                                     ),
                                 ),
                             )
-                                .expect("")
-                                .freeze();
+                            .expect("")
+                            .freeze();
 
                             let data = serialize_to_bytes(&NotificationBodyItemType::Binary(bytes))
                                 .expect("");
@@ -256,13 +263,15 @@ impl ServerModule for RealTimeTaskManager {
                                         .get(instance2.log_id())
                                         .entries()
                                         .commit(
-                                            serialize_to_bytes(&RealTimeTaskManagerLogEntryData::Persist(
-                                                RealTimeTaskManagerLogEntryPersistData::new(
-                                                    task_id,
-                                                    item,
+                                            serialize_to_bytes(
+                                                &RealTimeTaskManagerLogEntryData::Persist(
+                                                    RealTimeTaskManagerLogEntryPersistData::new(
+                                                        task_id, item,
+                                                    ),
                                                 ),
-                                            ))
-                                                .unwrap().freeze()
+                                            )
+                                            .unwrap()
+                                            .freeze(),
                                         )
                                         .await;
                                 }
@@ -546,7 +555,10 @@ impl ServerModule for RealTimeTaskManager {
                 .collect::<Vec<_>>()
         };
 
-        debug!("Reschedule tasks {:?} of disconnected server {}", &rescheduling_task_ids, disconnected_server_id);
+        debug!(
+            "Reschedule tasks {:?} of disconnected server {}",
+            &rescheduling_task_ids, disconnected_server_id
+        );
 
         for rescheduling_task_id in rescheduling_task_ids {
             input

@@ -30,15 +30,14 @@ use crate::server::node::{
     ServerNodeShutdownMessage,
 };
 use crate::server::{
-    LogEntryIssuer, LogEntryServerIssuer, Server, ServerClientId, ServerId,
-    ServerLeaderServerIdGetMessageInput, ServerLogAppendInitiateMessageInput,
-    ServerLogAppendRequestMessageInput, ServerLogEntriesAcknowledgementMessageInput,
-    ServerLogEntriesCommitMessageInput, ServerLogEntriesRecoveryMessageInput, ServerMessage,
-    ServerModuleGetMessageInput, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventInputServerSource,
+    LogEntryIssuer, LogEntryServerIssuer, Server, ServerClientId, ServerConnectMessageInput,
+    ServerDisconnectMessageInput, ServerId, ServerLeaderServerIdGetMessageInput,
+    ServerLogAppendInitiateMessageInput, ServerLogAppendRequestMessageInput,
+    ServerLogEntriesAcknowledgementMessageInput, ServerLogEntriesCommitMessageInput,
+    ServerLogEntriesRecoveryMessageInput, ServerMessage, ServerModuleGetMessageInput,
+    ServerModuleNotificationEventInput, ServerModuleNotificationEventInputServerSource,
     ServerModuleNotificationEventInputServerSourceOrigin, ServerServerIdGetMessageInput,
-    ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID, ServerDisconnectMessageInput,
-    ServerConnectMessageInput,
+    ServerServerSocketAddressGetMessageInput, SERVER_SYSTEM_LOG_ID,
 };
 use postcard::to_allocvec;
 use std::collections::HashMap;
@@ -388,11 +387,8 @@ impl ServerNodeTask {
 
         info!("Server {} recovered", self.server_id);
 
-        self
-            .server_message_sender
-            .do_send_asynchronous(ServerConnectMessageInput::new(
-                self.server_id,
-            ))
+        self.server_message_sender
+            .do_send_asynchronous(ServerConnectMessageInput::new(self.server_id))
             .await;
     }
 

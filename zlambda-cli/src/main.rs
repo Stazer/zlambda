@@ -10,8 +10,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use zlambda_core::client::{
-    ClientModule, ClientModuleNotificationEventInput, ClientModuleNotificationEventOutput,
-    ClientTask, ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput,
+    ClientModule, ClientModuleInitializeEventInput, ClientModuleInitializeEventOutput,
+    ClientModuleNotificationEventInput, ClientModuleNotificationEventOutput, ClientTask,
 };
 use zlambda_core::common::async_trait;
 use zlambda_core::common::fs::read;
@@ -34,8 +34,8 @@ use zlambda_matrix_native::MatrixCalculator;
 use zlambda_matrix_wasm_module::ImmediateWasmExecutor;
 use zlambda_process::ProcessDispatcher;
 use zlambda_realtime_task::RealTimeTaskManager;
-use zlambda_sleep::SleepModule;
 use zlambda_router::round_robin::{GlobalRoundRobinRouter, LocalRoundRobinRouter};
+use zlambda_sleep::SleepModule;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -246,7 +246,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .wait()
                 .await;
         }
-        MainCommand::Client { address, command, exit } => {
+        MainCommand::Client {
+            address,
+            command,
+            exit,
+        } => {
             let mut modules = Vec::new();
 
             if exit {
@@ -259,12 +263,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 )));
             }
 
-            let client_task = ClientTask::new(
-                address,
-                modules
-                .into_iter(),
-            )
-            .await?;
+            let client_task = ClientTask::new(address, modules.into_iter()).await?;
 
             // TODO
 

@@ -1,14 +1,11 @@
-use std::time::Duration;
 use serde::Deserialize;
+use std::time::Duration;
 use zlambda_core::common::async_trait;
 use zlambda_core::common::module::Module as CommonModule;
+use zlambda_core::common::notification::NotificationBodyItemStreamExt;
 use zlambda_core::common::time::sleep;
-use zlambda_core::common::notification::{
-    NotificationBodyItemStreamExt,
-};
 use zlambda_core::server::{
-    ServerModule, ServerModuleNotificationEventInput,
-    ServerModuleNotificationEventOutput,
+    ServerModule, ServerModuleNotificationEventInput, ServerModuleNotificationEventOutput,
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

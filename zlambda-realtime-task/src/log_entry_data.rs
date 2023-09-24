@@ -1,9 +1,9 @@
 use crate::RealTimeTaskId;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use zlambda_core::common::bytes::Bytes;
 use zlambda_core::common::module::ModuleId;
 use zlambda_core::common::notification::NotificationId;
-use zlambda_core::common::bytes::Bytes;
 use zlambda_core::server::{ServerClientId, ServerId};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -183,7 +183,7 @@ impl From<RealTimeTaskManagerLogEntryPersistData> for (RealTimeTaskId, Bytes) {
 
 impl RealTimeTaskManagerLogEntryPersistData {
     pub fn new(task_id: RealTimeTaskId, bytes: Bytes) -> Self {
-        Self { task_id, bytes, }
+        Self { task_id, bytes }
     }
 
     pub fn task_id(&self) -> RealTimeTaskId {

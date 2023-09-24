@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::fmt::{self, Formatter, Display};
+use std::fmt::{self, Display, Formatter};
 use zlambda_core::server::ServerId;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
