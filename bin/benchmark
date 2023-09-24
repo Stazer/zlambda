@@ -269,8 +269,8 @@ BENCHMARKS = [
   Benchmark.new('ebpf3-rnd', EbpfTarget.new, RandomServerChooser.new($ebpf_socket_addresses[0..2])),
   Benchmark.new('ebpf3-rr', EbpfTarget.new, RoundRobinServerChooser.new($ebpf_socket_addresses[0..2])),
 
-  Benchmark.new('wait-and-create-cluster', WaitAndCreateCluster.new, RoundRobinServerChooser.new($server_addresses[0..1])),
-  Benchmark.new('wait-and-create-standalone', WaitAndCreateStandalone.new, RoundRobinServerChooser.new($server_addresses[0..1])),
+  Benchmark.new('wait-and-create-cluster', WaitAndCreateCluster.new, RoundRobinServerChooser.new($server_addresses[0..2])),
+  Benchmark.new('wait-and-create-standalone', WaitAndCreateStandalone.new, RoundRobinServerChooser.new($server_addresses[0..2])),
 ]
 
 BENCHMARK_BY_NAME = Hash[BENCHMARKS.map { |x| [x.name, x] }]
@@ -344,5 +344,5 @@ end
 
 BENCHMARK_BY_NAME['wait-and-create-cluster'].run(
   SequentialExecutor.new,
-  (0..1).map { |x| x.to_s }.to_a,
+  (0..4).map { |x| x.to_s }.to_a,
 )

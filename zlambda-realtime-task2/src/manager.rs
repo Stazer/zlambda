@@ -227,8 +227,6 @@ impl ServerModule for RealTimeTaskManager {
 
                         let task_id = data.task_id();
 
-                        println!("YEP");
-
                         spawn(async move {
                             let bytes = serialize_to_bytes(
                                 &RealTimeTaskManagerNotificationHeader::Execute(
@@ -245,9 +243,7 @@ impl ServerModule for RealTimeTaskManager {
                                 .expect("");
 
                             sender.do_send(data).await;
-                            println!("SEND DATA");
                             sender.do_send(notification_data).await;
-                            println!("DATA SENT");
                         });
 
                         spawn(async move {
