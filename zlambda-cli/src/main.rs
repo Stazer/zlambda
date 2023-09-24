@@ -225,7 +225,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ServerBuilder::default()
                 .add_module(PrintModule::default())
                 .add_module(ProcessDispatcher::default())
-                .add_module(RealTimeTaskManager::default())
+                //.add_module(RealTimeTaskManager::default()) use either this or the other one
                 .add_module(GlobalRoundRobinRouter::default())
                 .add_module(LocalRoundRobinRouter::default())
                 .add_module(DynamicLibraryManager::default())

@@ -3,7 +3,7 @@ use crate::{
     RealTimeTaskFinishedState, RealTimeTaskId, RealTimeTaskManagerExecuteNotificationHeader,
     RealTimeTaskManagerInstance, RealTimeTaskManagerLogEntryData,
     RealTimeTaskManagerLogEntryDispatchData, RealTimeTaskManagerLogEntryFinishData,
-    RealTimeTaskManagerLogEntryOriginData, RealTimeTaskManagerLogEntryPersistData,
+    RealTimeTaskManagerLogEntryOriginData,
     RealTimeTaskManagerLogEntryRescheduleData, RealTimeTaskManagerLogEntryRunData,
     RealTimeTaskManagerNotificationHeader, RealTimeTaskOrigin, RealTimeTaskRunningState,
     RealTimeTaskScheduledState, RealTimeTaskSchedulingTask,
@@ -158,7 +158,7 @@ impl ServerModule for RealTimeTaskManager {
                             data.origin().as_ref().map(|o| {
                                 RealTimeTaskOrigin::new(o.server_id(), o.server_client_id())
                             }),
-                            BytesMut::default(),
+                            data.bytes().clone(),
                         );
 
                         let task_data = (task.id(), *task.deadline());
@@ -187,7 +187,6 @@ impl ServerModule for RealTimeTaskManager {
                 RealTimeTaskManagerLogEntryData::Schedule(data) => {
                     let (
                         source_server_id,
-                        source_notification_id,
                         origin,
                         target_module_id,
                         notification_data,
@@ -200,12 +199,11 @@ impl ServerModule for RealTimeTaskManager {
 
                         (
                             task.source_server_id(),
-                            task.source_notification_id(),
                             task.origin().as_ref().map(|o| {
                                 ServerNotificationOrigin::new(o.server_id(), o.server_client_id())
                             }),
                             task.target_module_id(),
-                            task.notification().clone().freeze(),
+                            task.notification().clone(),
                         )
                     };
 
@@ -225,16 +223,9 @@ impl ServerModule for RealTimeTaskManager {
                     }
 
                     if source_server_id == instance.server().server_id().await {
-                        let incoming_receiver = {
-                            let mut receivers = instance.receivers().write().await;
-                            receivers.remove(&source_notification_id)
-                        };
-
                         let (sender, receiver) = notification_body_item_queue();
 
                         let task_id = data.task_id();
-
-                        let instance2 = instance.clone();
 
                         spawn(async move {
                             let bytes = serialize_to_bytes(
@@ -252,32 +243,7 @@ impl ServerModule for RealTimeTaskManager {
                                 .expect("");
 
                             sender.do_send(data).await;
-
-                            if let Some(mut incoming_receiver) = incoming_receiver {
-                                while let Some(item) = incoming_receiver.next().await {
-                                    sender.do_send(item.clone()).await;
-
-                                    instance2
-                                        .server()
-                                        .logs()
-                                        .get(instance2.log_id())
-                                        .entries()
-                                        .commit(
-                                            serialize_to_bytes(
-                                                &RealTimeTaskManagerLogEntryData::Persist(
-                                                    RealTimeTaskManagerLogEntryPersistData::new(
-                                                        task_id, item,
-                                                    ),
-                                                ),
-                                            )
-                                            .unwrap()
-                                            .freeze(),
-                                        )
-                                        .await;
-                                }
-                            } else {
-                                sender.do_send(notification_data).await;
-                            }
+                            sender.do_send(notification_data).await;
                         });
 
                         spawn(async move {
@@ -320,11 +286,6 @@ impl ServerModule for RealTimeTaskManager {
                             RealTimeTaskSchedulingTaskRescheduleMessageInput::new(),
                         )
                         .await;
-                }
-                RealTimeTaskManagerLogEntryData::Persist(data) => {
-                    let mut tasks = instance.tasks().write().await;
-                    let task = tasks.get_mut(usize::from(data.task_id())).expect("");
-                    task.notification_mut().extend(data.bytes());
                 }
                 RealTimeTaskManagerLogEntryData::Run(data) => {
                     let mut tasks = instance.tasks().write().await;
@@ -402,9 +363,10 @@ impl ServerModule for RealTimeTaskManager {
                 let notification_id =
                     NotificationId::from(instance.local_counter().fetch_add(1, Ordering::Relaxed));
 
-                {
-                    let mut receivers = instance.receivers().write().await;
-                    receivers.insert(notification_id, deserializer);
+                let mut bytes = BytesMut::default();
+
+                while let Some(item) = deserializer.next().await {
+                    bytes.extend(item);
                 }
 
                 server
@@ -419,6 +381,7 @@ impl ServerModule for RealTimeTaskManager {
                                 notification_id,
                                 *header.deadline(),
                                 origin,
+                                bytes.freeze(),
                             ),
                         ))
                         .expect("")

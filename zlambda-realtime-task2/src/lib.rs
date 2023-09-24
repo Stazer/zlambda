@@ -27,7 +27,7 @@ pub use state::*;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
-use zlambda_core::common::bytes::BytesMut;
+use zlambda_core::common::bytes::Bytes;
 use zlambda_core::common::module::ModuleId;
 use zlambda_core::common::notification::NotificationId;
 use zlambda_core::common::tracing::debug;
@@ -69,7 +69,7 @@ pub struct RealTimeTask {
     source_notification_id: NotificationId,
     deadline: Option<DateTime<Utc>>,
     origin: Option<RealTimeTaskOrigin>,
-    notification: BytesMut,
+    notification: Bytes,
 }
 
 impl RealTimeTask {
@@ -81,7 +81,7 @@ impl RealTimeTask {
         source_notification_id: NotificationId,
         deadline: Option<DateTime<Utc>>,
         origin: Option<RealTimeTaskOrigin>,
-        notification: BytesMut,
+        notification: Bytes,
     ) -> Self {
         Self {
             id,
@@ -141,12 +141,8 @@ impl RealTimeTask {
         &self.origin
     }
 
-    pub fn notification(&self) -> &BytesMut {
+    pub fn notification(&self) -> &Bytes {
         &self.notification
-    }
-
-    pub fn notification_mut(&mut self) -> &mut BytesMut {
-        &mut self.notification
     }
 }
 

@@ -40,6 +40,7 @@ pub struct RealTimeTaskManagerLogEntryDispatchData {
     source_notification_id: NotificationId,
     deadline: Option<DateTime<Utc>>,
     origin: Option<RealTimeTaskManagerLogEntryOriginData>,
+    bytes: Bytes,
 }
 
 impl From<RealTimeTaskManagerLogEntryDispatchData>
@@ -75,6 +76,28 @@ impl From<RealTimeTaskManagerLogEntryDispatchData>
     }
 }
 
+impl From<RealTimeTaskManagerLogEntryDispatchData>
+    for (
+        ModuleId,
+        ServerId,
+        NotificationId,
+        Option<DateTime<Utc>>,
+        Option<RealTimeTaskManagerLogEntryOriginData>,
+        Bytes,
+    )
+{
+    fn from(data: RealTimeTaskManagerLogEntryDispatchData) -> Self {
+        (
+            data.target_module_id,
+            data.source_server_id,
+            data.source_notification_id,
+            data.deadline,
+            data.origin,
+            data.bytes,
+        )
+    }
+}
+
 impl RealTimeTaskManagerLogEntryDispatchData {
     pub fn new(
         target_module_id: ModuleId,
@@ -82,6 +105,7 @@ impl RealTimeTaskManagerLogEntryDispatchData {
         source_notification_id: NotificationId,
         deadline: Option<DateTime<Utc>>,
         origin: Option<RealTimeTaskManagerLogEntryOriginData>,
+        bytes: Bytes,
     ) -> Self {
         Self {
             target_module_id,
@@ -89,6 +113,7 @@ impl RealTimeTaskManagerLogEntryDispatchData {
             source_notification_id,
             deadline,
             origin,
+            bytes,
         }
     }
 
@@ -110,6 +135,10 @@ impl RealTimeTaskManagerLogEntryDispatchData {
 
     pub fn origin(&self) -> &Option<RealTimeTaskManagerLogEntryOriginData> {
         &self.origin
+    }
+
+    pub fn bytes(&self) -> &Bytes {
+        &self.bytes
     }
 }
 
@@ -170,34 +199,6 @@ impl RealTimeTaskManagerLogEntryRescheduleData {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct RealTimeTaskManagerLogEntryPersistData {
-    task_id: RealTimeTaskId,
-    bytes: Bytes,
-}
-
-impl From<RealTimeTaskManagerLogEntryPersistData> for (RealTimeTaskId, Bytes) {
-    fn from(data: RealTimeTaskManagerLogEntryPersistData) -> Self {
-        (data.task_id, data.bytes)
-    }
-}
-
-impl RealTimeTaskManagerLogEntryPersistData {
-    pub fn new(task_id: RealTimeTaskId, bytes: Bytes) -> Self {
-        Self { task_id, bytes }
-    }
-
-    pub fn task_id(&self) -> RealTimeTaskId {
-        self.task_id
-    }
-
-    pub fn bytes(&self) -> &Bytes {
-        &self.bytes
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[derive(Debug, Deserialize, Serialize)]
 pub struct RealTimeTaskManagerLogEntryRunData {
     task_id: RealTimeTaskId,
 }
@@ -248,7 +249,6 @@ pub enum RealTimeTaskManagerLogEntryData {
     Dispatch(RealTimeTaskManagerLogEntryDispatchData),
     Schedule(RealTimeTaskManagerLogEntryScheduleData),
     Reschedule(RealTimeTaskManagerLogEntryRescheduleData),
-    Persist(RealTimeTaskManagerLogEntryPersistData),
     Run(RealTimeTaskManagerLogEntryRunData),
     Finish(RealTimeTaskManagerLogEntryFinishData),
 }
